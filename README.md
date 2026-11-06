@@ -211,6 +211,9 @@ show a dash. Per-servo values are available as `servo_voltage_v` in `/api/status
 
 ## Project files
 
+Optional experiment: [GPU activity on the LED matrix](docs/gpu-matrix.md).
+See [Duck experiments](docs/experiments.md) for the staged development roadmap.
+
 `assets/` contains the web interface, `python/` the controller and models, `sketch/` the Uno Q firmware, and `tools/` the installation helpers.
 
 See [Program architecture](docs/architecture.md) for the block diagram, thread timing, Bridge recovery, and validation results.

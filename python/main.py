@@ -8,10 +8,12 @@ from fastapi import HTTPException
 from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
+from gpu_telemetry import GpuTelemetry
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
 sys.setswitchinterval(0.001)
 controller = Controller(Bridge)
+gpu = GpuTelemetry(Bridge)
 ui = WebUI(port=9527, cors_origins='')
 Bridge.provide('duck_state', controller.receive)
 Bridge.provide('duck_diagnostics', controller.receive_diagnostics)
@@ -112,7 +114,11 @@ def servo_action(body: dict):
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(400, str(exc))
 
-ui.expose_api('GET', '/api/status', controller.status)
+def status():
+    return dict(controller.status(), gpu=dict(gpu.latest))
+
+ui.expose_api('GET', '/api/status', status)
+ui.expose_api('GET', '/api/gpu', lambda: dict(gpu.latest))
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)
 ui.expose_api('POST', '/api/heading-hold', heading_hold)
@@ -136,8 +142,10 @@ ui.expose_api('POST', '/api/servo/exit', servo_exit)
 ui.expose_api('POST', '/api/servo', servo_action)
 worker = threading.Thread(target=controller.run, name='policy50', daemon=True)
 worker.start()
+gpu.start()
 try:
     App.run()
 finally:
     controller.stop()
+    gpu.stop()
     worker.join(timeout=2)
