@@ -1,0 +1,275 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "vendor/three/three.webgpu.js",
+      "bytes": 1350894,
+      "sha256": "eafead3154ec06093f3108bddceab360f048a6fcebd7c085d5aae0ab5404bd25",
+      "source": {
+        "package": "three",
+        "version": "0.187.0",
+        "integrity": "sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA=="
+      }
+    },
+    {
+      "path": "vendor/three/three.core.js",
+      "bytes": 1474799,
+      "sha256": "613e370f76638fdef83926642bf256dc9615684922de1ce1f63a8583e5d78578",
+      "source": {
+        "package": "three",
+        "version": "0.187.0",
+        "integrity": "sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA=="
+      }
+    },
+    {
+      "path": "vendor/three/three.tsl.js",
+      "bytes": 1065544,
+      "sha256": "d8f3cdb8b85b799a5631bd9a8d77e185d88ce1eb1bb051f48b332728a5423e3f",
+      "source": {
+        "package": "three",
+        "version": "0.187.0",
+        "integrity": "sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA=="
+      }
+    },
+    {
+      "path": "vendor/three/OrbitControls.js",
+      "bytes": 40918,
+      "sha256": "e7fca2fe9e7670a828af9b28084669a5909445b7f36f1f26cee9bf8f2961c32c",
+      "source": {
+        "package": "three",
+        "version": "0.187.0",
+        "integrity": "sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA=="
+      }
+    },
+    {
+      "path": "vendor/three/LICENSE",
+      "bytes": 1081,
+      "sha256": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
+      "source": {
+        "package": "three",
+        "version": "0.187.0",
+        "integrity": "sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA=="
+      }
+    },
+    {
+      "path": "vendor/mujoco/mujoco.js",
+      "bytes": 293092,
+      "sha256": "214dd7ead76aecd6e9b6525b2b83eca88e9ed3b893231361b4f1e2716a123a0a",
+      "source": {
+        "package": "@mujoco/mujoco",
+        "version": "3.12.0",
+        "integrity": "sha512-MPBSdhD7XsVkKD2owRlzf2mZzd8Qiz7v3zK9MaPc6X7ZS7LdBpQ5bgmdSrvXy6AsKHGlSocWRP9UmdV/I5+cZA=="
+      }
+    },
+    {
+      "path": "vendor/mujoco/mujoco.wasm",
+      "bytes": 10125422,
+      "sha256": "70f991e34b22674611d0cba181a9afb7b66914557c0817d5b5b0f7de10e6d548",
+      "source": {
+        "package": "@mujoco/mujoco",
+        "version": "3.12.0",
+        "integrity": "sha512-MPBSdhD7XsVkKD2owRlzf2mZzd8Qiz7v3zK9MaPc6X7ZS7LdBpQ5bgmdSrvXy6AsKHGlSocWRP9UmdV/I5+cZA=="
+      }
+    },
+    {
+      "path": "vendor/mujoco/mujoco.d.ts",
+      "bytes": 142788,
+      "sha256": "6d48dd96b473f3d641e3cc9ca9a1f1ead78d7ddd74e1c59b80781e420bb9f769",
+      "source": {
+        "package": "@mujoco/mujoco",
+        "version": "3.12.0",
+        "integrity": "sha512-MPBSdhD7XsVkKD2owRlzf2mZzd8Qiz7v3zK9MaPc6X7ZS7LdBpQ5bgmdSrvXy6AsKHGlSocWRP9UmdV/I5+cZA=="
+      }
+    },
+    {
+      "path": "vendor/mujoco/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source": {
+        "url": "https://raw.githubusercontent.com/google-deepmind/mujoco/13827e9ee56f097f57acf69ae52b078f9839682d/LICENSE",
+        "package": "@mujoco/mujoco",
+        "version": "3.12.0"
+      }
+    },
+    {
+      "path": "model/UPSTREAM-LICENSE",
+      "bytes": 11351,
+      "sha256": "2d3fd9ffffa70a4307498ec630b14a6b4731e010f8ddda92686eaf65733c2dfe",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/LICENSE",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "5babf660c98eac4418422e1a62a5d9fc51a4d63e"
+      }
+    },
+    {
+      "path": "model/assets/head_pitch.stl",
+      "bytes": 80884,
+      "sha256": "aef526ce7a58f65e4efca3f6c4a0abcd6b4a2e54a51b3949502d325472fdfcb1",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/head_pitch.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "c2c616cadc77d68faa39cb0839d81278a607e105"
+      }
+    },
+    {
+      "path": "model/assets/head_roll.stl",
+      "bytes": 927984,
+      "sha256": "dcbe8ae093a842399e94eecc6f41a533575df9e8367f26690d737a9d38f8b327",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/head_roll.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "76868942af67139c3169617aa4bdff2b8c344f9c"
+      }
+    },
+    {
+      "path": "model/assets/head_yaw.stl",
+      "bytes": 278284,
+      "sha256": "a509eadd3172b79826b635bdb1b239b567b71f1fcf6c665eb9d2d3fc455cebe1",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/head_yaw.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "f8cbef26214096103b9aa4449c67f434d69fe4ba"
+      }
+    },
+    {
+      "path": "model/assets/left_ankle.stl",
+      "bytes": 79584,
+      "sha256": "305c7e2900136c4d3e525ebdde4dd8b64c254ab3e92a4eb6c296ec1d84af0566",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/left_ankle.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "091b3979fc26e797b6430a79f7ae83a5b7303f6c"
+      }
+    },
+    {
+      "path": "model/assets/left_hip_pitch.stl",
+      "bytes": 287484,
+      "sha256": "5948191de26a4f209b7dcc7d18e9b1928920c01b687368cf77769d14553fa356",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/left_hip_pitch.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "d575bb4de9107c09bd46ba91991477b87d517d61"
+      }
+    },
+    {
+      "path": "model/assets/left_hip_roll.stl",
+      "bytes": 131484,
+      "sha256": "4745eb3c27645971c1a92a067cffafb024934660f0bd887415e73462f65440d4",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/left_hip_roll.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "6f92e2ebbce6cadbd069a2de1b7042d881a846f8"
+      }
+    },
+    {
+      "path": "model/assets/left_hip_yaw.stl",
+      "bytes": 222584,
+      "sha256": "34bcf92d98d9ca2fef20ee5ef70d05ca71e05079e88a08d30d7a791e208be508",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/left_hip_yaw.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "69f8a54f85e1ef440fb66a955ccd492ce56e00be"
+      }
+    },
+    {
+      "path": "model/assets/left_knee.stl",
+      "bytes": 215484,
+      "sha256": "0a879a561f2d46b8f91f201e4530cfa1b8de6fc6263f3dcf041b3479f14de832",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/left_knee.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "7a6bb2346ffa21da9012b1954b4ab72a5f53c04b"
+      }
+    },
+    {
+      "path": "model/assets/neck_pitch.stl",
+      "bytes": 177684,
+      "sha256": "48fd73c630b929a68dd7a192bee3920f5eed478d48948067f49223abb9297984",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/neck_pitch.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "8b9d28107482bfe9c592812943136b67ecc702d8"
+      }
+    },
+    {
+      "path": "model/assets/right_ankle.stl",
+      "bytes": 80284,
+      "sha256": "1f2a6b317277be4b6f22802e6fa74b8f0ffab502cb8bd36dacb9e13ab0896a2f",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/right_ankle.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "030f0d466fdc1db458898ed319054595c73446b4"
+      }
+    },
+    {
+      "path": "model/assets/right_hip_pitch.stl",
+      "bytes": 287284,
+      "sha256": "e580ffa06a66c0143a0eebdb9f346304bde98c754dec1af2e9ad2318038f71a7",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/right_hip_pitch.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "704201d2803a13cb3c4e91563cf474d2ae2db793"
+      }
+    },
+    {
+      "path": "model/assets/right_hip_roll.stl",
+      "bytes": 131484,
+      "sha256": "6f709cd1e2caf44c9c6dde112a8e8d8ac0bf1ef97b3542801b9c9deed08cd09c",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/right_hip_roll.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "2450f0b6ecfd1f6aa47ae399ff2705d755be6994"
+      }
+    },
+    {
+      "path": "model/assets/right_hip_yaw.stl",
+      "bytes": 222584,
+      "sha256": "a27fa340a4f7ae5a6fbb0224feb2203cb1c62827a20db786da022cb9c9abd12d",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/right_hip_yaw.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "a73eff0933a9a1a6611fd1b0eba834b30b8f38fc"
+      }
+    },
+    {
+      "path": "model/assets/right_knee.stl",
+      "bytes": 215484,
+      "sha256": "644e3fcc3b9b4815f8a5185aa2c4597cc54afcfdc876e42d5f9f04c0838c830d",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/right_knee.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "df7ebf026945d48ca87e1e3d104ccb3e25e9bd71"
+      }
+    },
+    {
+      "path": "model/assets/trunk_base.stl",
+      "bytes": 779084,
+      "sha256": "7df63591596f4cf627c80e78ac5e37dff889c67f63c9f2a726e61899d3c358c3",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/assets/trunk_base.stl",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "1de0f83eff9f5ddd56ef3f2cab5890e08f96e26b"
+      }
+    },
+    {
+      "path": "model/robot_allcollisions.xml",
+      "bytes": 13981,
+      "sha256": "906960f98a7f2ae24314b5ce1032c46ac6ff619d27c3bae502eb81c8f1b80fea",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/robot_allcollisions.xml",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "79048237c6bfc811ceeeceba4c9fb666e036af52"
+      }
+    },
+    {
+      "path": "model/scene_walk.xml",
+      "bytes": 1892,
+      "sha256": "deb9519100b524b8c7a06741c78662f6cfefad91eb284d123143e583e653d0da",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck/scene_walk.xml",
+        "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+        "git_blob": "073009f83b1ecc2c1a2f119db26807b32981a91a"
+      }
+    }
+  ]
+}
