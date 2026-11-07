@@ -21,7 +21,18 @@ continues to use the CPU. The GPU proof runs only when explicitly launched.
    A fresh cache file enables the matrix; no file leaves the matrix untouched.
    Run with host permissions that can read the relevant GPU clients. Limited
    `/proc` permissions can restrict coverage. Do not make `/proc` world-readable.
-4. If needed, install build dependencies **on the UNO Q**, then build the proof:
+4. Run the Python compute proof in another host terminal. It uses only Python's
+   standard library and the installed EGL/GLES driver:
+
+   ```sh
+   python3 tools/gpu-proof.py --seconds 10
+   ```
+
+   It dispatches on the GPU, then checks all 65,536 outputs on the CPU. The
+   reference check takes additional time after the requested dispatch interval.
+   It rejects software renderers. This does not require a compiler or pip install.
+
+   Alternatively, install build dependencies **on the UNO Q** and build the C version:
 
    ```sh
    sudo apt install build-essential libegl-dev libgles-dev
@@ -72,11 +83,26 @@ Run the portable counter/cache checks with:
 python3 tools/check-gpu-telemetry.py
 ```
 
-The parsers, stale-data handling and matrix frame generation can be checked on a
-development computer. A physical UNO Q is required to validate EGL/GLES access,
-counter coverage, App Lab cache sharing, sketch compilation, matrix orientation,
-and the effect of the GPU demo on control-loop timing. Do not claim those checks
-passed until they have been run on the board.
+Validation on a physical UNO Q 4 GB on 7 November 2026:
+
+- Debian 13, Mesa 25.2.6-1~bpo13+1, renderer `FD702`, OpenGL ES 3.1.
+- Python proof: **PASS**, 137 compute batches over a five-second dispatch
+  interval; all 65,536 results verified. Dispatch and CPU verification together
+  took 21.12 seconds.
+- Host DRM collector measured a peak of **40.7%** for readable clients during
+  the experiment. Some processes were inaccessible; this is not whole-device
+  utilization. The board clock was not yet synchronized, so raw log timestamps
+  are not the date of the experiment.
+- All six portable telemetry checks passed on both the board and Windows.
+- The matrix C++ harness and C proof syntax check passed on Windows.
+
+Still pending: C proof execution, App Lab cache sharing, full Duck sketch
+compilation, matrix orientation, and control-loop timing under GPU load. The
+stock board had core 0.51.0 and App CLI 0.6.6; the Duck runtime requires core
+1.0.0 and newer Bridge libraries, which need installation before flashing.
+
+When launching Arduino commands from an ADB shell on this image, use
+`TMPDIR=/tmp`; ADB's default `/data/local/tmp` does not exist on the board.
 
 References: [UNO Q datasheet](https://docs.arduino.cc/resources/datasheets/ABX00162-ABX00173-datasheet.pdf),
 [Linux DRM usage statistics](https://docs.kernel.org/gpu/drm-usage-stats.html),
