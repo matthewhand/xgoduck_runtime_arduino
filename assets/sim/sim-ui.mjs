@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs';
+import {WalkPanel} from './walk-ui.mjs?v=2';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
+const walk = new WalkPanel();
 let sim, renderer, orbit, camera, scene;
 let mode = 'pose', running = false, gait = false, gaitTime = 0, selected = 32;
 let lastPacket = null, lastPacketAt = 0, liveResult = null, stopping = false;
@@ -12,6 +14,8 @@ const geometryCache = new Map(), visualMeshes = [], collisionMeshes = [], jointM
 const rows = new Map();
 const matrix = new THREE.Matrix4();
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion();
+let walkRun = null;
 
 function showError(error) {
   $('error').hidden = false;
@@ -19,8 +23,10 @@ function showError(error) {
 }
 
 function resetCamera() {
-  camera.position.set(0.36, -0.43, 0.28);
-  orbit.target.set(0.012, 0, 0.145);
+  const x = mode === 'walk' ? sim.data.qpos[0] : 0;
+  const y = mode === 'walk' ? sim.data.qpos[1] : 0;
+  camera.position.set(x+0.36, y-0.43, 0.28);
+  orbit.target.set(x+0.012, y, 0.145);
   orbit.update();
 }
 
@@ -84,14 +90,14 @@ function updateRobot() {
 }
 
 function updateRows() {
-  const angles = mode === 'physics' && !sim.hold ? sim.angles() : sim.targetAngles();
+  const angles = mode === 'walk' || (mode === 'physics' && !sim.hold) ? sim.angles() : sim.targetAngles();
   const freshLive = lastPacket && performance.now()-lastPacketAt<2500 && liveResult?.fresh;
   for (const joint of sim.joints) {
     const row = rows.get(joint.id);
     const missing = mode === 'live' && (!freshLive || ($('live-source').value === 'measured' && !(lastPacket?.servo_ids || []).includes(joint.id)));
     row.output.textContent = missing ? '—' : `${angles[joint.id].toFixed(1)}°`;
     row.input.value = angles[joint.id].toFixed(1);
-    row.input.disabled = mode === 'live' || (mode === 'physics' && !sim.hold);
+    row.input.disabled = mode === 'walk' || mode === 'live' || (mode === 'physics' && !sim.hold);
     row.element.classList.toggle('selected', selected === joint.id);
   }
 }
@@ -130,15 +136,20 @@ function buildJointControls() {
 function updateModeText() {
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
   $('physics-card').hidden = mode !== 'physics'; $('live-card').hidden = mode !== 'live';
+  $('walk-card').hidden = $('walk-hud').hidden = mode !== 'walk'; $('pose-card').hidden = mode === 'walk';
+  $('play').hidden = $('reset').hidden = $('collisions').parentElement.hidden = mode === 'walk';
+  $('export').disabled = mode === 'walk';
+  collisionMeshes.forEach(mesh => { mesh.visible = mode !== 'walk' && $('collisions').checked; });
   $('gait').classList.toggle('active', gait);
   $('play').disabled = mode === 'pose' && !gait;
   $('play').textContent = running ? (mode === 'live' ? 'Freeze view' : 'Pause') : (mode === 'live' ? 'Resume view' : 'Play');
   $('step').disabled = running || mode !== 'physics';
   $('clock-label').textContent = gait ? 'PREVIEW TIME' : 'SIM TIME';
   $('reset').textContent = mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
-  $('scene-mode').textContent = mode === 'physics' ? 'MUJOCO / GRAVITY + CONTACTS' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = mode === 'walk' ? 'WALKING POLICY / SIMULATION ONLY' : mode === 'physics' ? 'MUJOCO / GRAVITY + CONTACTS' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Free-body MuJoCo physics. No balance policy is running; falling is expected. Hold targets enables the model’s approximate viewer PD.'
+    : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
     : mode === 'live' ? 'Read-only telemetry. Target previews are commanded angles; missing measured joints remain unavailable.'
     : gait ? 'A procedural joint cycle for checking articulation. It is a kinematic preview, without gravity or a walking policy.'
     : 'Adjust joint angles within the CAD model’s limits. Poses are local previews; they do not send motor commands.';
@@ -146,16 +157,19 @@ function updateModeText() {
 }
 
 function setMode(next) {
-  if (!['pose','physics','live'].includes(next)) return;
+  if (!['pose','physics','walk','live'].includes(next)) return;
+  const changedWalk = mode !== next && (mode === 'walk' || next === 'walk');
   if (next !== mode && (mode !== 'pose' || next !== 'physics')) sim.reset('STAND');
-  mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next !== 'pose';
+  mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
+  walk.setVisible(mode === 'walk');
+  if (changedWalk) { walkRun = null; resetCamera(); }
   sim.data.qvel.fill(0); sim.accumulator = 0;
   if (mode === 'live' && lastPacket && performance.now()-lastPacketAt<2500) liveResult = sim.applyTelemetry(lastPacket, $('live-source').value);
   updateModeText();
 }
 
 function applyPreset(preset) {
-  mode = 'pose'; sim.mode = 'pose'; running = false; gait = false; gaitTime = 0;
+  setMode('pose'); running = false; gait = false; gaitTime = 0;
   sim.reset(preset); updateModeText(); $('pose-message').textContent = `${preset.toLowerCase()} pose loaded.`;
 }
 
@@ -168,6 +182,31 @@ function animateGait(dt) {
     30:20,31:20,32:Math.sin(phase/2)*9,33:Math.sin(phase)*4});
   sim.data.qpos[2] = 0.139158 + Math.abs(left) * 0.003;
   sim.mj.mj_forward(sim.model, sim.data);
+}
+
+function animateWalk(dt) {
+  const packet = walk.latest;
+  const root = packet?.root;
+  const angles = packet?.joints_rad;
+  if (!root || root.length !== 7 || !root.every(Number.isFinite)
+      || !sim.joints.every(joint => Number.isFinite(angles?.[joint.id]))) return;
+  const q = sim.data.qpos;
+  const newRun = packet.run_id !== walkRun;
+  const alpha = newRun ? 1 : 1 - Math.exp(-dt / 0.055);
+  const dx = (root[0] - q[0]) * alpha, dy = (root[1] - q[1]) * alpha;
+  q[0] += dx; q[1] += dy; q[2] += (root[2] - q[2]) * alpha;
+  walkRotation.set(q[4], q[5], q[6], q[3]);
+  walkTarget.set(root[4], root[5], root[6], root[3]);
+  walkRotation.slerp(walkTarget, alpha).normalize();
+  q[3] = walkRotation.w; q[4] = walkRotation.x; q[5] = walkRotation.y; q[6] = walkRotation.z;
+  for (const joint of sim.joints) q[joint.address] += (angles[joint.id] - q[joint.address]) * alpha;
+  sim.mj.mj_forward(sim.model, sim.data);
+  if (newRun) resetCamera();
+  else {
+    orbit.target.x += dx; orbit.target.y += dy;
+    camera.position.x += dx; camera.position.y += dy;
+  }
+  walkRun = packet.run_id;
 }
 
 function updateBoard() {
@@ -203,14 +242,17 @@ function updateBoard() {
 async function pollBoard() {
   if (stopping) return;
   if (!document.hidden) {
+    let current = null;
     try {
       const response = await fetch('/api/status', {cache:'no-store', signal:AbortSignal.timeout(1800)});
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const packet = await response.json();
       if (typeof packet.feedback_hz !== 'number') throw new Error('Invalid telemetry');
       lastPacket = packet; lastPacketAt = performance.now();
+      current = packet;
       if (sim && mode === 'live' && running) liveResult = sim.applyTelemetry(packet, $('live-source').value);
     } catch { /* The age check replaces stale readings with unavailable indicators. */ }
+    if (mode === 'walk') walk.recordBoard(current);
   }
   updateBoard();
   setTimeout(pollBoard, mode === 'live' && !document.hidden ? 200 : 1000);
@@ -259,7 +301,7 @@ function attachControls() {
     $('pose-file').value = '';
   });
   viewport.addEventListener('keydown', event => {
-    if (event.code === 'Space' && !$('play').disabled) { event.preventDefault(); $('play').click(); }
+    if (event.code === 'Space' && !$('play').disabled && !$('play').hidden) { event.preventDefault(); $('play').click(); }
   });
   let down = null;
   renderer.domElement.addEventListener('pointerdown', event => { down = {x:event.clientX,y:event.clientY}; });
@@ -280,12 +322,14 @@ function frame(time) {
   try {
     if (running && mode === 'physics') sim.advance(dt*Number($('speed').value));
     if (running && mode === 'pose' && gait) animateGait(dt);
+    if (mode === 'walk') animateWalk(dt);
     updateRobot(); orbit.update(); renderer.render(scene,camera);
     fpsFrames++;
     if (time-fpsStart>600) { fps=fpsFrames*1000/(time-fpsStart); fpsFrames=0; fpsStart=time; }
     if (time-lastHud>200) {
-      $('fps').textContent = Math.round(fps); $('sim-time').textContent = (gait ? gaitTime : sim.data.time).toFixed(2);
-      $('contacts').textContent = mode === 'physics' ? sim.data.ncon : '—';
+      $('fps').textContent = Math.round(fps);
+      $('sim-time').textContent = (mode === 'walk' ? walk.latest?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
+      $('contacts').textContent = mode === 'walk' ? walk.latest?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
       $('height').textContent = (sim.data.qpos[2]*100).toFixed(1);
       updateRows(); updateBoard(); lastHud=time;
     }
@@ -301,17 +345,17 @@ async function start() {
   await renderer.init();
   const webgpu = Boolean(renderer.backend.isWebGPUBackend);
   $('renderer-state').textContent = webgpu ? 'WEBGPU · CLIENT GPU' : 'WEBGL 2 · FALLBACK';
-  $('engine-note').textContent = webgpu ? 'WebGPU graphics on this viewing device · MuJoCo physics on its CPU · UNO Q serves the app.'
-    : `${window.isSecureContext ? 'This browser selected WebGL 2.' : 'Wi-Fi HTTP uses WebGL 2; open localhost over USB for WebGPU.'} Physics runs on this viewing device’s CPU.`;
+  $('engine-note').textContent = webgpu ? 'WebGPU graphics on this viewing device · Playground physics in browser · Walking policy on UNO Q'
+    : `${window.isSecureContext ? 'This browser selected WebGL 2.' : 'Wi-Fi HTTP uses WebGL 2; open localhost over USB for WebGPU.'} The walking policy runs on the UNO Q CPU.`;
   viewport.prepend(renderer.domElement);
   orbit = new OrbitControls(camera,renderer.domElement); orbit.enableDamping=true;
   orbit.minDistance=0.15; orbit.maxDistance=1.8; orbit.maxPolarAngle=Math.PI*0.49; resetCamera();
   scene.add(new THREE.HemisphereLight('#e8f9ff','#294443',2.6));
   const light = new THREE.DirectionalLight('#fff3db',3.2); light.position.set(-0.3,-0.4,0.8); scene.add(light);
   const fill = new THREE.DirectionalLight('#8edac8',1.8); fill.position.set(0.5,0.25,0.4); scene.add(fill);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshStandardMaterial({color:'#15252c',roughness:0.95}));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(16,16),new THREE.MeshStandardMaterial({color:'#15252c',roughness:0.95}));
   ground.position.z=-0.0005; scene.add(ground);
-  const grid = new THREE.GridHelper(2,40,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001; scene.add(grid);
+  const grid = new THREE.GridHelper(14,280,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001; scene.add(grid);
   const axes = new THREE.AxesHelper(0.05); axes.position.set(-0.16,-0.13,0.001); scene.add(axes);
   const resize = new ResizeObserver(() => {
     const width = viewport.clientWidth, height = viewport.clientHeight;
@@ -325,7 +369,7 @@ async function start() {
   pollBoard();
   window.addEventListener('pagehide',event => {
     if (event.persisted) return;
-    stopping=true; resize.disconnect(); renderer.setAnimationLoop(null); orbit.dispose();
+    stopping=true; walk.setVisible(false); resize.disconnect(); renderer.setAnimationLoop(null); orbit.dispose();
     for (const mesh of [...visualMeshes,...collisionMeshes]) mesh.material.dispose();
     for (const geometry of geometryCache.values()) geometry.dispose();
     sim.dispose(); renderer.dispose();

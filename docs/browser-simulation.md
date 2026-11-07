@@ -16,19 +16,19 @@ fallback. The renderer badge reports the backend actually initialized.
 
 ## Where the work runs
 
-The UNO Q serves the HTML, JavaScript, WebAssembly, CAD assets and existing
-read-only telemetry API. The viewing device runs Three.js graphics on its GPU
-and single-threaded MuJoCo physics on its CPU. This does not accelerate the
-board's ONNX policies or use the board's Adreno for browser rendering on a PC.
+The UNO Q serves the page, CAD assets and telemetry. The viewing device runs
+Three.js graphics on its GPU and the Physics playground on its CPU.
+**Walking policy** instead runs both ONNX and MuJoCo on the UNO Q CPU and
+streams poses to the viewer. Browser graphics do not load the UNO Q Adreno.
 The **Board CPU** and **Board GPU** readings describe the UNO Q. The render FPS
 and physics clock describe the viewing device. **Missed Linux slots** counts
 board scheduling misses since app start, so it can be compared across a trial.
 
-All dependencies are vendored locally: Three.js 0.187.0, official MuJoCo 3.12.0
+Browser dependencies are vendored locally: Three.js 0.187.0, official MuJoCo 3.12.0
 WASM, and the XGO Duck model from LuwuDynamics/xgoduck_rl commit
 `fa621fc77ad9a05d69da13270e86118bdd3603fe`. The runtime bundle is approximately
-19 MB. No Node installation, compiler, CDN or Python dependency is needed on
-the board for this feature. The first page load downloads and compiles WASM.
+19 MB. The first page load downloads and compiles WASM. Native MuJoCo is an
+optional dependency used only by Walking policy.
 
 ## Workspaces
 
@@ -37,6 +37,7 @@ the board for this feature. The first page load downloads and compiles WASM.
 | Pose | Edit 14 joints within CAD limits; select parts in 3D; load upstream Stand/Sit/Fold poses; save and load local JSON poses. |
 | Step cycle | A labelled procedural joint animation in Pose mode. It previews articulation without physics or a trained walking policy. |
 | Physics | A free-body MuJoCo simulation using upstream masses, inertia, collision meshes and joint limits, with gravity and floor contacts. Drop, nudge, pause or step by 20 ms; adjust gravity, floor friction and playback speed. |
+| Walking policy | Run the shipped `xgoduck_walk.onnx` against the upstream walking scene on the UNO Q. Choose a forward speed and turn rate, then start a trial of up to 20 seconds. The camera follows the simulated Duck. |
 | Live Duck | Poll `/api/status` and display commanded targets or measured angles. No motor commands are sent. Targets and partial/unavailable measurements use a translucent model. |
 
 Drag the canvas to orbit and scroll to zoom. Collision hulls and joint axes can
@@ -49,6 +50,38 @@ is not applied. After a lost connection, the last pose freezes and numerical
 readings become unavailable; fresh packets resume the view. IMU gravity supplies
 roll and pitch only when the IMU is available. Yaw and world translation are not
 measured, and the live model remains anchored in this view.
+
+## Running a walking trial
+
+In **Walking policy**, leave the hardware runtime in **Shadow** or **Off**,
+pick a command and select **Run 20 s**. The simulation worker runs at lower
+priority in a separate process, with one ONNX CPU thread. It never calls the
+motor or MCU APIs.
+**Stop** ends the worker and keeps the last pose. A trial also ends if the
+simulated Duck falls or reaches the time limit.
+
+The board load graph shows total Linux CPU, the busiest core, and the Adreno
+GPU. A dash means that a reading is unavailable. **Missed sim slots** counts
+expired 20 ms releases that the simulation skips to keep pace with wall time.
+**Missed Duck slots** is the separate change in the hardware runtime's Linux
+missed-slot counter during the trial, including worker startup. **Slot work
+p95** is the 95th percentile over the latest five seconds of ONNX and physics
+work. **ONNX average** covers the inference portion alone. The hardware's own
+control loop retains its existing settings.
+
+To enable this mode on a new UNO Q, first start the app normally, then run
+this in an UNO Q Linux shell. Replace the container name if the app directory
+is named differently.
+
+```sh
+docker exec xgo-duck-main-1 uv pip install \
+  --target /app/.cache/walk-sim-deps --python /app/.cache/.venv/bin/python \
+  --no-deps mujoco==3.12.0 absl-py etils glfw PyOpenGL fsspec \
+  importlib-resources typing-extensions zipp
+```
+
+The app already includes NumPy and ONNX Runtime. Reload Duck Lab after the
+installation. Other Lab modes work without the optional package.
 
 ## Model fidelity
 
@@ -64,9 +97,11 @@ not implemented here. Servo delay, electrical behavior, calibration and
 sim-to-real agreement remain unvalidated. This is a physics/inspection sandbox,
 not an equivalent of the training environment.
 
-Future work can add matched BAM actuation and closed-loop policy rollouts,
-record/replay of joint and IMU telemetry, and additional scenes. Browser WebGPU
-graphics do not imply GPU-accelerated physics or in-browser training.
+The walking trial uses the exported model's home pose, raw actions and action
+scale, with four 5 ms MuJoCo steps per 20 ms policy slot. It uses the pinned
+upstream `scene_walk.xml` and its approximate position actuators. It does not
+replicate the training actuator dynamics, randomized conditions, or hardware
+filtering. Results describe the simulated Duck.
 
 ## Reproduction and checks
 
@@ -76,7 +111,7 @@ node tools/check-browser-sim.mjs
 ```
 
 The preparation tool verifies npm archive integrity and pinned Git blob hashes.
-`assets/sim/vendor-lock.json` records all 27 dependency/model payload checksums;
+`assets/sim/vendor-lock.json` records the dependency/model payload checksums;
 `.gitattributes` preserves those exact bytes on Windows and Linux. Licenses and
 attribution are in `assets/sim/NOTICE.txt` and the bundled license files.
 
@@ -84,6 +119,11 @@ The Node checks load the actual WASM/MJCF, validate meshes and motor mapping,
 exercise zero gravity, free fall and floor contacts, reject invalid pose files,
 and check missing/stale feedback and IMU attitude. They require Node.js, but
 the deployed browser application does not.
+
+With native MuJoCo installed, run `python -B tools/check-walk-sim.py` using the
+app's Python and dependency path. This checks six seconds of closed-loop
+locomotion with the real ONNX file, forward travel, bilateral foot contacts,
+and an upright trunk.
 
 Browser checks on 7 November 2026 confirmed WebGPU at approximately 60 fps on
 localhost, the WebGL 2 path over Wi-Fi HTTP, joint editing, the Sit preset,

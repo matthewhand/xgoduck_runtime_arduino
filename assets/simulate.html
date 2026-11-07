@@ -2,25 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="A browser-based XGO Duck pose, physics and live telemetry sandbox.">
+  <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=1">
+  <link rel="stylesheet" href="sim/sim.css?v=3">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
 <main>
   <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="/">Control</a><a href="/simulate.html" aria-current="page">Duck Lab</a><a href="/calibrate.html">Calibration</a></nav><span class="preview-badge">BROWSER SANDBOX</span></header>
-  <div class="intro"><div><p class="eyebrow">EXPERIMENT 02 / DIGITAL DUCK</p><h1>A little room to experiment.</h1><p>Pose it, drop it, or follow the real Duck. Every sandbox control stays in your browser.</p></div><a class="source-link" href="https://github.com/LuwuDynamics/xgoduck_rl/tree/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck" target="_blank" rel="noopener">Luwu CAD model ↗</a></div>
+  <div class="intro"><div><p class="eyebrow">EXPERIMENT 02 / DIGITAL DUCK</p><h1>A little room to experiment.</h1><p>Pose it, drop it, or try the trained walking policy. Lab controls never move the hardware.</p></div><a class="source-link" href="https://github.com/LuwuDynamics/xgoduck_rl/tree/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck" target="_blank" rel="noopener">Luwu CAD model ↗</a></div>
   <div class="lab-layout">
     <section class="stage-panel" aria-label="3D Duck workspace">
-      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="physics" aria-pressed="false" disabled>Physics</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
-      <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit, scroll to zoom. Press Space to pause."><div id="loading" role="status">Loading the Duck’s CAD model…</div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div><div class="viewport-help">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div></div>
+      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="physics" aria-pressed="false" disabled>Physics</button><button data-mode="walk" aria-pressed="false" disabled>Walking policy</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
+      <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit, scroll to zoom.">
+        <div id="loading" role="status">Loading the Duck’s CAD model…</div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div>
+        <div id="walk-hud" class="walk-hud" aria-label="Board load and missed slots" hidden>
+          <span>CPU <b id="hud-cpu">—</b></span><span>Top core <b id="hud-core">—</b></span><span>GPU <b id="hud-gpu">—</b></span>
+          <span>Misses <b id="hud-misses">—</b></span>
+        </div>
+        <div class="viewport-help">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div>
+      </div>
       <div class="stage-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
       <p class="mode-note" id="mode-note" aria-live="polite">Preparing the simulation…</p>
       <div class="stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
     </section>
     <aside class="controls-panel">
-      <section class="card"><div class="section-heading"><h2>Try a pose</h2><span>01</span></div><div class="preset-grid"><button data-preset="STAND" disabled>Stand</button><button data-preset="SIT" disabled>Sit</button><button data-preset="FOLD" disabled>Fold</button><button id="gait" disabled>Step cycle</button></div><p class="muted" id="preset-note">Exact joint frames and limits from Luwu’s model.</p></section>
+      <section class="card" id="walk-card" hidden>
+        <div class="section-heading"><h2>Walking policy</h2><span>UNO Q CPU</span></div>
+        <label class="range-label" for="walk-vx">Forward speed <output id="walk-vx-value">0.20 m/s</output></label>
+        <input id="walk-vx" type="range" min="-0.25" max="0.3" step="0.05" value="0.2">
+        <label class="range-label" for="walk-yaw">Turn rate <output id="walk-yaw-value">0.00 rad/s</output></label>
+        <input id="walk-yaw" type="range" min="-1" max="1" step="0.1" value="0">
+        <div class="button-row walk-buttons"><button id="walk-start" class="primary" disabled>Run 20 s</button><button id="walk-stop" disabled>Stop</button></div>
+        <p class="muted" id="walk-state" role="status">Checking the UNO Q…</p>
+        <dl class="walk-metrics">
+          <div><dt>Policy rate</dt><dd id="walk-hz">—</dd></div>
+          <div><dt>ONNX average</dt><dd id="walk-inference">—</dd></div>
+          <div title="95th percentile of recent policy and physics work; the slot budget is 20 ms"><dt>Slot work p95</dt><dd id="walk-work">—</dd></div>
+          <div><dt>Distance travelled</dt><dd id="walk-path">—</dd></div>
+          <div title="Rollout slots skipped to keep pace with wall time"><dt>Missed sim slots</dt><dd id="walk-missed">—</dd></div>
+          <div title="Change in the real Duck runtime’s Linux missed-slot counter during this trial"><dt>Missed Duck slots</dt><dd id="walk-duck-missed">—</dd></div>
+        </dl>
+        <div class="section-heading load-heading"><h3>Board load</h3><span>LAST 30 SECONDS</span></div>
+        <svg class="walk-graph" viewBox="0 0 290 70" role="img" aria-label="UNO Q CPU, busiest CPU core, and Adreno GPU load over time" preserveAspectRatio="none">
+          <path class="grid-lines" d="M0 2H290 M0 35H290 M0 68H290"/>
+          <path id="walk-core-path" class="graph-core"/><path id="walk-cpu-path" class="graph-cpu"/><path id="walk-gpu-path" class="graph-gpu"/>
+        </svg>
+        <dl class="walk-legend"><div class="graph-cpu"><dt>CPU</dt><dd id="walk-cpu">—</dd></div><div class="graph-core"><dt>Top core</dt><dd id="walk-core">—</dd></div><div class="graph-gpu"><dt>GPU</dt><dd id="walk-gpu">—</dd></div></dl>
+      </section>
+      <section class="card" id="pose-card"><div class="section-heading"><h2>Try a pose</h2><span>01</span></div><div class="preset-grid"><button data-preset="STAND" disabled>Stand</button><button data-preset="SIT" disabled>Sit</button><button data-preset="FOLD" disabled>Fold</button><button id="gait" disabled>Step cycle</button></div><p class="muted" id="preset-note">Exact joint frames and limits from Luwu’s model.</p></section>
       <section class="card" id="physics-card" hidden><div class="section-heading"><h2>Physics playground</h2><span>02</span></div><div class="button-row"><button id="drop" class="primary">Drop test</button><button id="nudge">Nudge</button><button id="step">Step 20 ms</button></div><label class="toggle"><input id="hold" type="checkbox"> Hold joint targets <span>viewer PD</span></label><label class="range-label" for="gravity">Gravity <output id="gravity-value">9.81 m/s²</output></label><input id="gravity" type="range" min="0" max="15" value="9.81" step="0.01"><label class="range-label" for="friction">Floor friction <output id="friction-value">1.00</output></label><input id="friction" type="range" min="0.1" max="2" value="1" step="0.05"><label class="range-label" for="speed">Simulation speed</label><select id="speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Real time</option></select><p class="muted">Gravity and contacts run in MuJoCo on this browser’s CPU. Viewer PD approximates servos; training uses BAM actuator models.</p></section>
       <section class="card" id="live-card" hidden><div class="section-heading"><h2>Read the real Duck</h2><span>02</span></div><label class="range-label" for="live-source">Display source</label><select id="live-source"><option value="targets">Commanded targets</option><option value="measured">Measured joint angles</option></select><p id="live-health" class="muted" role="status">Waiting for board telemetry…</p><p class="muted">Position is anchored in this view. IMU gravity provides roll and pitch when available; yaw and world position are not measured.</p></section>
       <section class="card joint-card"><div class="section-heading"><h2>Joint inspector</h2><span id="joint-count">14 DOF</span></div><p class="muted">Select a part in 3D or adjust its angle below.</p><div id="joint-controls"></div><p class="muted small-note">Motor 34 (mouth) is absent from the upstream model.</p><div class="button-row"><button id="export" disabled>Save pose</button><button id="import" disabled>Load pose</button><input id="pose-file" type="file" accept=".json,application/json" hidden></div><p id="pose-message" class="muted" role="status"></p></section>
@@ -31,5 +61,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=2"></script>
+<script type="module" src="sim/sim-ui.mjs?v=4"></script>
 </body></html>

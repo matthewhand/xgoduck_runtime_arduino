@@ -15,14 +15,16 @@ LuwuDynamics/xgoduck_rl, based on Pollen Robotics' microduck_rl.
 Apache License 2.0, as distributed by the upstream repository.
 Pinned commit: fa621fc77ad9a05d69da13270e86118bdd3603fe
 https://github.com/LuwuDynamics/xgoduck_rl
-Original model and meshes: model/robot_allcollisions.xml and model/assets/
+Original models and meshes: model/robot_allcollisions.xml, model/robot_walk.xml,
+model/scene_walk.xml, and model/assets/
 License: model/UPSTREAM-LICENSE
 browser_scene.xml adds a browser playground floor and simulation settings;
 its STAND/SIT/FOLD keyframes are adapted from upstream scene_walk.xml.
 
 The upstream model contains 14 articulated joints and does not model mouth
-motor 34. The viewer's PD actuators are an approximation; upstream training
-uses BAM actuator models. No training policy is run by this browser sandbox.
+motor 34. The simulator's position actuators are an approximation; upstream
+training uses BAM actuator models. The optional walking trial runs the
+runtime's shipped ONNX policy in a separate native MuJoCo process on the UNO Q.
 
 All runtime files are served locally. There are no CDN imports, analytics,
 or external telemetry uploads. See vendor-lock.json for file checksums and

@@ -71,6 +71,10 @@
       "sha": "79048237c6bfc811ceeeceba4c9fb666e036af52"
     },
     {
+      "path": "src/mjlab_microduck/robot/xgoduck/robot_walk.xml",
+      "sha": "e0854057321dcb4e1a166db7e9fe0b57bd8d3543"
+    },
+    {
       "path": "src/mjlab_microduck/robot/xgoduck/scene_walk.xml",
       "sha": "073009f83b1ecc2c1a2f119db26807b32981a91a"
     }

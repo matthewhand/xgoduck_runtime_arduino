@@ -9,11 +9,13 @@ from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
 from gpu_telemetry import CPU_DISABLED, GpuTelemetry
+from walk_lab import WalkLab, walk_command
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
 sys.setswitchinterval(0.001)
 controller = Controller(Bridge)
 gpu = GpuTelemetry(Bridge)
+walk_lab = WalkLab(lambda: controller.loop_missed)
 try:
     ui = WebUI(port=9527, cors_origins='')
 except TypeError as exc:
@@ -127,7 +129,26 @@ def status():
     cpu = sample.pop('cpu', CPU_DISABLED)
     return dict(controller.status(), gpu=sample, cpu=cpu)
 
+def walk_start(body: dict):
+    try:
+        vx, yaw = walk_command(body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    hardware = controller.status()
+    if hardware.get('enabled', False) or hardware['mode'] not in ('off', 'shadow'):
+        raise HTTPException(409, 'Put the hardware in Shadow or Off before starting a rollout.')
+    try:
+        return walk_lab.start(vx, yaw)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+
+def walk_stop(_body: dict):
+    return walk_lab.stop()
+
 ui.expose_api('GET', '/api/status', status)
+ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
+ui.expose_api('POST', '/api/lab/walk/start', walk_start)
+ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)
 ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key != 'cpu'})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)
@@ -156,6 +177,7 @@ gpu.start()
 try:
     App.run()
 finally:
+    walk_lab.stop()
     controller.stop()
     gpu.stop()
     worker.join(timeout=2)
