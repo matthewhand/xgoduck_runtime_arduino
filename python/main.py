@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
-from gpu_telemetry import GpuTelemetry
+from gpu_telemetry import CPU_DISABLED, GpuTelemetry
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
 sys.setswitchinterval(0.001)
@@ -123,10 +123,12 @@ def servo_action(body: dict):
         raise HTTPException(400, str(exc))
 
 def status():
-    return dict(controller.status(), gpu=dict(gpu.latest))
+    sample = dict(gpu.latest)
+    cpu = sample.pop('cpu', CPU_DISABLED)
+    return dict(controller.status(), gpu=sample, cpu=cpu)
 
 ui.expose_api('GET', '/api/status', status)
-ui.expose_api('GET', '/api/gpu', lambda: dict(gpu.latest))
+ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key != 'cpu'})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)
 ui.expose_api('POST', '/api/heading-hold', heading_hold)

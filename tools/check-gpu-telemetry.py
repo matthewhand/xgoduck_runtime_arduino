@@ -1,14 +1,15 @@
-import importlib.util
 import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'python'))
 from gpu_stats import GpuSampler
-from gpu_telemetry import read_sample
+from cpu_stats import CpuSampler
+from gpu_telemetry import GpuTelemetry, read_sample
 
 
 class TelemetryTests(unittest.TestCase):
@@ -79,12 +80,58 @@ class TelemetryTests(unittest.TestCase):
         for value in [-1, 101, True, float('nan'), '25']:
             path.write_text(json.dumps(dict(schema=1, timestamp=99., load_percent=value)))
             self.assertFalse(read_sample(path, 100.)['available'])
-        for stamp in [90., 101., True, float('nan')]:
+        for stamp in [90., 101., True, float('nan'), 10**310]:
             path.write_text(json.dumps(dict(schema=1, timestamp=stamp, load_percent=25)))
             self.assertFalse(read_sample(path, 100.)['available'])
         for raw in ['{', '[]', '{}']:
             path.write_text(raw)
             self.assertFalse(read_sample(path, 100.)['available'])
+
+    def test_cpu_aggregate_and_busiest_core(self):
+        stat = self.proc / 'stat'
+        stat.write_text('cpu 10 0 0 10 0 0 0 0 0 0\ncpu0 5 0 0 5 0 0 0 0 0 0\ncpu1 5 0 0 5 0 0 0 0 0 0\n')
+        sampler = CpuSampler(stat)
+        self.assertIsNone(sampler.sample()['load_percent'])
+        stat.write_text('cpu 70 0 0 140 10 0 0 0 30 0\ncpu0 65 0 0 45 0 0 0 0 30 0\ncpu1 5 0 0 95 10 0 0 0 0 0\n')
+        sample = sampler.sample()
+        self.assertEqual(sample['load_percent'], 30.)
+        self.assertEqual(sample['busiest_core_percent'], 60.)
+        self.assertEqual(sample['cores'], 2)
+        self.assertIsNone(sampler.sample()['load_percent'])
+        stat.write_text('cpu 1 0 0 1\n')
+        self.assertIsNone(sampler.sample()['load_percent'])
+
+    def test_cpu_and_gpu_availability_are_independent(self):
+        path = self.root / 'load.json'
+        packet = dict(schema=1, timestamp=99., load_percent=None,
+                      cpu=dict(load_percent=18., busiest_core_percent=55.))
+        path.write_text(json.dumps(packet))
+        sample = read_sample(path, 100.)
+        self.assertFalse(sample['available'])
+        self.assertEqual(sample['cpu']['busiest_core_percent'], 55.)
+        self.assertFalse(read_sample(path, 105.)['cpu']['available'])
+        packet.update(load_percent=22., cpu=dict(load_percent=True))
+        path.write_text(json.dumps(packet))
+        sample = read_sample(path, 100.)
+        self.assertEqual(sample['load_percent'], 22.)
+        self.assertFalse(sample['cpu']['available'])
+
+    def test_load_rpc_and_legacy_gpu_rpc(self):
+        path = self.root / 'load.json'
+        for cpu, expected in [(dict(load_percent=25.), ('duck_load', 25, 41)),
+                              (None, ('duck_gpu', 41))]:
+            packet = dict(schema=1, timestamp=time.time(), load_percent=41.)
+            if cpu is not None:
+                packet['cpu'] = cpu
+            path.write_text(json.dumps(packet))
+            calls = []
+            class Bridge:
+                def notify(self, *args):
+                    calls.append(args)
+                    telemetry.stop_event.set()
+            telemetry = GpuTelemetry(Bridge(), path)
+            telemetry.run()
+            self.assertEqual(calls, [expected])
 
 
 if __name__ == '__main__':

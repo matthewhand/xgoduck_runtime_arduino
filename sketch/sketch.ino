@@ -7,6 +7,7 @@
 #include "scs_bus.h"
 #include "qmi8658.h"
 #include "uart_fifo.h"
+#include "gpu_matrix.h"
 
 Motor motors[NUM_MOTORS];
 struct k_mutex motorsMu;
@@ -29,7 +30,6 @@ static atomic_t bridgeAttempts = ATOMIC_INIT(0), bridgeFailures = ATOMIC_INIT(0)
 static atomic_t notifyDrops = ATOMIC_INIT(0), bridgeReconnects = ATOMIC_INIT(0);
 static atomic_t bridgeReadyUs = ATOMIC_INIT(0);
 static atomic_t lastHostRxUs = ATOMIC_INIT(0);
-#include "gpu_matrix.h"
 static ImuSnapshot imuSnapshot = {};
 static CommandPacket latest = {};
 static bool pending = false;
@@ -627,7 +627,10 @@ static void bridgeTask(void*, void*, void*) {
               Bridge.provide("duck_cal", receiveCal) &&
               Bridge.provide("duck_servo", receiveServo);
       // Optional display registration must not gate the hardware-control Bridge.
-      if (ready) Bridge.provide("duck_gpu", receiveGpu);
+      if (ready) {
+        Bridge.provide("duck_gpu", receiveGpu);
+        Bridge.provide("duck_load", receiveLoad);
+      }
     }
     if (!ready) {
       atomic_inc(&bridgeFailures);
@@ -690,4 +693,4 @@ void setup() {
   // Thumb JUMP24 range; the Uno Q extension loader rejects it with ENOEXEC.
   asm volatile("nop" ::: "memory");
 }
-void loop() { updateGpuMatrix(); delay(100); }
+void loop() { updateLoadMatrix(atomic_get(&bridgeReady) != 0); delay(100); }
