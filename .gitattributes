@@ -1,0 +1,6 @@
+# Keep pinned third-party payloads byte-identical on Windows and Linux.
+assets/sim/vendor/** -text linguist-vendored=true
+assets/sim/model/** -text
+assets/sim/model/assets/** linguist-vendored=true
+assets/sim/model-source.json text eol=lf
+assets/sim/vendor-lock.json text eol=lf

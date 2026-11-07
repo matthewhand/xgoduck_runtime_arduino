@@ -7,8 +7,8 @@ can be reviewed independently before proposing an upstream contribution.
 | --- | --- | --- |
 | GPU + matrix | Adreno proof passed; live GPU API/card deployed; matrix display confirmed; ~100 Hz feedback under GPU load | UNO Q only; motors and closed-loop policy timing later |
 | Duck mood matrix | Blink, idle eyes, listening, dizzy and recovery animations driven by runtime events | UNO Q; some events initially simulated |
-| 3D telemetry | Browser Duck showing measured and target joints, IMU tilt and timing | Exact XGO geometry/joint mapping; motors later |
-| Physics simulation | Exact XGO dynamics and trained policies in a closed simulation loop | Physics engine and matching actuator model; distinct from a pose viewer |
+| 3D telemetry | Duck Lab has the actual CAD model, target/measured views, missing-data handling, and IMU roll/pitch | Deployed; real motors and IMU needed for hardware comparison |
+| Physics simulation | Browser MuJoCo with XGO masses, collisions, gravity, drop/pause/step controls | Deployed sandbox; BAM actuation and closed-loop policy rollouts still pending |
 | Vision | Detect a face or gesture, preview proposed head commands | Compatible camera; head motors later |
 | ROS 2 bridge | Publish state and accept bounded high-level commands | Compatible ROS 2 host, timestamps and command ownership |
 | Voice and sound | Recognize a command and animate a listening/speaking response | Microphone and speaker; local inference performance to measure |

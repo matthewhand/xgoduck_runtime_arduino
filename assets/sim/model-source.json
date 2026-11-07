@@ -1,0 +1,78 @@
+{
+  "repository": "LuwuDynamics/xgoduck_rl",
+  "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha": "5babf660c98eac4418422e1a62a5d9fc51a4d63e"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/head_pitch.stl",
+      "sha": "c2c616cadc77d68faa39cb0839d81278a607e105"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/head_roll.stl",
+      "sha": "76868942af67139c3169617aa4bdff2b8c344f9c"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/head_yaw.stl",
+      "sha": "f8cbef26214096103b9aa4449c67f434d69fe4ba"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/left_ankle.stl",
+      "sha": "091b3979fc26e797b6430a79f7ae83a5b7303f6c"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/left_hip_pitch.stl",
+      "sha": "d575bb4de9107c09bd46ba91991477b87d517d61"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/left_hip_roll.stl",
+      "sha": "6f92e2ebbce6cadbd069a2de1b7042d881a846f8"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/left_hip_yaw.stl",
+      "sha": "69f8a54f85e1ef440fb66a955ccd492ce56e00be"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/left_knee.stl",
+      "sha": "7a6bb2346ffa21da9012b1954b4ab72a5f53c04b"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/neck_pitch.stl",
+      "sha": "8b9d28107482bfe9c592812943136b67ecc702d8"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/right_ankle.stl",
+      "sha": "030f0d466fdc1db458898ed319054595c73446b4"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/right_hip_pitch.stl",
+      "sha": "704201d2803a13cb3c4e91563cf474d2ae2db793"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/right_hip_roll.stl",
+      "sha": "2450f0b6ecfd1f6aa47ae399ff2705d755be6994"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/right_hip_yaw.stl",
+      "sha": "a73eff0933a9a1a6611fd1b0eba834b30b8f38fc"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/right_knee.stl",
+      "sha": "df7ebf026945d48ca87e1e3d104ccb3e25e9bd71"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/assets/trunk_base.stl",
+      "sha": "1de0f83eff9f5ddd56ef3f2cab5890e08f96e26b"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/robot_allcollisions.xml",
+      "sha": "79048237c6bfc811ceeeceba4c9fb666e036af52"
+    },
+    {
+      "path": "src/mjlab_microduck/robot/xgoduck/scene_walk.xml",
+      "sha": "073009f83b1ecc2c1a2f119db26807b32981a91a"
+    }
+  ]
+}

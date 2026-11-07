@@ -17,6 +17,13 @@ This document identifies upstream sources used by the runtime. It does not decla
 - License: Mozilla Public License 2.0; a copy is included in [LICENSES/MPL-2.0.txt](LICENSES/MPL-2.0.txt).
 - `tools/prepare-bridge.py`, `tools/bridge_patch.py`, and `tools/patches/` adapt portions of these libraries. Changes cover the Bridge thread stack, bounded MessagePack framing, bounded RPC waits, retry-safe initialization, UART initialization reuse, and late-response recovery. The helper applies these changes to the installed libraries and retains their original copyright and license headers.
 
+## Browser simulation
+
+- Three.js 0.187.0, Copyright 2010–2026 Three.js Authors, MIT license. Vendored builds and OrbitControls are in `assets/sim/vendor/three/`, including their `LICENSE`.
+- MuJoCo 3.12.0, Google DeepMind and contributors, Apache License 2.0. The official single-threaded npm JavaScript/WASM distribution is in `assets/sim/vendor/mujoco/`, with its `LICENSE`.
+- XGO Duck MJCF and CAD meshes from [LuwuDynamics/xgoduck_rl](https://github.com/LuwuDynamics/xgoduck_rl), commit `fa621fc77ad9a05d69da13270e86118bdd3603fe`, distributed by that repository under Apache License 2.0. The model, meshes, original scene and upstream license are in `assets/sim/model/`. The browser scene adds floor/simulation options and adapts the upstream Stand/Sit/Fold keyframes.
+- `assets/sim/NOTICE.txt` provides browser-visible attribution. `assets/sim/model-source.json` and `assets/sim/vendor-lock.json` record immutable sources and checksums. The bundled compiled engines are required browser runtime assets.
+
 ## Other dependencies and policy assets
 
 Arduino libraries are resolved from `sketch/sketch.yaml`; Python packages are listed in `python/requirements.txt`. Their respective upstream licenses continue to apply. Installed SDKs, dependencies, virtual environments, and compiled firmware are not vendored in this repository.
