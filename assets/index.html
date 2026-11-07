@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XGO Duck</title><link rel="stylesheet" href="style.css?v=20261105-imu-calibration2">
+<title>XGO Duck</title><link rel="stylesheet" href="style.css?v=20261107-gpu">
 <main>
 <header><div><small>ARDUINO UNO Q</small><h1>XGO Duck</h1></div><div class="header-actions"><nav class="nav"><a href="/" aria-current="page">Control</a><a href="/calibrate.html">Calibration</a><a href="/servo.html">Servo setup</a></nav><button class="stop" id="stop">Torque off</button></div></header>
 <p id="message">Connecting…</p>
-<section class="metrics"><article><small>Feedback</small><strong id="rx">—</strong></article><article><small>Policy</small><strong id="rl">—</strong></article><article><small>Servos online</small><strong id="servos">—</strong></article><article><small>Voltage</small><strong id="voltage">—</strong></article><article><small>IMU</small><strong id="imu">—</strong></article></section>
+<section class="metrics"><article><small>Feedback</small><strong id="rx">—</strong></article><article><small>Policy</small><strong id="rl">—</strong></article><article><small>Servos online</small><strong id="servos">—</strong></article><article><small>Voltage</small><strong id="voltage">—</strong></article><article><small>IMU</small><strong id="imu">—</strong></article><article><small>GPU activity</small><strong id="gpu" title="Activity measured across readable GPU clients">—</strong></article></section>
 <section>
   <h2>Mode <span id="mode">—</span></h2>
   <div class="buttons"><button data-mode="shadow">Inference only</button><button data-mode="hold">Default pose</button><button data-mode="policy">Walk / get up</button><button id="pick">Pick</button><button id="roulade">Roulade</button><button id="sitstand" disabled>Sit</button><button id="left_kick" disabled>Left kick</button><button id="right_kick" disabled>Right kick</button><label class="mode-toggle"><input id="roller-mode" type="checkbox" role="switch">Skating mode <span id="roller-state">Off</span></label></div>
@@ -47,4 +47,4 @@
     </figure>
   </div>
 </section>
-</main><script src="app.js?v=20261106-heading-hold2"></script></html>
+</main><script src="app.js?v=20261107-gpu"></script></html>
