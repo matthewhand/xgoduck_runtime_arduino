@@ -1,6 +1,7 @@
 import loadMujoco from './vendor/mujoco/mujoco.js';
 
-export const MOTOR_IDS = [10, 11, 12, 13, 14, 20, 21, 22, 23, 24, 30, 31, 32, 33, 34];
+// Runtime packets include mouth motor 34; it has no corresponding MJCF joint.
+const RUNTIME_MOTOR_IDS = [10, 11, 12, 13, 14, 20, 21, 22, 23, 24, 30, 31, 32, 33, 34];
 export const JOINTS = [
   [10, 'left_hip_yaw', 'Left hip yaw'], [11, 'left_hip_roll', 'Left hip roll'],
   [12, 'left_hip_pitch', 'Left hip pitch'], [13, 'left_knee', 'Left knee'], [14, 'left_ankle', 'Left ankle'],
@@ -71,6 +72,8 @@ export class DuckSimulation {
     this.mj = mj; this.model = model; this.data = data;
     this.option = model.opt;
     this.timestep = this.option.timestep;
+    this.floor = mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, 'floor');
+    if (this.floor < 0) throw new Error('Floor geom not found in Duck model.');
     this.joints = JOINTS.map(([id, name, label]) => {
       const index = mj.mj_name2id(model, mj.mjtObj.mjOBJ_JOINT.value, name);
       const actuator = mj.mj_name2id(model, mj.mjtObj.mjOBJ_ACTUATOR.value, name);
@@ -130,8 +133,7 @@ export class DuckSimulation {
 
   setFriction(value) {
     if (!Number.isFinite(value) || value < 0.05 || value > 3) throw new Error('Invalid floor friction.');
-    const floor = this.mj.mj_name2id(this.model, this.mj.mjtObj.mjOBJ_GEOM.value, 'floor');
-    this.model.geom_friction[floor * 3] = value;
+    this.model.geom_friction[this.floor * 3] = value;
   }
 
   drop() {
@@ -173,7 +175,7 @@ export class DuckSimulation {
     const array = source === 'measured' ? packet.angles : packet.targets;
     let used = 0;
     for (const joint of this.joints) {
-      const value = array?.[MOTOR_IDS.indexOf(joint.id)];
+      const value = array?.[RUNTIME_MOTOR_IDS.indexOf(joint.id)];
       if ((source !== 'measured' || present.has(joint.id)) && typeof value === 'number' && Number.isFinite(value)) {
         this.setJoint(joint.id, value, {kinematic: true, clamp: false}); used++;
       }
@@ -184,5 +186,8 @@ export class DuckSimulation {
     return {fresh: true, used, measured: this.joints.filter(joint => present.has(joint.id)).length, imu: Boolean(quaternion)};
   }
 
-  dispose() { this.data.delete(); this.option.delete(); this.model.delete(); }
+  dispose() {
+    // MjModel.opt is a borrowed reference to storage owned by MjModel.
+    this.data.delete(); this.model.delete();
+  }
 }

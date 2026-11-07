@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {DuckSimulation, parsePose, attitudeFromGravity, JOINTS} from '../assets/sim/sim-core.mjs';
+import {DuckSimulation, parsePose, attitudeFromGravity} from '../assets/sim/sim-core.mjs';
 
 const base = new URL('../assets/sim/',import.meta.url);
 const read = path => readFile(new URL(path,base));
@@ -41,6 +41,7 @@ try {
   const zeroHeight=sim.data.qpos[2]; sim.step(25);
   assert(Math.abs(sim.data.qpos[2]-zeroHeight)<1e-6);
   sim.setGravity(9.81); sim.drop();
+  assert.equal(sim.mode,'physics');
   const start=sim.data.qpos[2]; sim.step(25);
   assert(sim.data.qpos[2]<start-0.009 && sim.data.qpos[2]>start-0.02);
   sim.step(475);
@@ -53,8 +54,9 @@ try {
   const packet={feedback_age_ms:1,servo_ids:[],angles:Array(15).fill(60),targets:Array(15).fill(0),imu_ok:false};
   assert.equal(sim.applyTelemetry(packet,'measured').used,0);
   assert.deepEqual(sim.data.qpos,original,'Missing joints must not become measured zeros/angles');
+  const beforeStale=sim.data.qpos.slice();
   assert.equal(sim.applyTelemetry({...packet,feedback_age_ms:500},'targets').fresh,false);
-  assert.deepEqual(sim.data.qpos,original,'Stale feedback must freeze the pose');
+  assert.deepEqual(sim.data.qpos,beforeStale,'Stale feedback must freeze the pose');
   packet.targets[10]=8;
   assert.equal(sim.applyTelemetry(packet,'targets').used,14);
   assert(Math.abs(sim.angles()[30]-8)<1e-6,'Runtime motor 30 must map to neck_pitch');
