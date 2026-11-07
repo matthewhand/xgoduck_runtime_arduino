@@ -5,7 +5,7 @@ can be reviewed independently before proposing an upstream contribution.
 
 | Experiment | First useful milestone | Needs |
 | --- | --- | --- |
-| GPU + matrix | Adreno proof passed; live GPU API/card deployed; matrix display confirmed; ~100 Hz feedback under GPU load | UNO Q only; motors and closed-loop policy timing later |
+| Board load + matrix | Verified Adreno compute; labelled CPU/GPU pages and dashboard load/timing readings | UNO Q only; motors and closed-loop policy timing later |
 | Duck mood matrix | Blink, idle eyes, listening, dizzy and recovery animations driven by runtime events | UNO Q; some events initially simulated |
 | 3D telemetry | Duck Lab has the actual CAD model, target/measured views, missing-data handling, and IMU roll/pitch | Deployed; real motors and IMU needed for hardware comparison |
 | Physics simulation | Browser MuJoCo with XGO masses, collisions, gravity, drop/pause/step controls | Deployed sandbox; BAM actuation and closed-loop policy rollouts still pending |

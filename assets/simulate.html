@@ -26,10 +26,10 @@
       <section class="card joint-card"><div class="section-heading"><h2>Joint inspector</h2><span id="joint-count">14 DOF</span></div><p class="muted">Select a part in 3D or adjust its angle below.</p><div id="joint-controls"></div><p class="muted small-note">Motor 34 (mouth) is absent from the upstream model.</p><div class="button-row"><button id="export" disabled>Save pose</button><button id="import" disabled>Load pose</button><input id="pose-file" type="file" accept=".json,application/json" hidden></div><p id="pose-message" class="muted" role="status"></p></section>
     </aside>
   </div>
-  <section class="board-strip" aria-label="Board telemetry"><div><span class="status-dot" id="board-dot"></span><strong>UNO Q</strong><span id="board-state">Connecting…</span></div><div>Feedback <strong id="board-feedback">—</strong></div><div>Servos <strong id="board-servos">—</strong></div><div>Board GPU <strong id="board-gpu">—</strong></div><div id="board-torque">Torque status unknown</div></section>
+  <section class="board-strip" aria-label="Board telemetry"><div><span class="status-dot" id="board-dot"></span><strong>UNO Q</strong><span id="board-state">Connecting…</span></div><div>Feedback <strong id="board-feedback">—</strong></div><div>Servos <strong id="board-servos">—</strong></div><div>Board CPU <strong id="board-cpu">—</strong></div><div>Board GPU <strong id="board-gpu">—</strong></div><div>Missed Linux slots <strong id="board-missed">—</strong></div><div id="board-torque">Torque status unknown</div></section>
   <footer><span id="engine-note">Graphics run on the viewing device. The UNO Q serves the app.</span><span>MuJoCo 3.12 · Three.js r187 · <a href="sim/NOTICE.txt">Sources &amp; licenses</a></span></footer>
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=1"></script>
+<script type="module" src="sim/sim-ui.mjs?v=2"></script>
 </body></html>

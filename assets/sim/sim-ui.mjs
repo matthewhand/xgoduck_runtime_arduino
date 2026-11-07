@@ -176,7 +176,11 @@ function updateBoard() {
   $('board-state').textContent = fresh ? 'Connected' : 'Not connected';
   $('board-feedback').textContent = fresh ? `${lastPacket.feedback_hz.toFixed(1)} Hz` : '—';
   $('board-servos').textContent = fresh ? `${lastPacket.servo_ids?.length || 0}/15` : '—';
+  const cpu = fresh ? lastPacket.cpu : null;
+  $('board-cpu').textContent = cpu?.available && Number.isFinite(cpu.load_percent) ? `${cpu.load_percent.toFixed(1)}%` : '—';
+  $('board-cpu').title = cpu?.available && Number.isFinite(cpu.busiest_core_percent) ? `Busiest core ${cpu.busiest_core_percent.toFixed(1)}%` : '';
   $('board-gpu').textContent = fresh && lastPacket.gpu?.available ? `${lastPacket.gpu.load_percent.toFixed(1)}%` : '—';
+  $('board-missed').textContent = fresh && Number.isInteger(lastPacket.loop_missed) ? lastPacket.loop_missed : '—';
   $('board-torque').textContent = fresh && typeof lastPacket.enabled === 'boolean' ? (lastPacket.enabled ? 'Hardware torque ON' : 'Hardware torque off') : 'Torque status unknown';
   $('board-torque').classList.toggle('warning', fresh && lastPacket.enabled === true);
   if (mode === 'live') {

@@ -20,7 +20,9 @@ The UNO Q serves the HTML, JavaScript, WebAssembly, CAD assets and existing
 read-only telemetry API. The viewing device runs Three.js graphics on its GPU
 and single-threaded MuJoCo physics on its CPU. This does not accelerate the
 board's ONNX policies or use the board's Adreno for browser rendering on a PC.
-The **Board GPU** reading is a separate metric from browser graphics activity.
+The **Board CPU** and **Board GPU** readings describe the UNO Q. The render FPS
+and physics clock describe the viewing device. **Missed Linux slots** counts
+board scheduling misses since app start, so it can be compared across a trial.
 
 All dependencies are vendored locally: Three.js 0.187.0, official MuJoCo 3.12.0
 WASM, and the XGO Duck model from LuwuDynamics/xgoduck_rl commit

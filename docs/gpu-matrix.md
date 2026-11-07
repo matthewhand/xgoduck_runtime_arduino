@@ -1,8 +1,8 @@
-# GPU activity on the UNO Q LED matrix
+# CPU and GPU activity on the UNO Q LED matrix
 
-This optional experiment runs a verified compute shader on the UNO Q Adreno GPU
-and shows measured GPU activity on its 8 x 13 matrix. ONNX policy inference
-continues to use the CPU. The GPU proof runs only when explicitly launched.
+The UNO Q's 8 x 13 matrix shows measured host CPU and Adreno GPU activity.
+An optional compute proof exercises the Adreno and verifies its outputs.
+ONNX policy inference continues to use the CPU.
 
 ## Deployment
 
@@ -50,10 +50,12 @@ continues to use the CPU. The GPU proof runs only when explicitly launched.
 
 ## Reading the display
 
-The three-by-five digits show 0–100, with a thirteen-pixel gauge along the bottom.
-The corner heartbeat alternates each second. `--` means missing, unsupported,
-invalid or stale telemetry; it does not mean zero GPU usage. Both Python and the
-MCU independently stop showing a numeric value after five seconds without data.
+The matrix alternates every three seconds: **C** is total CPU busy percent and
+**G** is measured GPU activity percent. The bottom gauge shows the same value.
+The corner dot blinks on a page with a fresh numeric reading. `--` indicates
+unavailable data. Python checks the host sample age and the MCU checks when it
+last received an update; both use a five-second expiry. Older GPU-only collector
+samples still drive the G page.
 Removing `.cache/gpu-status.json` disables the display. The monitor stops after
 the requested duration (1–3600 seconds); its final sample remains as evidence.
 Use `--seconds 0 --quiet` for continuous monitoring without per-sample log output.
@@ -71,8 +73,15 @@ The Duck app must also be running to forward samples to the matrix. App Lab's
 default-app setting controls that separately. Stop the collector and remove its
 cron entry before removing the cache file to disable this experiment permanently.
 
-The same sample is shown in the Control page's GPU activity card and returned by
-`GET /api/gpu` and the `gpu` field of `GET /api/status`.
+**Control** shows total CPU, busiest core, GPU activity and **Missed Linux slots**.
+Duck Lab also shows board load and misses. The `cpu` and `gpu` fields of
+`GET /api/status` carry the load readings; `GET /api/gpu` remains GPU-only.
+
+Use busiest core and the change in missed slots to assess a new workload. One
+busy core can be hidden by a modest average across four cores. The missed-slot
+counter is cumulative since app start; compare it before and during the test
+alongside the feedback rate. Browser rendering runs on the viewing device, so
+Duck Lab can show high frame rates while the UNO Q's GPU page reads zero.
 
 If the board's Wi-Fi connection is unreliable, forward the dashboard over USB
 from a PC with ADB, then open `http://127.0.0.1:19527` on that PC:
@@ -87,6 +96,9 @@ if more than one ADB device is connected.
 
 ## What the percentage measures
 
+- CPU uses changes in Linux `/proc/stat` counters over the sample interval,
+  excluding idle and I/O wait from busy time and avoiding double-counted guest
+  time. The dashboard shows the aggregate and the busiest reporting core.
 - With a KGSL `gpubusy` node, it is the device busy-time ratio from that node.
 - With mainline MSM DRM, it is the change in `drm-engine-gpu` time divided by
   elapsed time, summed across readable clients. Duplicate/shared descriptors are
@@ -158,6 +170,15 @@ actual sensors, policies, and any proposed GPU workload before enabling motion.
 The user confirmed readable matrix digits, the blinking dot, and the rising
 bottom gauge on the board. Optional C proof execution remains untested; the
 Python proof has been exercised on the actual GPU.
+
+The CPU/GPU display update was compiled and flashed on the same board, and
+the MCU accepted a paired reading. A low-priority single-core workload raised
+aggregate CPU from a 14.1% idle median to 35.0%, with the busiest core at 100%.
+The Adreno proof verified all 65,536 results and reached 40.7% measured GPU
+activity. Feedback stayed near 100 Hz with no additional Linux scheduling misses,
+Bridge reconnects or MCU overruns in these trials. Nine portable telemetry tests
+passed on Windows and the board. A matrix harness checked rotation, 100%,
+unavailable pages, legacy GPU samples and timer rollover.
 
 When launching Arduino commands from an ADB shell on this image, use
 `TMPDIR=/tmp`; ADB's default `/data/local/tmp` does not exist on the board.
