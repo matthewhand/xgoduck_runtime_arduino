@@ -212,6 +212,9 @@ setInterval(async()=>{if(statusBusy||document.hidden)return;statusBusy=true;try{
 controlModeAvailable=!['calibrate','servo_debug'].includes(s.mode);
 if(!headingBusy)showHeading(s.heading_hold);
 $('voltage').textContent=s.voltage_v==null?'—':s.voltage_v.toFixed(1)+' V';
+const gpu=s.gpu;
+$('gpu').textContent=gpu?.available&&Number.isFinite(gpu.load_percent)?gpu.load_percent.toFixed(1)+'%':'—';
+$('gpu').title=gpu?.available?'Activity measured across readable GPU clients; some system processes may be excluded':(gpu?.reason||'GPU telemetry is not running');
 const imuActive=!!s.imu_calibration?.active;
 if(imuActive!==imuCalibrationActive)zero(false);
 imuCalibrationActive=imuActive;

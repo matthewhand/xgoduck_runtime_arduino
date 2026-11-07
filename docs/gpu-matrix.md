@@ -54,9 +54,10 @@ invalid or stale telemetry; it does not mean zero GPU usage. Both Python and the
 MCU independently stop showing a numeric value after five seconds without data.
 Removing `.cache/gpu-status.json` disables the display. The monitor stops after
 the requested duration (1–3600 seconds); its final sample remains as evidence.
+Use `--seconds 0 --quiet` for continuous monitoring without per-sample log output.
 
-The same sample is returned by `GET /api/gpu` and the `gpu` field of
-`GET /api/status`.
+The same sample is shown in the Control page's GPU activity card and returned by
+`GET /api/gpu` and the `gpu` field of `GET /api/status`.
 
 ## What the percentage measures
 
@@ -69,6 +70,10 @@ The same sample is returned by `GET /api/gpu` and the `gpu` field of
   until work completes. Values are bounded to 0–100 for this single-engine GPU.
 - GPU clock speed is not substituted for utilization. If neither source is
   available, the metric remains unavailable.
+
+The collector keeps an idle render-node descriptor open so MSM can report a
+real zero-time client even when no app is rendering. It does not submit GPU
+work. This enables an idle reading without inventing data on unsupported drivers.
 
 Sampling and JSON I/O occur outside the 50 Hz policy and 100 Hz hardware loops.
 The host collector publishes at 1 Hz. Matrix rendering runs in the existing
@@ -96,13 +101,21 @@ Validation on a physical UNO Q 4 GB on 7 November 2026:
 - All six portable telemetry checks passed on both the board and Windows.
 - The matrix C++ harness and C proof syntax check passed on Windows.
 
-Still pending: C proof execution, App Lab cache sharing, full Duck sketch
-compilation, matrix orientation, and control-loop timing under GPU load. The
-stock board had core 0.51.0 and App CLI 0.6.6; the Duck runtime requires core
-1.0.0 and newer Bridge libraries, which need installation before flashing.
+The full Duck sketch subsequently compiled and flashed with core 1.0.0 and the
+runtime's Bridge patches. The Python app started with App CLI 0.6.6 and App
+Bricks 0.5.0, loaded all eight ONNX policies, and served fresh host GPU samples
+through both status APIs. The hardware reported motor torque disabled. The
+factory WebUI fallback was checked to retain same-origin Socket.IO behavior.
+
+Still pending: C proof execution, matrix orientation, and stable control-loop
+timing under GPU load after the factory communication service is updated.
 
 When launching Arduino commands from an ADB shell on this image, use
 `TMPDIR=/tmp`; ADB's default `/data/local/tmp` does not exist on the board.
+Factory router 0.5.3 also lacks the `$/version` probe used by this runtime and
+must be updated before use. Merely changing its baud rate causes repeated
+Bridge reconnects. The Python entrypoint handles App Bricks 0.5.0's older WebUI
+constructor while keeping Socket.IO restricted to the same origin.
 
 References: [UNO Q datasheet](https://docs.arduino.cc/resources/datasheets/ABX00162-ABX00173-datasheet.pdf),
 [Linux DRM usage statistics](https://docs.kernel.org/gpu/drm-usage-stats.html),

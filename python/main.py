@@ -14,7 +14,15 @@ from gpu_telemetry import GpuTelemetry
 sys.setswitchinterval(0.001)
 controller = Controller(Bridge)
 gpu = GpuTelemetry(Bridge)
-ui = WebUI(port=9527, cors_origins='')
+try:
+    ui = WebUI(port=9527, cors_origins='')
+except TypeError as exc:
+    if "unexpected keyword argument 'cors_origins'" not in str(exc):
+        raise
+    # App Bricks 0.5.0 lacks the option and otherwise allows every Socket.IO
+    # origin. Preserve same-origin checks on factory images.
+    ui = WebUI(port=9527)
+    ui.app.sio.eio.cors_allowed_origins = None
 Bridge.provide('duck_state', controller.receive)
 Bridge.provide('duck_diagnostics', controller.receive_diagnostics)
 Bridge.provide('duck_voltage', controller.receive_voltage)
