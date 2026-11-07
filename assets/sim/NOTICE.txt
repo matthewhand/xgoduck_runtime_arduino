@@ -1,0 +1,29 @@
+Duck Lab browser dependencies and model
+
+Three.js 0.187.0
+Copyright 2010-2026 Three.js Authors. MIT license.
+https://github.com/mrdoob/three.js
+License: vendor/three/LICENSE
+
+MuJoCo 3.12.0, official single-threaded JavaScript/WebAssembly build
+Google DeepMind and contributors. Apache License 2.0.
+https://github.com/google-deepmind/mujoco
+License: vendor/mujoco/LICENSE
+
+XGO Duck CAD meshes and MJCF
+LuwuDynamics/xgoduck_rl, based on Pollen Robotics' microduck_rl.
+Apache License 2.0, as distributed by the upstream repository.
+Pinned commit: fa621fc77ad9a05d69da13270e86118bdd3603fe
+https://github.com/LuwuDynamics/xgoduck_rl
+Original model and meshes: model/robot_allcollisions.xml and model/assets/
+License: model/UPSTREAM-LICENSE
+browser_scene.xml adds a browser playground floor and simulation settings;
+its STAND/SIT/FOLD keyframes are adapted from upstream scene_walk.xml.
+
+The upstream model contains 14 articulated joints and does not model mouth
+motor 34. The viewer's PD actuators are an approximation; upstream training
+uses BAM actuator models. No training policy is run by this browser sandbox.
+
+All runtime files are served locally. There are no CDN imports, analytics,
+or external telemetry uploads. See vendor-lock.json for file checksums and
+package provenance, and tools/prepare-browser-sim.py to reproduce the assets.
