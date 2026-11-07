@@ -131,14 +131,14 @@ def status():
 
 def walk_start(body: dict):
     try:
-        vx, yaw = walk_command(body)
+        vx, yaw, arena = walk_command(body)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     hardware = controller.status()
     if hardware.get('enabled', False) or hardware['mode'] not in ('off', 'shadow'):
         raise HTTPException(409, 'Put the hardware in Shadow or Off before starting a rollout.')
     try:
-        return walk_lab.start(vx, yaw)
+        return walk_lab.start(vx, yaw, arena)
     except RuntimeError as exc:
         raise HTTPException(409, str(exc))
 
