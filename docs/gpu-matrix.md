@@ -31,6 +31,8 @@ continues to use the CPU. The GPU proof runs only when explicitly launched.
    It dispatches on the GPU, then checks all 65,536 outputs on the CPU. The
    reference check takes additional time after the requested dispatch interval.
    It rejects software renderers. This does not require a compiler or pip install.
+   On Linux it runs at nice level 10 so this diagnostic and its CPU reference
+   have lower scheduling priority than the robot's normal control processes.
 
    Alternatively, install build dependencies **on the UNO Q** and build the C version:
 
@@ -55,6 +57,19 @@ MCU independently stop showing a numeric value after five seconds without data.
 Removing `.cache/gpu-status.json` disables the display. The monitor stops after
 the requested duration (1–3600 seconds); its final sample remains as evidence.
 Use `--seconds 0 --quiet` for continuous monitoring without per-sample log output.
+Only one collector can write a given output file; a second instance exits without
+replacing the first instance's samples.
+
+For optional startup on boot, add this line with `crontab -e` on the UNO Q,
+adjusting the app path if necessary:
+
+```cron
+@reboot /bin/sleep 20 && /usr/bin/python3 /home/arduino/ArduinoApps/xgo-duck/tools/gpu-monitor.py --seconds 0 --quiet >> /home/arduino/ArduinoApps/xgo-duck/.cache/gpu-service.log 2>&1
+```
+
+The Duck app must also be running to forward samples to the matrix. App Lab's
+default-app setting controls that separately. Stop the collector and remove its
+cron entry before removing the cache file to disable this experiment permanently.
 
 The same sample is shown in the Control page's GPU activity card and returned by
 `GET /api/gpu` and the `gpu` field of `GET /api/status`.
@@ -94,10 +109,9 @@ Validation on a physical UNO Q 4 GB on 7 November 2026:
 - Python proof: **PASS**, 137 compute batches over a five-second dispatch
   interval; all 65,536 results verified. Dispatch and CPU verification together
   took 21.12 seconds.
-- Host DRM collector measured a peak of **40.7%** for readable clients during
-  the experiment. Some processes were inaccessible; this is not whole-device
-  utilization. The board clock was not yet synchronized, so raw log timestamps
-  are not the date of the experiment.
+- A subsequent ten-second dispatch test measured a **41.0%** peak for readable
+  DRM clients, with all outputs verified. Some processes were inaccessible;
+  this is not whole-device utilization.
 - All six portable telemetry checks passed on both the board and Windows.
 - The matrix C++ harness and C proof syntax check passed on Windows.
 
@@ -107,15 +121,42 @@ Bricks 0.5.0, loaded all eight ONNX policies, and served fresh host GPU samples
 through both status APIs. The hardware reported motor torque disabled. The
 factory WebUI fallback was checked to retain same-origin Socket.IO behavior.
 
-Still pending: C proof execution, matrix orientation, and stable control-loop
-timing under GPU load after the factory communication service is updated.
+After updating Arduino Router to 0.11.0, an end-to-end GPU test on the factory
+Python image kept MCU feedback at approximately 100 Hz, with no Bridge
+reconnects, bad feedback frames, MCU overruns, or additional missed Linux control
+cycles. App CLI was subsequently upgraded to 0.14.1 with App Bricks 0.13.2;
+ordinary App CLI startup then worked without a manual router group override.
+Its first stress run passed the GPU check and measured a 40.2% peak, with clean
+MCU counters, but recorded two missed Linux scheduling slots. The proof now
+runs at nice level 10 to reduce interference from background diagnostics.
+
+All samples reported inference-only mode with torque disabled. No motors or IMU
+were attached, so these checks verify communication and diagnostics under GPU
+load, not walking or 50 Hz policy execution with live observations. Linux
+scheduling is not a hard real-time guarantee; measure deadlines again with
+actual sensors, policies, and any proposed GPU workload before enabling motion.
+
+The user confirmed readable matrix digits, the blinking dot, and the rising
+bottom gauge on the board. Optional C proof execution remains untested; the
+Python proof has been exercised on the actual GPU.
 
 When launching Arduino commands from an ADB shell on this image, use
 `TMPDIR=/tmp`; ADB's default `/data/local/tmp` does not exist on the board.
 Factory router 0.5.3 also lacks the `$/version` probe used by this runtime and
 must be updated before use. Merely changing its baud rate causes repeated
-Bridge reconnects. The Python entrypoint handles App Bricks 0.5.0's older WebUI
-constructor while keeping Socket.IO restricted to the same origin.
+Bridge reconnects. Keep App CLI compatible with the router: the older CLI
+0.6.6 does not add the new router socket's supplementary group to app containers.
+The Python entrypoint handles App Bricks 0.5.0's older WebUI constructor while
+keeping Socket.IO restricted to the same origin.
+
+When upgrading App CLI on a factory image, also check `arduino-cli core list`.
+The globally installed core 0.51.0 uses a different upload menu from this app's
+pinned core 1.0.0; App CLI can otherwise choose the wrong upload method and report
+`invalid option 'flash_mode'`. Installing the matching global core resolves that:
+
+```sh
+TMPDIR=/tmp arduino-cli core install arduino:zephyr@1.0.0
+```
 
 References: [UNO Q datasheet](https://docs.arduino.cc/resources/datasheets/ABX00162-ABX00173-datasheet.pdf),
 [Linux DRM usage statistics](https://docs.kernel.org/gpu/drm-usage-stats.html),

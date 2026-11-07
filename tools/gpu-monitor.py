@@ -21,8 +21,16 @@ def main():
         parser.error('--seconds must be between 0 and 3600')
     if sys.platform != 'linux':
         parser.error('Run this collector on the UNO Q Linux host')
+    import fcntl
+
     os.nice(10)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    lock = args.output.with_name(args.output.name + '.lock').open('a')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock.close()
+        parser.exit(0, f'A GPU collector is already writing {args.output}\n')
     sampler = GpuSampler()
     deadline = time.monotonic() + args.seconds if args.seconds else float('inf')
     # Keep a real MSM client counter readable even when no application renders.
@@ -48,6 +56,7 @@ def main():
     finally:
         if probe is not None:
             os.close(probe)
+        lock.close()
     # Keep the last sample as evidence. Both the app and MCU mark it stale.
 
 

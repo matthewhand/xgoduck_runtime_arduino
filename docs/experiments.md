@@ -5,7 +5,7 @@ can be reviewed independently before proposing an upstream contribution.
 
 | Experiment | First useful milestone | Needs |
 | --- | --- | --- |
-| GPU + matrix | Verified Adreno compute; live measured activity and stale-data indication | UNO Q only; hardware validation pending |
+| GPU + matrix | Adreno proof passed; live GPU API/card deployed; matrix display confirmed; ~100 Hz feedback under GPU load | UNO Q only; motors and closed-loop policy timing later |
 | Duck mood matrix | Blink, idle eyes, listening, dizzy and recovery animations driven by runtime events | UNO Q; some events initially simulated |
 | 3D telemetry | Browser Duck showing measured and target joints, IMU tilt and timing | Exact XGO geometry/joint mapping; motors later |
 | Physics simulation | Exact XGO dynamics and trained policies in a closed simulation loop | Physics engine and matching actuator model; distinct from a pose viewer |

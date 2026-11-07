@@ -6,6 +6,7 @@ No compiler, pip packages, browser or network connection is required.
 import argparse
 import ctypes as c
 import json
+import os
 import time
 
 N = 65536
@@ -25,6 +26,10 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.seconds <= 30:
         parser.error('--seconds must be 1..30')
+    # The proof and its CPU reference are background diagnostics, below the
+    # robot's control processes in the Linux scheduler.
+    if hasattr(os, 'nice'):
+        os.nice(10)
     egl, gl = c.CDLL('libEGL.so.1'), c.CDLL('libGLESv2.so.2')
     display = bind(egl, 'eglGetPlatformDisplay', P, U, P, P)(0x31DD, None, None)
     if not display or not bind(egl, 'eglInitialize', U, P, P, P)(display, None, None):
