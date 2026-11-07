@@ -74,6 +74,17 @@ cron entry before removing the cache file to disable this experiment permanently
 The same sample is shown in the Control page's GPU activity card and returned by
 `GET /api/gpu` and the `gpu` field of `GET /api/status`.
 
+If the board's Wi-Fi connection is unreliable, forward the dashboard over USB
+from a PC with ADB, then open `http://127.0.0.1:19527` on that PC:
+
+```sh
+adb forward tcp:19527 tcp:9527
+```
+
+The app and GPU work still run on the board. Recreate the forward after a USB
+disconnect or board restart. Select the intended device with `adb -s <serial>`
+if more than one ADB device is connected.
+
 ## What the percentage measures
 
 - With a KGSL `gpubusy` node, it is the device busy-time ratio from that node.
@@ -129,6 +140,14 @@ ordinary App CLI startup then worked without a manual router group override.
 Its first stress run passed the GPU check and measured a 40.2% peak, with clean
 MCU counters, but recorded two missed Linux scheduling slots. The proof now
 runs at nice level 10 to reduce interference from background diagnostics.
+
+The final test, after a full board restart, passed all checks: 279 GPU batches,
+65,536 verified outputs, a **41.7%** readable-client peak, **99.8 Hz** feedback,
+no API failures, no Bridge reconnects, no bad frames or MCU overruns, and zero
+additional missed Linux scheduling slots. Dispatch plus CPU verification took
+26.19 seconds. Both the Duck app and the GPU collector started automatically
+after the restart, with motor torque off. The final dashboard and API test used
+USB forwarding because the Wi-Fi link was intermittent.
 
 All samples reported inference-only mode with torque disabled. No motors or IMU
 were attached, so these checks verify communication and diagnostics under GPU
