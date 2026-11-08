@@ -472,13 +472,17 @@ function attachMatrixPlayer() {
     try {
       const response = await fetch('/api/matrix/scene', options);
       if (!response.ok) throw new Error('Scene controls unavailable.');
-      const {scenes, current, encore_from: encoreFrom} = await response.json();
+      const {scenes, current, encore_from: encoreFrom, marquee_from: marqueeFrom = scenes.length} = await response.json();
       if (id !== requestId) return;
-      const key = JSON.stringify([scenes, encoreFrom]);
+      const key = JSON.stringify([scenes, encoreFrom, marqueeFrom]);
       if (catalog !== key) {
         const selection = picker.value;
         picker.replaceChildren(new Option('Choose animation', ''));
-        for (const [label, start, end] of [['New scenes', encoreFrom, scenes.length], ['Earlier scenes', 0, encoreFrom]]) {
+        for (const [label, start, end] of [
+          ['Marquees', marqueeFrom, scenes.length],
+          ['New scenes', encoreFrom, marqueeFrom],
+          ['Earlier scenes', 0, encoreFrom],
+        ]) {
           if (start === end) continue;
           const group = document.createElement('optgroup');
           group.label = label;

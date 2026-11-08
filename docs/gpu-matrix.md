@@ -1,10 +1,11 @@
 # UNO Q matrix animations and load readouts
 
-The UNO Q's 8 × 13 matrix cycles through 26 scenes, including two
+The UNO Q's 8 × 13 matrix cycles through 38 scenes, including two
 Mandelbrot dives, cosmic waves, Duckzilla and Duck Regatta, animated impasto,
 miniature nature scenes, a duck digestion cutaway, and Space Invaders.
 The Duck's back also shows tiny stories like Pond Heist, Feather Foundry,
-and Blue Hour Train. A full lap takes about four minutes and thirteen seconds. Load is
+and Blue Hour Train, plus twelve scrolling quips in the **Marquees** group.
+A full lap takes about six minutes and ten seconds. Load is
 available in Duck Lab and as a brief matrix readout.
 An optional compute proof exercises the Adreno and verifies its outputs.
 ONNX policy inference continues to use the CPU.

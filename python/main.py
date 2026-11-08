@@ -9,7 +9,7 @@ from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
 from gpu_telemetry import CPU_DISABLED, GpuTelemetry
-from matrix_scenes import CATALOG_ID, ENCORE_FROM, SCENE_NAMES
+from matrix_scenes import CATALOG_ID, ENCORE_FROM, MARQUEE_FROM, SCENE_NAMES
 from walk_lab import WalkLab, walk_command
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
@@ -172,7 +172,8 @@ def matrix_scene(request):
     current = response & 0xff
     if current >= len(SCENE_NAMES):
         raise HTTPException(503, 'The board reported an unknown animation.')
-    return {'current': current, 'scenes': SCENE_NAMES, 'encore_from': ENCORE_FROM}
+    return {'current': current, 'scenes': SCENE_NAMES,
+            'encore_from': ENCORE_FROM, 'marquee_from': MARQUEE_FROM}
 
 def matrix_scene_status():
     return matrix_scene(-1)
