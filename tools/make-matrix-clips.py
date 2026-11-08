@@ -240,6 +240,102 @@ def fern_unfurl(t):
     return pixels
 
 
+def tube_points(corners):
+    """Sample a tube at near-uniform spacing, including both ends."""
+    points = []
+    for (x, y), (nx, ny) in zip(corners, corners[1:]):
+        count = max(1, math.ceil(math.hypot(nx - x, ny - y) * 8))
+        points.extend((x + (nx - x) * i / count, y + (ny - y) * i / count)
+                      for i in range(count))
+    return (*points, corners[-1])
+
+
+DIGEST_IN = tube_points(((-1, 0), (1.3, 0), (2.3, 1), (2.5, 2), (3.7, 2.5), (4.7, 2.6)))
+DIGEST_OUT = tube_points(((6.3, 3.5), (7.8, 4.2), (10.5, 4.2), (11.1, 5.2),
+                          (10.5, 6), (7.5, 6), (7, 6.6), (7.7, 7), (13, 7)))
+
+
+def digestion(t):
+    """A cutaway: swallow, grind in the gizzard, then follow the winding gut."""
+    pixels = [0] * (WIDTH * HEIGHT)
+    for tube in (DIGEST_IN, DIGEST_OUT):
+        for x, y in tube:
+            ink(pixels, x, y, 1.8)
+
+    churn = smooth((t - .25) * 15) * (1 - smooth((t - .60) * 15))
+    for i in range(40):
+        angle = math.tau * i / 40
+        swell = 1 + churn * .11 * math.sin(t * math.tau * 9)
+        x = 4.9 + 2.2 * swell * math.cos(angle)
+        y = 2.45 + 1.85 * swell * math.sin(angle)
+        ink(pixels, x, y, 1.6 + churn * (1 + .8 * math.cos(2 * angle - 28 * t)))
+
+    def pellet(tube, travel, size):
+        index = round(smooth(travel) * (len(tube) - 1))
+        for offset, level in ((12, 1.8), (7, 2.8), (0, 6.0)):
+            x, y = tube[max(0, index - offset)]
+            ink(pixels, x, y, level * size)
+
+    if t < .28:
+        pellet(DIGEST_IN, t / .28, 1)
+    elif t < .60:
+        spin = (t - .28) / .32
+        scatter = math.sin(math.pi * spin)
+        for i in range(5):
+            angle = 11 * spin + math.tau * i / 5
+            x = 4.7 + 1.6 * spin + math.cos(angle) * scatter * (1.45 - .11 * i)
+            y = 2.6 + .9 * spin + math.sin(angle) * scatter * (1.05 - .07 * i)
+            ink(pixels, x, y, 5.7 - .48 * i)
+    else:
+        pellet(DIGEST_OUT, (t - .60) / .36, .94)
+        if t > .89:
+            burst = (t - .89) / .11
+            for dx, dy in ((0, -1), (-1, -2), (-2, -.4), (.8, -2.4)):
+                ink(pixels, 12 + dx * burst, 7 + dy * burst, 4.4 * (1 - burst))
+    return pixels
+
+
+def invader_position(index, t):
+    x = index % 3 * 4 + round(1.1 + 1.05 * math.sin(t * math.tau * 1.6))
+    y = index // 3 * 3 + int(t > .53)
+    return x, y
+
+
+def space_invaders(t):
+    pixels = [0] * (WIDTH * HEIGHT)
+    shots = ((.11, 4), (.37, 3), (.65, 5))
+    bolt_time = .115
+    destroyed = {index for fire, index in shots if t >= fire + bolt_time}
+    for i in range(6):
+        if i in destroyed:
+            continue
+        left, top = invader_position(i, t)
+        feet = '5 5' if (int(t * 13) + i // 3) % 2 == 0 else '353'
+        sprite(pixels, (' 5 ', feet), left, top)
+
+    player = 5.5
+    for fire, index in shots:
+        target_x, target_y = invader_position(index, fire + bolt_time)
+        target_x += 1
+        if t >= fire - .12:
+            player += (target_x - player) * smooth((t - fire + .12) / .12)
+        if fire <= t < fire + bolt_time:
+            progress = (t - fire) / bolt_time
+            bolt_y = 5.7 + (target_y + .65 - 5.7) * progress
+            ink(pixels, target_x, bolt_y, 6)
+            ink(pixels, target_x, bolt_y + .8, 3.8)
+        if fire + bolt_time <= t < fire + bolt_time + .14:
+            burst = (t - fire - bolt_time) / .14
+            for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1), (0, 0)):
+                ink(pixels, target_x + dx * burst * 2, target_y + .7 + dy * burst * 1.5,
+                    6 * (1 - burst))
+    sprite(pixels, ('  5  ', '34543'), player - 2, 6)
+    for launch, x in ((.20, 9.2), (.49, 2.3), (.79, 7.1)):
+        if launch <= t < launch + .13:
+            ink(pixels, x, 2 + (t - launch) / .13 * 4.2, 2.8)
+    return pixels
+
+
 SCENES = (
     ('Seahorse dive', lambda t: mandelbrot(t, complex(-.743643887, .131825904), .009)),
     ('Duckzilla', duckzilla),
@@ -247,11 +343,13 @@ SCENES = (
     ('Knife strokes', knife_strokes),
     ('Aurora pines', aurora_pines),
     ('Ghost arcade', ghost_arcade),
+    ('Duck digestion', digestion),
     ('Double spiral', lambda t: mandelbrot(t, complex(-1.25066, .02012), .017)),
     ('Duck regatta', duck_regatta),
     ('Jelly drift', jelly_drift),
     ('Storm impasto', storm_impasto),
     ('Fern unfurl', fern_unfurl),
+    ('Space invaders', space_invaders),
     ('Gravity tide', lambda t: waves(t, tide=True)),
 )
 
@@ -294,21 +392,24 @@ def write_header(clips):
     HEADER.write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
 
 
-def write_preview(clips, path):
+def write_preview(clips, path, titles):
     from PIL import Image, ImageColor, ImageDraw
 
     colors = ['#101924', '#193350', '#235083', '#346fb2', '#569be0', '#91cbff',
               '#0a111b', '#0d1824', '#263a50', '#d0e6ff', '#89a3be']
     palette = [channel for color in colors for channel in ImageColor.getrgb(color)]
+    cols = min(3, len(clips))
+    rows = math.ceil(len(clips) / cols)
     frames = []
     for montage in zip(*clips):
-        image = Image.new('P', (688, 570), 6)
+        image = Image.new('P', (19 + cols * 223, 42 + rows * 132), 6)
         image.putpalette(palette)
         draw = ImageDraw.Draw(image)
         draw.text((15, 14), 'DUCK LAB / UNO Q MATRIX', fill=5)
-        draw.text((457, 14), '12 SCENES / 13 X 8 BLUE LEDS', fill=10)
-        for i, ((title, _), pixels) in enumerate(zip(SCENES, montage)):
-            left, top = 14 + i % 3 * 223, 36 + i // 3 * 132
+        if cols > 1:
+            draw.text((image.width - 135, 14), '13 X 8 BLUE LEDS', fill=10)
+        for i, (title, pixels) in enumerate(zip(titles, montage)):
+            left, top = 14 + i % cols * 223, 36 + i // cols * 132
             draw.rounded_rectangle((left, top, left + 211, top + 122), radius=10, fill=7, outline=8)
             draw.text((left + 13, top + 10), title.upper(), fill=9)
             for j, level in enumerate(pixels):
@@ -323,11 +424,16 @@ def write_preview(clips, path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preview', type=Path, help='Optional GIF preview (requires Pillow)')
+    parser.add_argument('--preview-scene', action='append', choices=[title for title, _ in SCENES],
+                        help='Preview just this scene. Repeat to select more than one.')
     args = parser.parse_args()
     clips = render_clips()
     write_header(clips)
     if args.preview:
-        write_preview(clips, args.preview)
+        selected = [(title, clip) for (title, _), clip in zip(SCENES, clips)
+                    if not args.preview_scene or title in args.preview_scene]
+        titles, preview_clips = zip(*selected)
+        write_preview(preview_clips, args.preview, titles)
 
 
 if __name__ == '__main__':
