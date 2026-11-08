@@ -67,9 +67,11 @@ In Duck Lab, press **Matrix readout** to slide **CPU** in from the left.
 **C** stays on the same row while **PU** continues off the right edge, then
 the percentage fades in beside it on that row.
 Tap again within three seconds to cycle through **GPU**, **RAM**, **TMP**, and
-back to the animation. Every page uses the same slide and fade. RAM is the
-percentage of Linux host memory in use, estimated from `MemAvailable`. TMP is
-the warmer reading from the board's CPU subsystem thermal zones, in °C.
+back to the animation. Every page uses the same slide, fade, and bottom-row
+bar. RAM is the percentage of Linux host memory in use, estimated from
+`MemAvailable`. TMP is the warmer reading from the board's CPU subsystem
+thermal zones, in °C. The bar fills at 100% for CPU, GPU, and RAM, and at 100°C
+for TMP. Higher temperatures still show their numeric value.
 Each page times out after three seconds. Unavailable readings are skipped.
 Python and the MCU both check sample freshness. Older collectors still supply
 the pages for which they report data. Current RAM and temperature values are

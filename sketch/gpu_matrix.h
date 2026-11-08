@@ -125,22 +125,8 @@ static void drawMatrixLoad(MatrixMetric metric, int value, unsigned frame) {
   if (value >= 100) matrixGlyph(pixels, digits[value / 100], 3, level);
   if (value >= 10) matrixGlyph(pixels, digits[(value / 10) % 10], 6, level);
   matrixGlyph(pixels, digits[value % 10], 10, level);
-  if (metric == MatrixMetric::Temp) {
-    pixels[5 * 13 + 8] = level; // Degree dot next to a small C.
-    for (unsigned x = 10; x < 13; ++x) {
-      pixels[5 * 13 + x] = level;
-      pixels[7 * 13 + x] = level;
-    }
-    pixels[6 * 13 + 10] = level;
-  } else {
-    const int width = metric == MatrixMetric::Ram ? 9 : 13;
-    for (int x = 0; x < (value * width + 50) / 100; ++x) pixels[91 + x] = (level + 1) / 2;
-    if (metric == MatrixMetric::Ram) {
-      pixels[5 * 13 + 10] = pixels[5 * 13 + 12] = level;
-      pixels[6 * 13 + 11] = level;
-      pixels[7 * 13 + 10] = pixels[7 * 13 + 12] = level;
-    }
-  }
+  const int barValue = value > 100 ? 100 : value;
+  for (int x = 0; x < (barValue * 13 + 50) / 100; ++x) pixels[91 + x] = (level + 1) / 2;
   loadMatrix.draw(pixels);
 }
 
