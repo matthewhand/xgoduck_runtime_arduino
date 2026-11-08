@@ -27,6 +27,14 @@ def _read_cpu(payload, age):
     except ValueError as exc:
         return dict(CPU_DISABLED, enabled=True, reason=str(exc))
 
+def _read_health(payload):
+    payload = payload if isinstance(payload, dict) else {}
+    result = {}
+    for name, maximum in (('ram_percent', 100), ('temperature_c', 125)):
+        value = payload.get(name)
+        result[name] = value if type(value) in (int, float) and 0 <= value <= maximum else None
+    return result
+
 
 def read_sample(path=CACHE_PATH, now=None):
     now = time.time() if now is None else now
@@ -56,6 +64,8 @@ def read_sample(path=CACHE_PATH, now=None):
             result = dict(disabled, enabled=True, reason=str(exc), age_s=age)
         if has_cpu:
             result['cpu'] = _read_cpu(sample['cpu'], age)
+        if 'health' in sample:
+            result['health'] = _read_health(sample['health'])
         return result
     except (ValueError, TypeError, KeyError) as exc:
         result = dict(disabled, enabled=True, reason=str(exc))
@@ -83,6 +93,12 @@ class GpuTelemetry:
                         self.bridge.notify('duck_load', round(cpu['load_percent']) if cpu['available'] else -1, percent)
                     else:
                         self.bridge.notify('duck_gpu', percent)
+                    if 'health' in sample:
+                        health = sample['health']
+                        ram = health['ram_percent']
+                        temperature = health['temperature_c']
+                        self.bridge.notify('duck_health', round(ram) if ram is not None else -1,
+                                           round(temperature) if temperature is not None else -1)
                 except Exception as exc:
                     sample['matrix_error'] = str(exc)
             active = sample['enabled']

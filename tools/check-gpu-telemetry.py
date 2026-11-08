@@ -9,6 +9,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'python'))
 from gpu_stats import GpuSampler
 from cpu_stats import CpuSampler
+from board_health import BoardHealthSampler
 from gpu_telemetry import GpuTelemetry, read_sample
 
 
@@ -132,6 +133,27 @@ class TelemetryTests(unittest.TestCase):
             telemetry = GpuTelemetry(Bridge(), path)
             telemetry.run()
             self.assertEqual(calls, [expected])
+
+    def test_board_health_and_cache(self):
+        mem = self.proc / 'meminfo'
+        mem.write_text('MemTotal: 4000 kB\nMemFree: 1000 kB\nMemAvailable: 2800 kB\n')
+        thermal = self.root / 'thermal'
+        for i, (name, value) in enumerate((('cpuss0-thermal', '38000'), ('cpuss1-thermal', '42300'),
+                                           ('gpu-thermal', '60000'), ('cpuss2-thermal', 'invalid'))):
+            zone = thermal / f'thermal_zone{i}'
+            zone.mkdir(parents=True)
+            (zone / 'type').write_text(name)
+            (zone / 'temp').write_text(value)
+        health = BoardHealthSampler(mem, thermal).sample()
+        self.assertEqual(health, {'ram_percent': 30.0, 'temperature_c': 42.3})
+        path = self.root / 'health.json'
+        packet = dict(schema=1, timestamp=99., load_percent=None, health=health)
+        path.write_text(json.dumps(packet))
+        self.assertEqual(read_sample(path, 100.)['health'], health)
+        self.assertNotIn('health', read_sample(path, 105.))
+        health['ram_percent'] = True
+        path.write_text(json.dumps(packet))
+        self.assertEqual(read_sample(path, 100.)['health'], {'ram_percent': None, 'temperature_c': 42.3})
 
 
 if __name__ == '__main__':
