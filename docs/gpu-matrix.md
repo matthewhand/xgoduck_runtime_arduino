@@ -1,11 +1,10 @@
 # UNO Q matrix animations and load readouts
 
-The UNO Q's 8 × 13 matrix cycles through 38 scenes, including two
+The UNO Q's 8 × 13 matrix cycles through 26 scenes, including two
 Mandelbrot dives, cosmic waves, Duckzilla and Duck Regatta, animated impasto,
 miniature nature scenes, a duck digestion cutaway, and Space Invaders.
 The Duck's back also shows tiny stories like Pond Heist, Feather Foundry,
-and Blue Hour Train, plus twelve scrolling quips in the **Marquees** group.
-A full lap takes about six minutes and ten seconds. Load is
+and Blue Hour Train. A full lap takes about four minutes and thirteen seconds. Load is
 available in Duck Lab and as a brief matrix readout.
 An optional compute proof exercises the Adreno and verifies its outputs.
 ONNX policy inference continues to use the CPU.
@@ -60,8 +59,13 @@ Use **Back display** in Duck Lab to see the current animation, choose one
 and press **Play**, or press **Next animation**. Either command starts its
 scene from the first frame, then the carousel continues from there.
 
-In Duck Lab, press **Matrix readout** to show **C** (total CPU busy).
-Tap again within three seconds for **G** (measured GPU activity), and again
+Choose one of the twelve **Notifications** and press **Show once** to send a
+slower marquee to the back display. It plays once, then resumes the interrupted
+animation. **Next animation** skips to the next art scene during a notification.
+
+In Duck Lab, press **Matrix readout** to show **CPU**, then **C** and the
+percentage. **PU** slides to the right as the number fades in.
+Tap again within three seconds for the corresponding **GPU** readout, and again
 to resume the animation. Each reading times out after three seconds. A gauge
 along the bottom shows the same percentage. Unavailable readings are skipped.
 Python and the MCU both check sample freshness. Older GPU-only collector samples

@@ -453,11 +453,12 @@ function attachMatrixControls() {
 function attachMatrixPlayer() {
   const picker = $('matrix-scenes'), play = $('matrix-play'), skip = $('matrix-skip');
   const playing = $('matrix-playing'), error = $('matrix-scene-error');
-  let requestId = 0, pending = false, available = false, catalog = null;
+  let requestId = 0, pending = false, available = false, catalog = null, noticeFrom = Infinity;
 
   function updateButtons() {
     picker.disabled = skip.disabled = pending || !available;
     play.disabled = pending || !available || picker.value === '';
+    play.textContent = picker.value !== '' && Number(picker.value) >= noticeFrom ? 'Show once' : 'Play';
   }
 
   async function request(body) {
@@ -474,12 +475,13 @@ function attachMatrixPlayer() {
       if (!response.ok) throw new Error('Scene controls unavailable.');
       const {scenes, current, encore_from: encoreFrom, marquee_from: marqueeFrom = scenes.length} = await response.json();
       if (id !== requestId) return;
+      noticeFrom = marqueeFrom;
       const key = JSON.stringify([scenes, encoreFrom, marqueeFrom]);
       if (catalog !== key) {
         const selection = picker.value;
         picker.replaceChildren(new Option('Choose animation', ''));
         for (const [label, start, end] of [
-          ['Marquees', marqueeFrom, scenes.length],
+          ['Notifications', marqueeFrom, scenes.length],
           ['New scenes', encoreFrom, marqueeFrom],
           ['Earlier scenes', 0, encoreFrom],
         ]) {
@@ -492,7 +494,7 @@ function attachMatrixPlayer() {
         picker.value = selection;
         catalog = key;
       }
-      playing.textContent = `Now playing · ${scenes[current]}`;
+      playing.textContent = `${current >= noticeFrom ? 'Notification' : 'Now playing'} · ${scenes[current]}`;
       error.hidden = true;
       available = true;
     } catch {

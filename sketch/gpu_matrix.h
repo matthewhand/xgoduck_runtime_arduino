@@ -10,6 +10,7 @@ static atomic_t loadSampleMs = ATOMIC_INIT(0);
 static atomic_t matrixTaps = ATOMIC_INIT(0);
 static atomic_t matrixAuto = ATOMIC_INIT(0);
 static atomic_t matrixScene = ATOMIC_INIT(0);
+static atomic_t matrixArtScene = ATOMIC_INIT(0);
 static constexpr atomic_val_t sceneIndexMask = 0xff;
 static constexpr atomic_val_t scenePending = 0x100;
 static_assert(matrixClipCount <= sceneIndexMask + 1, "Scene index must fit in the RPC reply");
@@ -37,7 +38,9 @@ static int receiveMatrixScene(int request) {
     atomic_val_t next;
     do {
       state = atomic_get(&matrixScene);
-      const int index = request == -2 ? (int(state & sceneIndexMask) + 1) % matrixClipCount : request;
+      const int current = state & sceneIndexMask;
+      const int art = current < int(matrixMarqueeFrom) ? current : atomic_get(&matrixArtScene);
+      const int index = request == -2 ? (art + 1) % matrixMarqueeFrom : request;
       next = scenePending | index;
     } while (!atomic_cas(&matrixScene, state, next));
     state = next;
@@ -55,31 +58,59 @@ static void drawMatrixClip(unsigned clip, unsigned frame) {
   loadMatrix.draw(pixels);
 }
 
-static void drawMatrixLoad(bool cpu, int percent) {
+static void matrixGlyph(uint8_t *pixels, const uint8_t *rows, unsigned x, unsigned y, uint8_t level) {
+  for (unsigned row = 0; row < 5; ++row)
+    for (unsigned col = 0; col < 3 && x + col < 13; ++col)
+      if (rows[row] & (4u >> col)) pixels[(y + row) * 13 + x + col] = level;
+}
+
+static constexpr unsigned readoutTitleMs = 550;
+static constexpr unsigned readoutSlideStepMs = 56;
+static constexpr unsigned readoutSlideSteps = 8;
+static constexpr unsigned readoutFadeStepMs = 80;
+
+static unsigned readoutFrame(unsigned elapsed) {
+  if (elapsed < readoutTitleMs) return 0;
+  elapsed -= readoutTitleMs;
+  const unsigned slideMs = readoutSlideSteps * readoutSlideStepMs;
+  if (elapsed < slideMs) return 1 + elapsed / readoutSlideStepMs;
+  const unsigned fade = (elapsed - slideMs) / readoutFadeStepMs;
+  return 1 + readoutSlideSteps + (fade < 3 ? fade : 3);
+}
+
+static void drawMatrixLoad(bool cpu, int percent, unsigned frame) {
   uint8_t pixels[104] = {};
   const uint8_t label[5] = {7, 4, uint8_t(cpu ? 4 : 5), uint8_t(cpu ? 4 : 5), 7};
+  if (frame <= readoutSlideSteps) {
+    static const uint8_t p[5] = {6,5,6,4,4};
+    static const uint8_t u[5] = {5,5,5,5,7};
+    const unsigned centered = frame < 3 ? 1 : 0;
+    matrixGlyph(pixels, label, centered, centered, 4);
+    matrixGlyph(pixels, p, 5 + frame, 1, 4);
+    matrixGlyph(pixels, u, 9 + frame, 1, 4);
+    loadMatrix.draw(pixels);
+    return;
+  }
   static const uint8_t digits[10][5] = {
     {7,5,5,5,7}, {2,6,2,2,7}, {7,1,7,4,7}, {7,1,7,1,7}, {5,5,7,1,1},
     {7,4,7,1,7}, {7,4,7,5,7}, {7,1,1,1,1}, {7,5,7,5,7}, {7,5,7,1,7}
   };
-  auto glyph = [&](const uint8_t *rows, unsigned x, unsigned y) {
-    for (unsigned row = 0; row < 5; ++row)
-      for (unsigned bit = 0; bit < 3; ++bit)
-        if (rows[row] & (4u >> bit)) pixels[(y + row) * 13 + x + bit] = 4;
-  };
-  glyph(label, 0, 0);
-  if (percent == 100) glyph(digits[1], 3, 2);
-  if (percent >= 10) glyph(digits[(percent / 10) % 10], 6, 2);
-  glyph(digits[percent % 10], 10, 2);
-  for (int x = 0; x < (percent * 13 + 50) / 100; ++x) pixels[91 + x] = 2;
+  const uint8_t level = frame - readoutSlideSteps;
+  matrixGlyph(pixels, label, 0, 0, 4);
+  if (percent == 100) matrixGlyph(pixels, digits[1], 3, 2, level);
+  if (percent >= 10) matrixGlyph(pixels, digits[(percent / 10) % 10], 6, 2, level);
+  matrixGlyph(pixels, digits[percent % 10], 10, 2, level);
+  for (int x = 0; x < (percent * 13 + 50) / 100; ++x) pixels[91 + x] = (level + 1) / 2;
   loadMatrix.draw(pixels);
 }
 
 enum class MatrixPage { Art, Cpu, Gpu, Auto };
 static constexpr unsigned matrixManualMs = 3000;
-static constexpr unsigned matrixAutoPageMs = 1400;
+static constexpr unsigned matrixAutoPageMs = 2400;
 static constexpr unsigned matrixCooldownMs = 20000;
 static constexpr unsigned matrixClipMs = matrixClipFrames * matrixFrameMs;
+static constexpr unsigned matrixNoticeFrameMs = 96;
+static constexpr unsigned matrixNoticeMs = matrixClipFrames * matrixNoticeFrameMs;
 static constexpr unsigned matrixSlidesPerGlance = 4;
 static constexpr int matrixLoadDelta = 15;
 
@@ -95,6 +126,7 @@ static void updateLoadMatrix(bool bridgeConnected) {
   static bool started = false, autoWasEnabled = false, showedLoad = false;
   static uint32_t clipAt, pageAt, pauseAt, lastLoadAt, seenSample, seenTaps;
   static unsigned clip, slides, previousChange, lastFrame = matrixClipFrames;
+  static unsigned returnClip, returnElapsed;
   static int referenceCpu = -1, referenceGpu = -1, shownCpu, shownGpu;
   static MatrixPage page = MatrixPage::Art;
   static int lastReadout = -1;
@@ -166,19 +198,36 @@ static void updateLoadMatrix(bool bridgeConnected) {
   const bool jumped = (requested & scenePending) &&
                       atomic_cas(&matrixScene, requested, requested & sceneIndexMask);
   if (jumped) {
-    clip = requested & sceneIndexMask;
+    const unsigned selected = requested & sceneIndexMask;
+    if (selected >= matrixMarqueeFrom && clip < matrixMarqueeFrom) {
+      returnClip = clip;
+      returnElapsed = (page == MatrixPage::Art ? now : pauseAt) - clipAt;
+      if (returnElapsed >= matrixClipMs) returnElapsed = matrixClipMs - 1;
+    } else if (selected < matrixMarqueeFrom) {
+      atomic_set(&matrixArtScene, selected);
+      slides = previousChange = 0;
+    }
+    clip = selected;
     clipAt = now;
     page = MatrixPage::Art;
-    slides = previousChange = 0;
     lastFrame = matrixClipFrames;
   }
 
-  if (page == MatrixPage::Art) {
+  if (page == MatrixPage::Art && clip >= matrixMarqueeFrom && now - clipAt >= matrixNoticeMs) {
+    const unsigned finished = clip;
+    clip = returnClip;
+    clipAt = now - returnElapsed;
+    atomic_cas(&matrixScene, finished, clip);
+    lastFrame = matrixClipFrames;
+  }
+
+  if (page == MatrixPage::Art && clip < matrixMarqueeFrom) {
     const unsigned completed = (now - clipAt) / matrixClipMs;
     if (completed) {
       clipAt += completed * matrixClipMs;
       const unsigned previous = clip;
-      clip = (clip + completed) % matrixClipCount;
+      clip = (clip + completed) % matrixMarqueeFrom;
+      atomic_set(&matrixArtScene, clip);
       // A scene request may arrive while the natural transition is calculated.
       atomic_cas(&matrixScene, previous, clip);
       slides += completed;
@@ -193,15 +242,17 @@ static void updateLoadMatrix(bool bridgeConnected) {
   if (page != MatrixPage::Art) {
     const bool cpuPage = page == MatrixPage::Cpu || (page == MatrixPage::Auto && shownCpu >= 0
       && (shownGpu < 0 || now - pageAt < matrixAutoPageMs));
-    const int readout = cpuPage ? 0 : 1;
+    const unsigned elapsed = now - pageAt;
+    const unsigned frame = readoutFrame(page == MatrixPage::Auto ? elapsed % matrixAutoPageMs : elapsed);
+    const int readout = frame + (cpuPage ? 0 : 16);
     if (lastReadout != readout) {
-      drawMatrixLoad(cpuPage, cpuPage ? shownCpu : shownGpu);
+      drawMatrixLoad(cpuPage, cpuPage ? shownCpu : shownGpu, frame);
       lastReadout = readout;
     }
     return;
   }
 
-  const unsigned frame = (now - clipAt) / matrixFrameMs;
+  const unsigned frame = (now - clipAt) / (clip < matrixMarqueeFrom ? matrixFrameMs : matrixNoticeFrameMs);
   if (frame != lastFrame) {
     drawMatrixClip(clip, frame);
     lastFrame = frame;
