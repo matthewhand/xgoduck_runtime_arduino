@@ -145,7 +145,25 @@ def walk_start(body: dict):
 def walk_stop(_body: dict):
     return walk_lab.stop()
 
+def matrix_request(request):
+    try:
+        return {'auto': Bridge.call('duck_matrix', request, timeout=0.8)}
+    except (ValueError, TimeoutError, ConnectionError, RuntimeError) as exc:
+        raise HTTPException(503, 'The matrix controller is unavailable.') from exc
+
+def matrix_status():
+    return matrix_request(3)
+
+def matrix_action(body: dict):
+    if body == {'action': 'next'}:
+        return matrix_request(0)
+    if set(body) == {'action', 'enabled'} and body['action'] == 'auto' and type(body['enabled']) is bool:
+        return matrix_request(2 if body['enabled'] else 1)
+    raise HTTPException(400, 'Choose next or set auto to true or false.')
+
 ui.expose_api('GET', '/api/status', status)
+ui.expose_api('GET', '/api/matrix', matrix_status)
+ui.expose_api('POST', '/api/matrix', matrix_action)
 ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
 ui.expose_api('POST', '/api/lab/walk/start', walk_start)
 ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)

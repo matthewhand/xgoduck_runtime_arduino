@@ -423,6 +423,34 @@ async function start() {
   },{once:true});
 }
 
+function attachMatrixControls() {
+  const next = $('matrix-next'), automatic = $('matrix-auto'), note = $('matrix-note');
+  let enabled = false, connected = false;
+  async function request(body) {
+    next.disabled = automatic.disabled = true;
+    const options = {cache:'no-store', signal:AbortSignal.timeout(1800)};
+    if (body) Object.assign(options, {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)});
+    try {
+      const response = await fetch('/api/matrix', options);
+      if (!response.ok) throw new Error('Matrix controls unavailable.');
+      const state = await response.json();
+      enabled = state.auto === true;
+      connected = true;
+      note.textContent = body?.action === 'next' ? 'Tap again within 3 s to cycle.' : '';
+    } catch {
+      note.textContent = 'Matrix controls unavailable.';
+    } finally {
+      automatic.checked = enabled;
+      next.disabled = automatic.disabled = !connected;
+    }
+  }
+  next.addEventListener('click', () => request({action:'next'}));
+  automatic.addEventListener('change', () => request({action:'auto', enabled:automatic.checked}));
+  request();
+}
+
+attachMatrixControls();
 start().catch(error => {
   $('loading').textContent = 'The 3D workspace could not start.';
   showError(error);

@@ -24,6 +24,7 @@
       </div>
       <div class="stage-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
       <p class="mode-note" id="mode-note" aria-live="polite">Preparing the simulation…</p>
+      <div class="stage-toolbar" aria-label="UNO Q LED matrix"><div><button id="matrix-next" disabled>Matrix readout</button></div><label title="Show load after four clips or after a sustained 15 percentage point change"><input type="checkbox" id="matrix-auto" disabled> Automatic load flashes</label><span id="matrix-note" class="muted" role="status"></span></div>
       <div class="stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
     </section>
     <aside class="controls-panel">
@@ -74,5 +75,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=5"></script>
+<script type="module" src="sim/sim-ui.mjs?v=6"></script>
 </body></html>
