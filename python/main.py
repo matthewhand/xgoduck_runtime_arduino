@@ -9,6 +9,7 @@ from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
 from gpu_telemetry import CPU_DISABLED, GpuTelemetry
+from matrix_scenes import CATALOG_ID, ENCORE_FROM, SCENE_NAMES
 from walk_lab import WalkLab, walk_command
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
@@ -161,9 +162,33 @@ def matrix_action(body: dict):
         return matrix_request(2 if body['enabled'] else 1)
     raise HTTPException(400, 'Choose next or set auto to true or false.')
 
+def matrix_scene(request):
+    try:
+        response = Bridge.call('duck_matrix_scene', request, timeout=0.8)
+    except (ValueError, TimeoutError, ConnectionError, RuntimeError) as exc:
+        raise HTTPException(503, 'The matrix scene controller is unavailable.') from exc
+    if type(response) is not int or response < 0 or response >> 8 != CATALOG_ID:
+        raise HTTPException(503, 'The matrix scene list does not match the sketch.')
+    current = response & 0xff
+    if current >= len(SCENE_NAMES):
+        raise HTTPException(503, 'The board reported an unknown animation.')
+    return {'current': current, 'scenes': SCENE_NAMES, 'encore_from': ENCORE_FROM}
+
+def matrix_scene_status():
+    return matrix_scene(-1)
+
+def matrix_scene_action(body: dict):
+    if body == {'action': 'skip'}:
+        return matrix_scene(-2)
+    if set(body) == {'index'} and type(body['index']) is int and 0 <= body['index'] < len(SCENE_NAMES):
+        return matrix_scene(body['index'])
+    raise HTTPException(400, 'Choose a valid animation or skip to the next one.')
+
 ui.expose_api('GET', '/api/status', status)
 ui.expose_api('GET', '/api/matrix', matrix_status)
 ui.expose_api('POST', '/api/matrix', matrix_action)
+ui.expose_api('GET', '/api/matrix/scene', matrix_scene_status)
+ui.expose_api('POST', '/api/matrix/scene', matrix_scene_action)
 ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
 ui.expose_api('POST', '/api/lab/walk/start', walk_start)
 ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)

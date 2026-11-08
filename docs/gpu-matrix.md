@@ -55,6 +55,10 @@ ONNX policy inference continues to use the CPU.
 
 ## Reading the display
 
+Use **Back display** in Duck Lab to see the current animation, choose one
+and press **Play**, or press **Next animation**. Either command starts its
+scene from the first frame, then the carousel continues from there.
+
 In Duck Lab, press **Matrix readout** to show **C** (total CPU busy).
 Tap again within three seconds for **G** (measured GPU activity), and again
 to resume the animation. Each reading times out after three seconds. A gauge

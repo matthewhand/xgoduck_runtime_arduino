@@ -9,6 +9,10 @@ static atomic_t loadReadings = ATOMIC_INIT(0); // Each byte encodes percent + 2.
 static atomic_t loadSampleMs = ATOMIC_INIT(0);
 static atomic_t matrixTaps = ATOMIC_INIT(0);
 static atomic_t matrixAuto = ATOMIC_INIT(0);
+static atomic_t matrixScene = ATOMIC_INIT(0);
+static constexpr atomic_val_t sceneIndexMask = 0xff;
+static constexpr atomic_val_t scenePending = 0x100;
+static_assert(matrixClipCount <= sceneIndexMask + 1, "Scene index must fit in the RPC reply");
 
 static void receiveLoad(int cpu, int gpu) {
   if (cpu < -2 || cpu > 100 || gpu < -2 || gpu > 100) return;
@@ -23,6 +27,22 @@ static bool receiveMatrix(int request) {
   if (request == 0) atomic_inc(&matrixTaps);
   else if (request == 1 || request == 2) atomic_set(&matrixAuto, request == 2);
   return atomic_get(&matrixAuto) != 0;
+}
+
+static int receiveMatrixScene(int request) {
+  // -1 reads the current clip, -2 skips, and a nonnegative index selects.
+  if (request < -2 || request >= int(matrixClipCount)) return -1;
+  atomic_val_t state = atomic_get(&matrixScene);
+  if (request != -1) {
+    atomic_val_t next;
+    do {
+      state = atomic_get(&matrixScene);
+      const int index = request == -2 ? (int(state & sceneIndexMask) + 1) % matrixClipCount : request;
+      next = scenePending | index;
+    } while (!atomic_cas(&matrixScene, state, next));
+    state = next;
+  }
+  return (matrixCatalogId << 8) | (state & sceneIndexMask);
 }
 
 static void drawMatrixClip(unsigned clip, unsigned frame) {
@@ -142,17 +162,31 @@ static void updateLoadMatrix(bool bridgeConnected) {
     else show(MatrixPage::Cpu);
   }
 
+  const atomic_val_t requested = atomic_get(&matrixScene);
+  const bool jumped = (requested & scenePending) &&
+                      atomic_cas(&matrixScene, requested, requested & sceneIndexMask);
+  if (jumped) {
+    clip = requested & sceneIndexMask;
+    clipAt = now;
+    page = MatrixPage::Art;
+    slides = previousChange = 0;
+    lastFrame = matrixClipFrames;
+  }
+
   if (page == MatrixPage::Art) {
     const unsigned completed = (now - clipAt) / matrixClipMs;
     if (completed) {
       clipAt += completed * matrixClipMs;
+      const unsigned previous = clip;
       clip = (clip + completed) % matrixClipCount;
+      // A scene request may arrive while the natural transition is calculated.
+      atomic_cas(&matrixScene, previous, clip);
       slides += completed;
       if (slides > matrixSlidesPerGlance) slides = matrixSlidesPerGlance;
       lastFrame = matrixClipFrames;
     }
     const bool cooled = !showedLoad || now - lastLoadAt >= matrixCooldownMs;
-    if (autoEnabled && available && cooled && (significant || slides >= matrixSlidesPerGlance))
+    if (!jumped && autoEnabled && available && cooled && (significant || slides >= matrixSlidesPerGlance))
       show(MatrixPage::Auto);
   }
 

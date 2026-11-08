@@ -29,3 +29,14 @@
 .search-key li:nth-child(4)::before{background:var(--mint)}
 .search-key li:nth-child(5)::before{background:#90aafa}
 .search-key li:nth-child(6)::before{background:#ffcb72}
+.matrix-player{margin:8px 17px 14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#101c25}
+.matrix-heading,.matrix-readouts{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
+.matrix-heading{justify-content:space-between;margin-bottom:8px}
+.matrix-heading h2{margin:0;font-size:13px;font-weight:600}
+#matrix-playing{font-size:11px;color:var(--mint)}
+.matrix-actions{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px}
+.matrix-actions button,.matrix-readouts button{padding:7px 9px;font-size:11px}
+.matrix-readouts{margin-top:9px}
+.matrix-readouts label{display:flex;gap:5px;align-items:center;color:var(--muted);font-size:11px}
+.matrix-readouts .muted{margin:0}
+@media(max-width:400px){.matrix-actions{grid-template-columns:1fr 1fr}.matrix-actions select{grid-column:1/-1}}
