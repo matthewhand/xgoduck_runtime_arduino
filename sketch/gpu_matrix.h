@@ -58,36 +58,45 @@ static void drawMatrixClip(unsigned clip, unsigned frame) {
   loadMatrix.draw(pixels);
 }
 
-static void matrixGlyph(uint8_t *pixels, const uint8_t *rows, unsigned x, unsigned y, uint8_t level) {
-  for (unsigned row = 0; row < 5; ++row)
-    for (unsigned col = 0; col < 3 && x + col < 13; ++col)
-      if (rows[row] & (4u >> col)) pixels[(y + row) * 13 + x + col] = level;
+static void matrixGlyph(uint8_t *pixels, const uint8_t *rows, int x, uint8_t level) {
+  for (int col = 0; col < 3; ++col) {
+    const int pixel = x + col;
+    if (pixel < 0 || pixel >= 13) continue;
+    for (unsigned row = 0; row < 5; ++row)
+      if (rows[row] & (4u >> col)) pixels[row * 13 + pixel] = level;
+  }
 }
 
-static constexpr unsigned readoutTitleMs = 550;
-static constexpr unsigned readoutSlideStepMs = 56;
-static constexpr unsigned readoutSlideSteps = 8;
+static constexpr unsigned readoutEntrySteps = 11;
+static constexpr unsigned readoutTitleMs = 384;
+static constexpr unsigned readoutSlideStepMs = 48;
+static constexpr unsigned readoutExitSteps = 9;
+static constexpr unsigned readoutFadeFirst = readoutEntrySteps + readoutExitSteps + 1;
 static constexpr unsigned readoutFadeStepMs = 80;
+static constexpr unsigned readoutFrameCount = readoutFadeFirst + 4;
 
 static unsigned readoutFrame(unsigned elapsed) {
-  if (elapsed < readoutTitleMs) return 0;
+  const unsigned entryMs = readoutEntrySteps * readoutSlideStepMs;
+  if (elapsed < entryMs) return elapsed / readoutSlideStepMs;
+  elapsed -= entryMs;
+  if (elapsed < readoutTitleMs) return readoutEntrySteps;
   elapsed -= readoutTitleMs;
-  const unsigned slideMs = readoutSlideSteps * readoutSlideStepMs;
-  if (elapsed < slideMs) return 1 + elapsed / readoutSlideStepMs;
-  const unsigned fade = (elapsed - slideMs) / readoutFadeStepMs;
-  return 1 + readoutSlideSteps + (fade < 3 ? fade : 3);
+  const unsigned exitMs = readoutExitSteps * readoutSlideStepMs;
+  if (elapsed < exitMs) return readoutEntrySteps + 1 + elapsed / readoutSlideStepMs;
+  const unsigned fade = (elapsed - exitMs) / readoutFadeStepMs;
+  return readoutFadeFirst + (fade < 3 ? fade : 3);
 }
 
 static void drawMatrixLoad(bool cpu, int percent, unsigned frame) {
   uint8_t pixels[104] = {};
   const uint8_t label[5] = {7, 4, uint8_t(cpu ? 4 : 5), uint8_t(cpu ? 4 : 5), 7};
-  if (frame <= readoutSlideSteps) {
+  if (frame < readoutFadeFirst) {
     static const uint8_t p[5] = {6,5,6,4,4};
     static const uint8_t u[5] = {5,5,5,5,7};
-    const unsigned centered = frame < 3 ? 1 : 0;
-    matrixGlyph(pixels, label, centered, centered, 4);
-    matrixGlyph(pixels, p, 5 + frame, 1, 4);
-    matrixGlyph(pixels, u, 9 + frame, 1, 4);
+    const int offset = int(frame) - int(readoutEntrySteps);
+    matrixGlyph(pixels, label, offset < 0 ? offset : 0, 4);
+    matrixGlyph(pixels, p, 4 + offset, 4);
+    matrixGlyph(pixels, u, 8 + offset, 4);
     loadMatrix.draw(pixels);
     return;
   }
@@ -95,11 +104,11 @@ static void drawMatrixLoad(bool cpu, int percent, unsigned frame) {
     {7,5,5,5,7}, {2,6,2,2,7}, {7,1,7,4,7}, {7,1,7,1,7}, {5,5,7,1,1},
     {7,4,7,1,7}, {7,4,7,5,7}, {7,1,1,1,1}, {7,5,7,5,7}, {7,5,7,1,7}
   };
-  const uint8_t level = frame - readoutSlideSteps;
-  matrixGlyph(pixels, label, 0, 0, 4);
-  if (percent == 100) matrixGlyph(pixels, digits[1], 3, 2, level);
-  if (percent >= 10) matrixGlyph(pixels, digits[(percent / 10) % 10], 6, 2, level);
-  matrixGlyph(pixels, digits[percent % 10], 10, 2, level);
+  const uint8_t level = frame - readoutFadeFirst + 1;
+  matrixGlyph(pixels, label, 0, 4);
+  if (percent == 100) matrixGlyph(pixels, digits[1], 3, level);
+  if (percent >= 10) matrixGlyph(pixels, digits[(percent / 10) % 10], 6, level);
+  matrixGlyph(pixels, digits[percent % 10], 10, level);
   for (int x = 0; x < (percent * 13 + 50) / 100; ++x) pixels[91 + x] = (level + 1) / 2;
   loadMatrix.draw(pixels);
 }
@@ -244,7 +253,7 @@ static void updateLoadMatrix(bool bridgeConnected) {
       && (shownGpu < 0 || now - pageAt < matrixAutoPageMs));
     const unsigned elapsed = now - pageAt;
     const unsigned frame = readoutFrame(page == MatrixPage::Auto ? elapsed % matrixAutoPageMs : elapsed);
-    const int readout = frame + (cpuPage ? 0 : 16);
+    const int readout = frame + (cpuPage ? 0 : readoutFrameCount);
     if (lastReadout != readout) {
       drawMatrixLoad(cpuPage, cpuPage ? shownCpu : shownGpu, frame);
       lastReadout = readout;

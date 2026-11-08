@@ -63,8 +63,9 @@ Choose one of the twelve **Notifications** and press **Show once** to send a
 slower marquee to the back display. It plays once, then resumes the interrupted
 animation. **Next animation** skips to the next art scene during a notification.
 
-In Duck Lab, press **Matrix readout** to show **CPU**, then **C** and the
-percentage. **PU** slides to the right as the number fades in.
+In Duck Lab, press **Matrix readout** to slide **CPU** in from the left.
+**C** stays on the same row while **PU** continues off the right edge, then
+the percentage fades in beside it on that row.
 Tap again within three seconds for the corresponding **GPU** readout, and again
 to resume the animation. Each reading times out after three seconds. A gauge
 along the bottom shows the same percentage. Unavailable readings are skipped.
