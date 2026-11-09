@@ -2,3 +2,41 @@
 @media(max-width:1000px){.lab-layout{grid-template-columns:minmax(0,1fr) 290px}.card{padding:14px}.stage-toolbar label{font-size:10px}.stats strong{font-size:20px}.preview-badge{display:none}}
 @media(max-width:760px){main{padding:0 15px 22px}.topbar{gap:20px;min-height:64px}.topbar nav{gap:16px}.topbar nav a{font-size:12px;padding:23px 0}.intro{padding:25px 0 20px}.intro .source-link{display:none}.intro p:not(.eyebrow){font-size:12px}.lab-layout{grid-template-columns:1fr}.stage-panel{position:static}.controls-panel{display:grid;grid-template-columns:1fr 1fr}.joint-card{grid-column:1/-1}#joint-controls{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}#viewport{height:clamp(280px,55dvh,420px)}.stats>div{padding:0 10px}.board-strip{justify-content:flex-start;gap:13px 22px}.engine{font-size:9px}.stage-bar{padding:11px}}
 @media(max-width:480px){.wordmark{font-size:16px}.topbar nav{gap:13px}h1{font-size:27px;letter-spacing:-.8px}.controls-panel{display:flex}#joint-controls{grid-template-columns:1fr}#viewport{height:300px}.stats strong{font-size:19px}.stats>div{padding:0 8px}.stats small{font-size:7px}.stats span{font-size:8px}.stage-toolbar>div{width:100%}.tabs button{padding:7px 10px}.stage-bar{gap:5px}.engine{font-size:8px}.viewport-help{font-size:7px}.card{padding:17px}.intro .eyebrow{font-size:9px}}
+.tabs{flex-wrap:wrap}
+#walk-card{grid-column:1/-1}
+.walk-buttons{margin-top:12px}
+#walk-state{min-height:2.8em}
+.walk-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 18px}
+.walk-metrics>div{border:1px solid var(--line);border-radius:7px;background:#13242c;padding:8px}
+.walk-metrics dt,.walk-legend dt{font-size:10px;color:var(--muted)}
+.walk-metrics dd,.walk-legend dd{margin:4px 0 0;font:12px ui-monospace,monospace}
+.walk-metrics dd.warning{color:var(--amber)}
+.load-heading{margin:0 0 7px}.load-heading h3{font-size:12px;margin:0;font-weight:600}
+.walk-graph{display:block;width:100%;height:70px;background:#0b1720;border-radius:6px}
+.walk-graph path{fill:none;stroke:currentColor;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.walk-graph .grid-lines{color:var(--line);stroke-width:1}
+.walk-legend{display:flex;justify-content:space-between;gap:7px;margin:8px 0 0}
+.graph-cpu{color:var(--mint)}.graph-core{color:var(--amber)}.graph-gpu{color:#9eaeff}
+.walk-hud{position:absolute;bottom:35px;left:12px;right:12px;z-index:1;display:flex;justify-content:center;flex-wrap:wrap;gap:4px;pointer-events:none}
+.walk-hud span{border:1px solid #385058;background:#0c1720eb;border-radius:6px;padding:5px 7px;color:var(--muted);font-size:10px;white-space:nowrap}
+.walk-hud b{color:var(--text);font:10px ui-monospace,monospace}.walk-hud b.warning{color:var(--amber)}
+#search-map-panel{margin:12px 0 16px}
+#search-map{width:100%;height:auto;border:1px solid var(--line);border-radius:7px;background:#0b1720}
+.search-key{display:flex;gap:4px 10px;flex-wrap:wrap;list-style:none;padding:0;margin:8px 0 0;color:var(--muted);font-size:10px}
+.search-key li::before{content:'';display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:2px;background:#243544}
+.search-key li:nth-child(2)::before{background:#376368}
+.search-key li:nth-child(3)::before{background:#bd7958}
+.search-key li:nth-child(4)::before{background:var(--mint)}
+.search-key li:nth-child(5)::before{background:#90aafa}
+.search-key li:nth-child(6)::before{background:#ffcb72}
+.matrix-player{margin:8px 17px 14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#101c25}
+.matrix-heading,.matrix-readouts{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap}
+.matrix-heading{justify-content:space-between;margin-bottom:8px}
+.matrix-heading h2{margin:0;font-size:13px;font-weight:600}
+#matrix-playing{font-size:11px;color:var(--mint)}
+.matrix-actions{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px}
+.matrix-actions button,.matrix-readouts button{padding:7px 9px;font-size:11px}
+.matrix-readouts{margin-top:9px}
+.matrix-readouts label{display:flex;gap:5px;align-items:center;color:var(--muted);font-size:11px}
+.matrix-readouts .muted{margin:0}
+@media(max-width:400px){.matrix-actions{grid-template-columns:1fr 1fr}.matrix-actions select{grid-column:1/-1}}

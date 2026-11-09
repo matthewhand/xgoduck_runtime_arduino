@@ -9,11 +9,14 @@ from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
 from gpu_telemetry import CPU_DISABLED, GpuTelemetry
+from matrix_scenes import CATALOG_ID, ENCORE_FROM, MARQUEE_FROM, SCENE_NAMES
+from walk_lab import WalkLab, walk_command
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
 sys.setswitchinterval(0.001)
 controller = Controller(Bridge)
 gpu = GpuTelemetry(Bridge)
+walk_lab = WalkLab(lambda: controller.loop_missed)
 try:
     ui = WebUI(port=9527, cors_origins='')
 except TypeError as exc:
@@ -125,10 +128,73 @@ def servo_action(body: dict):
 def status():
     sample = dict(gpu.latest)
     cpu = sample.pop('cpu', CPU_DISABLED)
-    return dict(controller.status(), gpu=sample, cpu=cpu)
+    health = sample.pop('health', {'ram_percent': None, 'temperature_c': None})
+    return dict(controller.status(), gpu=sample, cpu=cpu, health=health)
+
+def walk_start(body: dict):
+    try:
+        vx, yaw, arena = walk_command(body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    hardware = controller.status()
+    if hardware.get('enabled', False) or hardware['mode'] not in ('off', 'shadow'):
+        raise HTTPException(409, 'Put the hardware in Shadow or Off before starting a rollout.')
+    try:
+        return walk_lab.start(vx, yaw, arena)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+
+def walk_stop(_body: dict):
+    return walk_lab.stop()
+
+def matrix_request(request):
+    try:
+        return {'auto': Bridge.call('duck_matrix', request, timeout=0.8)}
+    except (ValueError, TimeoutError, ConnectionError, RuntimeError) as exc:
+        raise HTTPException(503, 'The matrix controller is unavailable.') from exc
+
+def matrix_status():
+    return matrix_request(3)
+
+def matrix_action(body: dict):
+    if body == {'action': 'next'}:
+        return matrix_request(0)
+    if set(body) == {'action', 'enabled'} and body['action'] == 'auto' and type(body['enabled']) is bool:
+        return matrix_request(2 if body['enabled'] else 1)
+    raise HTTPException(400, 'Choose next or set auto to true or false.')
+
+def matrix_scene(request):
+    try:
+        response = Bridge.call('duck_matrix_scene', request, timeout=0.8)
+    except (ValueError, TimeoutError, ConnectionError, RuntimeError) as exc:
+        raise HTTPException(503, 'The matrix scene controller is unavailable.') from exc
+    if type(response) is not int or response < 0 or response >> 8 != CATALOG_ID:
+        raise HTTPException(503, 'The matrix scene list does not match the sketch.')
+    current = response & 0xff
+    if current >= len(SCENE_NAMES):
+        raise HTTPException(503, 'The board reported an unknown animation.')
+    return {'current': current, 'scenes': SCENE_NAMES,
+            'encore_from': ENCORE_FROM, 'marquee_from': MARQUEE_FROM}
+
+def matrix_scene_status():
+    return matrix_scene(-1)
+
+def matrix_scene_action(body: dict):
+    if body == {'action': 'skip'}:
+        return matrix_scene(-2)
+    if set(body) == {'index'} and type(body['index']) is int and 0 <= body['index'] < len(SCENE_NAMES):
+        return matrix_scene(body['index'])
+    raise HTTPException(400, 'Choose a valid animation or skip to the next one.')
 
 ui.expose_api('GET', '/api/status', status)
-ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key != 'cpu'})
+ui.expose_api('GET', '/api/matrix', matrix_status)
+ui.expose_api('POST', '/api/matrix', matrix_action)
+ui.expose_api('GET', '/api/matrix/scene', matrix_scene_status)
+ui.expose_api('POST', '/api/matrix/scene', matrix_scene_action)
+ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
+ui.expose_api('POST', '/api/lab/walk/start', walk_start)
+ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)
+ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key not in ('cpu', 'health')})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)
 ui.expose_api('POST', '/api/heading-hold', heading_hold)
@@ -156,6 +222,7 @@ gpu.start()
 try:
     App.run()
 finally:
+    walk_lab.stop()
     controller.stop()
     gpu.stop()
     worker.join(timeout=2)
