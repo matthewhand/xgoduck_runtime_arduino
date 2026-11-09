@@ -1,8 +1,10 @@
 # UNO Q matrix animations and load readouts
 
-The UNO Q's 8 × 13 matrix cycles through twelve scenes, including two
+The UNO Q's 8 × 13 matrix cycles through 26 scenes, including two
 Mandelbrot dives, cosmic waves, Duckzilla and Duck Regatta, animated impasto,
-and miniature nature scenes. A full lap takes about two minutes. Load is
+miniature nature scenes, a duck digestion cutaway, and Space Invaders.
+The Duck's back also shows tiny stories like Pond Heist, Feather Foundry,
+and Blue Hour Train. A full lap takes about four minutes and thirteen seconds. Load is
 available in Duck Lab and as a brief matrix readout.
 An optional compute proof exercises the Adreno and verifies its outputs.
 ONNX policy inference continues to use the CPU.
@@ -53,15 +55,30 @@ ONNX policy inference continues to use the CPU.
 
 ## Reading the display
 
-In Duck Lab, press **Matrix readout** to show **C** (total CPU busy).
-Tap again within three seconds for **G** (measured GPU activity), and again
-to resume the animation. Each reading times out after three seconds. A gauge
-along the bottom shows the same percentage. Unavailable readings are skipped.
-Python and the MCU both check sample freshness. Older GPU-only collector samples
-still drive the G page.
+Use **Back display** in Duck Lab to see the current animation, choose one
+and press **Play**, or press **Next animation**. Either command starts its
+scene from the first frame, then the carousel continues from there.
 
-**Automatic load flashes** is off on boot. When enabled it shows a brief
-readout after four clips, or when CPU or GPU changes by at least 15 percentage
+Choose one of the twelve **Notifications** and press **Show once** to send a
+slower marquee to the back display. It plays once, then resumes the interrupted
+animation. **Next animation** skips to the next art scene during a notification.
+
+In Duck Lab, press **Matrix readout** to slide **CPU** in from the left.
+**C** stays on the same row while **PU** continues off the right edge, then
+the percentage fades in beside it on that row.
+Tap again within three seconds to cycle through **GPU**, **RAM**, **TMP**, and
+back to the animation. Every page uses the same slide, fade, and bottom-row
+bar. RAM is the percentage of Linux host memory in use, estimated from
+`MemAvailable`. TMP is the warmer reading from the board's CPU subsystem
+thermal zones, in °C. The bar fills at 100% for CPU, GPU, and RAM, and at 100°C
+for TMP. Higher temperatures still show their numeric value.
+Each page times out after three seconds. Unavailable readings are skipped.
+Python and the MCU both check sample freshness. Older collectors still supply
+the pages for which they report data. Current RAM and temperature values are
+also available in the `health` field of `GET /api/status`.
+
+**Automatic load flashes** is off on boot. When enabled it shows a brief CPU
+and GPU readout after four clips, or when CPU or GPU changes by at least 15 percentage
 points from its reference in the same direction across two fresh samples.
 Automatic readouts wait at least 20 seconds between displays. The animations
 use a maximum level of 5 out of 7, fade at the ends, and leave a short dark
