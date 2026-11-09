@@ -61,6 +61,14 @@ It never calls the motor or MCU APIs.
 **Stop** ends the worker and keeps the last pose. A trial also ends if the
 simulated Duck falls or reaches the time limit.
 
+Use **Poke**, **Nudge**, or **Bash** during a walking trial to add a sideways
+velocity impulse of 0.12, 0.30, or 0.48 m/s to the simulated trunk. The policy
+reacts to the resulting sensor feedback. The panel reports when the push
+happened, peak tilt, and recovery time. Recovery requires at least half a
+second within 15° of upright with the trunk at least 10 cm off the floor.
+The outcome depends on the walking command and the phase of the step.
+Pushes only affect the walking simulation.
+
 The board load graph shows total Linux CPU, the busiest core, and the Adreno
 GPU. A dash means that a reading is unavailable. **Missed sim slots** counts
 expired 20 ms releases that the simulation skips to keep pace with wall time.
@@ -132,7 +140,8 @@ the deployed browser application does not.
 With native MuJoCo installed, run `python -B tools/check-walk-sim.py` using the
 app's Python and dependency path. This checks the full 20-second straight-ahead
 trial with the shipped ONNX file, forward travel, bilateral foot contacts, and
-trunk height throughout the run.
+trunk height throughout the run. It also runs a trial with all three pushes
+and checks that the Duck regains balance after each one.
 
 Browser checks on 7 November 2026 confirmed WebGPU at approximately 60 fps on
 localhost, the WebGL 2 path over Wi-Fi HTTP, joint editing, the Sit preset,

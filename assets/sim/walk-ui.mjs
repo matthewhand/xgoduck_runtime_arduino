@@ -32,6 +32,12 @@ export class WalkPanel {
       ? {arena:$('search-arena').value}
       : {vx:Number($('walk-vx').value), yaw:Number($('walk-yaw').value)}));
     $('walk-stop').addEventListener('click', () => this.action('stop', {}));
+    this.pushButtons = document.querySelectorAll('[data-walk-push]');
+    for (const button of this.pushButtons) {
+      button.addEventListener('click', () => this.action('push', {
+        run_id: this.latest.run_id, kind: button.dataset.walkPush,
+      }));
+    }
   }
 
   setMode(mode) {
@@ -39,6 +45,7 @@ export class WalkPanel {
     $('walk-title').textContent = this.explore ? 'Beacon hunt' : 'Walking policy';
     $('walk-start').textContent = this.explore ? 'Start search' : 'Run 20 s';
     $('walk-inputs').hidden = this.explore;
+    $('walk-push-controls').hidden = this.explore;
     $('search-inputs').hidden = $('search-map-panel').hidden = !this.explore;
     this.setVisible(mode === 'walk' || this.explore);
     this.update();
@@ -118,6 +125,19 @@ export class WalkPanel {
     $('walk-yaw').disabled = busy;
     $('search-arena').disabled = busy;
     const trial = matching ? run : null;
+    const push = trial?.push;
+    const canPush = !this.explore && trial?.state === 'running' && !this.pending
+      && !trial.push_pending && (!push || push.recovery_s != null);
+    for (const button of this.pushButtons) button.disabled = !canPush;
+    let pushText = 'Push sideways during a trial to test balance.';
+    if (trial?.push_pending) pushText = 'Push queued…';
+    else if (push) {
+      const label = push.kind[0].toUpperCase() + push.kind.slice(1);
+      let recovery = busy ? 'checking balance…' : 'trial ended before recovery';
+      if (push.recovery_s != null) recovery = `recovered in ${fmt(push.recovery_s, 2, ' s')}`;
+      pushText = `${label} at ${fmt(push.time_s, 2, ' s')} · ${recovery} · peak tilt ${fmt(push.peak_tilt_deg, 1, '°')}`;
+    }
+    $('walk-push-state').textContent = pushText;
     $('walk-hz').textContent = fmt(trial?.hz, 1, ' Hz');
     $('walk-inference').textContent = fmt(trial?.inference_ms, 2, ' ms');
     $('walk-work').textContent = fmt(trial?.slot_p95_ms, 2, ' / 20 ms');

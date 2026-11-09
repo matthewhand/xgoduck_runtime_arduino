@@ -147,6 +147,14 @@ def walk_start(body: dict):
 def walk_stop(_body: dict):
     return walk_lab.stop()
 
+def walk_push(body: dict):
+    try:
+        return walk_lab.push(body.get('run_id'), body.get('kind'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
 def matrix_request(request):
     try:
         return {'auto': Bridge.call('duck_matrix', request, timeout=0.8)}
@@ -194,6 +202,7 @@ ui.expose_api('POST', '/api/matrix/scene', matrix_scene_action)
 ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
 ui.expose_api('POST', '/api/lab/walk/start', walk_start)
 ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)
+ui.expose_api('POST', '/api/lab/walk/push', walk_push)
 ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key not in ('cpu', 'health')})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)

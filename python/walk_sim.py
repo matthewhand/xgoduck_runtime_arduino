@@ -14,6 +14,9 @@ STEP_S = 0.005
 SUBSTEPS = 4
 SLOT_S = STEP_S * SUBSTEPS
 RUN_S = 20
+PUSH_SPEEDS = {'poke': 0.12, 'nudge': 0.30, 'bash': 0.48}
+RECOVERY_TILT_DEG = 15
+RECOVERY_HOLD_S = 0.5
 MODEL = Path(__file__).resolve().parent.parent / 'assets/sim/model/scene_walk.xml'
 JOINT_IDS = (10, 11, 12, 13, 14, 30, 31, 32, 33, 20, 21, 22, 23, 24)
 JOINT_NAMES = (
@@ -55,7 +58,9 @@ class WalkSimulation:
         self.qvel = [int(model.joint(name).dofadr[0]) for name in JOINT_NAMES]
         self.actuators = [model.actuator(name).id for name in JOINT_NAMES]
         self.trunk = model.body('trunk_base').id
-        self.root = int(model.joint('trunk_base_freejoint').qposadr[0])
+        root_joint = model.joint('trunk_base_freejoint')
+        self.root = int(root_joint.qposadr[0])
+        self.root_dof = int(root_joint.dofadr[0])
         gyro = int(model.sensor('imu_ang_vel').adr[0])
         self.gyro = slice(gyro, gyro + 3)
         mj.mj_resetDataKeyframe(model, data, model.key('STAND').id)
@@ -68,6 +73,18 @@ class WalkSimulation:
         self.last_contact = set()
         self.footfalls = dict(left=0, right=0)
         self.inference_ms = 0.0
+        self.push = None
+        self.settled_since = None
+
+    def apply_push(self, kind):
+        # Use the trunk heading to add a world-frame sideways velocity impulse.
+        w, x, y, z = self.data.qpos[self.root + 3:self.root + 7]
+        heading = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+        speed = PUSH_SPEEDS[kind]
+        self.data.qvel[self.root_dof] -= speed * math.sin(heading)
+        self.data.qvel[self.root_dof + 1] += speed * math.cos(heading)
+        self.push = dict(kind=kind, time_s=round(self.data.time, 3), peak_tilt_deg=0.0, recovery_s=None)
+        self.settled_since = None
 
     def tick(self):
         d, obs = self.data, self.obs[0]
@@ -106,7 +123,17 @@ class WalkSimulation:
             raise ValueError('Walking simulation emitted a non-finite pose')
         # Terminate a fallen trial instead of accumulating misleading floor motion.
         q = d.qpos[self.root:self.root + 7]
-        return q[2] < 0.06 or 1 - 2 * (q[4] ** 2 + q[5] ** 2) < 0.45
+        up = 1 - 2 * (q[4] ** 2 + q[5] ** 2)
+        if self.push and self.push['recovery_s'] is None:
+            tilt = math.degrees(math.acos(max(-1.0, min(1.0, up))))
+            self.push['peak_tilt_deg'] = max(self.push['peak_tilt_deg'], round(tilt, 1))
+            if tilt > RECOVERY_TILT_DEG or q[2] < 0.10:
+                self.settled_since = None
+            elif self.settled_since is None:
+                self.settled_since = d.time
+            elif d.time - self.settled_since >= RECOVERY_HOLD_S - 1e-9:
+                self.push['recovery_s'] = round(d.time - self.push['time_s'], 3)
+        return q[2] < 0.06 or up < 0.45
 
     def snapshot(self):
         d = self.data
@@ -115,6 +142,8 @@ class WalkSimulation:
                       contacts=d.ncon, footfalls=self.footfalls, path_m=round(self.path_m, 3))
         if self.mission:
             sample['mission'] = self.mission.snapshot()
+        if self.push:
+            sample['push'] = self.push.copy()
         return sample
 
 
@@ -122,7 +151,7 @@ def publish(sample):
     print(json.dumps(sample, separators=(',', ':'), allow_nan=False), flush=True)
 
 
-def run(sim):
+def run(sim, push_fd=None):
     slots = missed = 0
     run_slots = round((MISSION_S if sim.mission else RUN_S) / SLOT_S)
     inference, work = deque(maxlen=250), deque(maxlen=250)
@@ -138,7 +167,19 @@ def run(sim):
         missed += skipped
         deadline += (1 + skipped) * SLOT_S
         fallen = False
+        pushed = False
         if slots + missed < run_slots:
+            if push_fd is not None:
+                try:
+                    command = os.read(push_fd, 16)
+                except BlockingIOError:
+                    pass
+                else:
+                    if not command:
+                        push_fd = None
+                    else:
+                        sim.apply_push(command.decode('ascii'))
+                        pushed = True
             fallen = sim.tick()
             if not (sim.mission and sim.mission.found):
                 slots += 1
@@ -150,7 +191,7 @@ def run(sim):
             state = 'fallen'
         elif slots + missed >= run_slots:
             state = 'complete'
-        if slots == 1 or slots % 5 == 0 or state != 'running':
+        if pushed or slots == 1 or slots % 5 == 0 or state != 'running':
             p95 = sorted(work)[math.ceil(0.95 * len(work)) - 1] if work else None
             elapsed = max(time.monotonic() - began, now - began + SLOT_S)
             publish(dict(state=state, slots=slots, missed=missed, hz=round(slots / elapsed, 1),
@@ -163,12 +204,17 @@ def main():
     parser.add_argument('--vx', type=float, default=0.2)
     parser.add_argument('--yaw', type=float, default=0.0)
     parser.add_argument('--arena', choices=ARENAS)
+    parser.add_argument('--interactive', action='store_true', help='Accept a push name from a dedicated stdin pipe')
     args = parser.parse_args()
     try:
         if hasattr(os, 'nice'):
             os.nice(10)
         sim = WalkSimulation(args.vx, args.yaw, args.arena)
-        run(sim)
+        push_fd = None
+        if args.interactive and not args.arena:
+            push_fd = sys.stdin.fileno()
+            os.set_blocking(push_fd, False)
+        run(sim, push_fd)
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         publish(dict(state='error', detail='Walking simulation could not run. Check the app logs and MuJoCo installation.'))
