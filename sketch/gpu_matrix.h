@@ -7,9 +7,12 @@
 static Arduino_LED_Matrix loadMatrix;
 static atomic_t loadReadings = ATOMIC_INIT(0); // Each byte encodes percent + 2.
 static atomic_t loadSampleMs = ATOMIC_INIT(0);
+static atomic_t healthReadings = ATOMIC_INIT(0); // Each byte encodes a value + 2.
+static atomic_t healthSampleMs = ATOMIC_INIT(0);
 static atomic_t matrixTaps = ATOMIC_INIT(0);
 static atomic_t matrixAuto = ATOMIC_INIT(0);
 static atomic_t matrixScene = ATOMIC_INIT(0);
+static atomic_t matrixArtScene = ATOMIC_INIT(0);
 static constexpr atomic_val_t sceneIndexMask = 0xff;
 static constexpr atomic_val_t scenePending = 0x100;
 static_assert(matrixClipCount <= sceneIndexMask + 1, "Scene index must fit in the RPC reply");
@@ -22,6 +25,12 @@ static void receiveLoad(int cpu, int gpu) {
 
 // An older host collector can still supply GPU-only readings.
 static void receiveGpu(int percent) { receiveLoad(-2, percent); }
+
+static void receiveHealth(int ram, int temperature) {
+  if (ram < -2 || ram > 100 || temperature < -2 || temperature > 125) return;
+  atomic_set(&healthReadings, (ram + 2) | ((temperature + 2) << 8));
+  atomic_set(&healthSampleMs, static_cast<atomic_val_t>(static_cast<uint32_t>(millis())));
+}
 
 static bool receiveMatrix(int request) {
   if (request == 0) atomic_inc(&matrixTaps);
@@ -37,7 +46,9 @@ static int receiveMatrixScene(int request) {
     atomic_val_t next;
     do {
       state = atomic_get(&matrixScene);
-      const int index = request == -2 ? (int(state & sceneIndexMask) + 1) % matrixClipCount : request;
+      const int current = state & sceneIndexMask;
+      const int art = current < int(matrixMarqueeFrom) ? current : atomic_get(&matrixArtScene);
+      const int index = request == -2 ? (art + 1) % matrixMarqueeFrom : request;
       next = scenePending | index;
     } while (!atomic_cas(&matrixScene, state, next));
     state = next;
@@ -55,31 +66,77 @@ static void drawMatrixClip(unsigned clip, unsigned frame) {
   loadMatrix.draw(pixels);
 }
 
-static void drawMatrixLoad(bool cpu, int percent) {
+static void matrixGlyph(uint8_t *pixels, const uint8_t *rows, int x, uint8_t level) {
+  for (int col = 0; col < 3; ++col) {
+    const int pixel = x + col;
+    if (pixel < 0 || pixel >= 13) continue;
+    for (unsigned row = 0; row < 5; ++row)
+      if (rows[row] & (4u >> col)) pixels[row * 13 + pixel] = level;
+  }
+}
+
+static constexpr unsigned readoutEntrySteps = 11;
+static constexpr unsigned readoutTitleMs = 384;
+static constexpr unsigned readoutSlideStepMs = 48;
+static constexpr unsigned readoutExitSteps = 9;
+static constexpr unsigned readoutFadeFirst = readoutEntrySteps + readoutExitSteps + 1;
+static constexpr unsigned readoutFadeStepMs = 80;
+static constexpr unsigned readoutFrameCount = readoutFadeFirst + 4;
+
+static unsigned readoutFrame(unsigned elapsed) {
+  const unsigned entryMs = readoutEntrySteps * readoutSlideStepMs;
+  if (elapsed < entryMs) return elapsed / readoutSlideStepMs;
+  elapsed -= entryMs;
+  if (elapsed < readoutTitleMs) return readoutEntrySteps;
+  elapsed -= readoutTitleMs;
+  const unsigned exitMs = readoutExitSteps * readoutSlideStepMs;
+  if (elapsed < exitMs) return readoutEntrySteps + 1 + elapsed / readoutSlideStepMs;
+  const unsigned fade = (elapsed - exitMs) / readoutFadeStepMs;
+  return readoutFadeFirst + (fade < 3 ? fade : 3);
+}
+
+enum class MatrixMetric { Cpu, Gpu, Ram, Temp };
+static constexpr unsigned matrixMetricCount = 4;
+
+static void drawMatrixLoad(MatrixMetric metric, int value, unsigned frame) {
   uint8_t pixels[104] = {};
-  const uint8_t label[5] = {7, 4, uint8_t(cpu ? 4 : 5), uint8_t(cpu ? 4 : 5), 7};
+  static constexpr uint8_t c[5] = {7,4,4,4,7}, g[5] = {7,4,5,5,7};
+  static constexpr uint8_t r[5] = {6,5,6,5,5}, a[5] = {2,5,7,5,5};
+  static constexpr uint8_t m[5] = {5,7,7,5,5}, t[5] = {7,2,2,2,2};
+  static constexpr uint8_t p[5] = {6,5,6,4,4}, u[5] = {5,5,5,5,7};
+  static constexpr const uint8_t *words[matrixMetricCount][3] = {
+    {c,p,u}, {g,p,u}, {r,a,m}, {t,m,p}
+  };
+  const auto &word = words[unsigned(metric)];
+  if (frame < readoutFadeFirst) {
+    const int offset = int(frame) - int(readoutEntrySteps);
+    matrixGlyph(pixels, word[0], offset < 0 ? offset : 0, 4);
+    matrixGlyph(pixels, word[1], 4 + offset, 4);
+    matrixGlyph(pixels, word[2], 8 + offset, 4);
+    loadMatrix.draw(pixels);
+    return;
+  }
   static const uint8_t digits[10][5] = {
     {7,5,5,5,7}, {2,6,2,2,7}, {7,1,7,4,7}, {7,1,7,1,7}, {5,5,7,1,1},
     {7,4,7,1,7}, {7,4,7,5,7}, {7,1,1,1,1}, {7,5,7,5,7}, {7,5,7,1,7}
   };
-  auto glyph = [&](const uint8_t *rows, unsigned x, unsigned y) {
-    for (unsigned row = 0; row < 5; ++row)
-      for (unsigned bit = 0; bit < 3; ++bit)
-        if (rows[row] & (4u >> bit)) pixels[(y + row) * 13 + x + bit] = 4;
-  };
-  glyph(label, 0, 0);
-  if (percent == 100) glyph(digits[1], 3, 2);
-  if (percent >= 10) glyph(digits[(percent / 10) % 10], 6, 2);
-  glyph(digits[percent % 10], 10, 2);
-  for (int x = 0; x < (percent * 13 + 50) / 100; ++x) pixels[91 + x] = 2;
+  const uint8_t level = frame - readoutFadeFirst + 1;
+  matrixGlyph(pixels, word[0], 0, 4);
+  if (value >= 100) matrixGlyph(pixels, digits[value / 100], 3, level);
+  if (value >= 10) matrixGlyph(pixels, digits[(value / 10) % 10], 6, level);
+  matrixGlyph(pixels, digits[value % 10], 10, level);
+  const int barValue = value > 100 ? 100 : value;
+  for (int x = 0; x < (barValue * 13 + 50) / 100; ++x) pixels[91 + x] = (level + 1) / 2;
   loadMatrix.draw(pixels);
 }
 
-enum class MatrixPage { Art, Cpu, Gpu, Auto };
+enum class MatrixPage { Art, Manual, Auto };
 static constexpr unsigned matrixManualMs = 3000;
-static constexpr unsigned matrixAutoPageMs = 1400;
+static constexpr unsigned matrixAutoPageMs = 2400;
 static constexpr unsigned matrixCooldownMs = 20000;
 static constexpr unsigned matrixClipMs = matrixClipFrames * matrixFrameMs;
+static constexpr unsigned matrixNoticeFrameMs = 96;
+static constexpr unsigned matrixNoticeMs = matrixClipFrames * matrixNoticeFrameMs;
 static constexpr unsigned matrixSlidesPerGlance = 4;
 static constexpr int matrixLoadDelta = 15;
 
@@ -95,7 +152,9 @@ static void updateLoadMatrix(bool bridgeConnected) {
   static bool started = false, autoWasEnabled = false, showedLoad = false;
   static uint32_t clipAt, pageAt, pauseAt, lastLoadAt, seenSample, seenTaps;
   static unsigned clip, slides, previousChange, lastFrame = matrixClipFrames;
-  static int referenceCpu = -1, referenceGpu = -1, shownCpu, shownGpu;
+  static unsigned returnClip, returnElapsed;
+  static int referenceCpu = -1, referenceGpu = -1, shown[matrixMetricCount];
+  static unsigned manualMetric;
   static MatrixPage page = MatrixPage::Art;
   static int lastReadout = -1;
   const uint32_t now = static_cast<uint32_t>(millis());
@@ -111,7 +170,12 @@ static void updateLoadMatrix(bool bridgeConnected) {
   const bool fresh = bridgeConnected && now - stamp <= 5000u;
   const int cpu = fresh ? int(readings & 0xffu) - 2 : -2;
   const int gpu = fresh ? int((readings >> 8) & 0xffu) - 2 : -2;
-  const bool available = cpu >= 0 || gpu >= 0;
+  const uint32_t healthStamp = static_cast<uint32_t>(atomic_get(&healthSampleMs));
+  const unsigned health = atomic_get(&healthReadings);
+  const bool healthFresh = bridgeConnected && now - healthStamp <= 5000u;
+  const int values[matrixMetricCount] = {cpu, gpu, healthFresh ? int(health & 0xffu) - 2 : -2,
+                                       healthFresh ? int((health >> 8) & 0xffu) - 2 : -2};
+  const bool loadAvailable = cpu >= 0 || gpu >= 0;
   const bool autoEnabled = atomic_get(&matrixAuto) != 0;
   if (autoEnabled && !autoWasEnabled) {
     slides = previousChange = 0;
@@ -121,7 +185,7 @@ static void updateLoadMatrix(bool bridgeConnected) {
   autoWasEnabled = autoEnabled;
 
   bool significant = false;
-  if (!available) previousChange = 0;
+  if (!loadAvailable) previousChange = 0;
   else if (stamp != seenSample) {
     seenSample = stamp;
     const unsigned change = loadChange(cpu, referenceCpu, 1, 2) |
@@ -130,7 +194,7 @@ static void updateLoadMatrix(bool bridgeConnected) {
     previousChange = change;
   }
 
-  const unsigned autoDuration = matrixAutoPageMs * (unsigned(shownCpu >= 0) + unsigned(shownGpu >= 0));
+  const unsigned autoDuration = matrixAutoPageMs * (unsigned(shown[0] >= 0) + unsigned(shown[1] >= 0));
   const bool expired = now - pageAt >= (page == MatrixPage::Auto ? autoDuration : matrixManualMs);
   auto resume = [&] {
     if (page != MatrixPage::Art) {
@@ -139,14 +203,17 @@ static void updateLoadMatrix(bool bridgeConnected) {
       page = MatrixPage::Art;
     }
   };
-  if (expired || !available || (page == MatrixPage::Auto && !autoEnabled)) resume();
+  if (expired || (page == MatrixPage::Manual && values[manualMetric] < 0)
+      || (page == MatrixPage::Auto && (!autoEnabled || !loadAvailable))) resume();
 
-  auto show = [&](MatrixPage selected) {
+  auto show = [&](MatrixPage selected, unsigned metric) {
     if (page == MatrixPage::Art) pauseAt = now;
     page = selected;
     pageAt = lastLoadAt = now;
-    shownCpu = referenceCpu = cpu;
-    shownGpu = referenceGpu = gpu;
+    manualMetric = metric;
+    for (unsigned i = 0; i < matrixMetricCount; ++i) shown[i] = values[i];
+    referenceCpu = cpu;
+    referenceGpu = gpu;
     showedLoad = true;
     slides = previousChange = 0;
     lastReadout = -1;
@@ -154,31 +221,51 @@ static void updateLoadMatrix(bool bridgeConnected) {
 
   const uint32_t taps = static_cast<uint32_t>(atomic_get(&matrixTaps));
   // Preserve rapid taps that arrive between two sketch iterations.
-  unsigned queued = (taps - seenTaps) % (cpu >= 0 && gpu >= 0 ? 3u : 2u);
+  unsigned cycleSize = 1; // Include the return to art.
+  for (int value : values) if (value >= 0) ++cycleSize;
+  unsigned queued = (taps - seenTaps) % cycleSize;
   seenTaps = taps;
-  for (; available && queued > 0; --queued) {
-    if (page == MatrixPage::Gpu || (page == MatrixPage::Cpu && gpu < 0)) resume();
-    else if (page == MatrixPage::Cpu || cpu < 0) show(MatrixPage::Gpu);
-    else show(MatrixPage::Cpu);
+  for (; queued > 0; --queued) {
+    unsigned next = page == MatrixPage::Manual ? manualMetric + 1 : 0;
+    while (next < matrixMetricCount && values[next] < 0) ++next;
+    if (next == matrixMetricCount) resume();
+    else show(MatrixPage::Manual, next);
   }
 
   const atomic_val_t requested = atomic_get(&matrixScene);
   const bool jumped = (requested & scenePending) &&
                       atomic_cas(&matrixScene, requested, requested & sceneIndexMask);
   if (jumped) {
-    clip = requested & sceneIndexMask;
+    const unsigned selected = requested & sceneIndexMask;
+    if (selected >= matrixMarqueeFrom && clip < matrixMarqueeFrom) {
+      returnClip = clip;
+      returnElapsed = (page == MatrixPage::Art ? now : pauseAt) - clipAt;
+      if (returnElapsed >= matrixClipMs) returnElapsed = matrixClipMs - 1;
+    } else if (selected < matrixMarqueeFrom) {
+      atomic_set(&matrixArtScene, selected);
+      slides = previousChange = 0;
+    }
+    clip = selected;
     clipAt = now;
     page = MatrixPage::Art;
-    slides = previousChange = 0;
     lastFrame = matrixClipFrames;
   }
 
-  if (page == MatrixPage::Art) {
+  if (page == MatrixPage::Art && clip >= matrixMarqueeFrom && now - clipAt >= matrixNoticeMs) {
+    const unsigned finished = clip;
+    clip = returnClip;
+    clipAt = now - returnElapsed;
+    atomic_cas(&matrixScene, finished, clip);
+    lastFrame = matrixClipFrames;
+  }
+
+  if (page == MatrixPage::Art && clip < matrixMarqueeFrom) {
     const unsigned completed = (now - clipAt) / matrixClipMs;
     if (completed) {
       clipAt += completed * matrixClipMs;
       const unsigned previous = clip;
-      clip = (clip + completed) % matrixClipCount;
+      clip = (clip + completed) % matrixMarqueeFrom;
+      atomic_set(&matrixArtScene, clip);
       // A scene request may arrive while the natural transition is calculated.
       atomic_cas(&matrixScene, previous, clip);
       slides += completed;
@@ -186,22 +273,25 @@ static void updateLoadMatrix(bool bridgeConnected) {
       lastFrame = matrixClipFrames;
     }
     const bool cooled = !showedLoad || now - lastLoadAt >= matrixCooldownMs;
-    if (!jumped && autoEnabled && available && cooled && (significant || slides >= matrixSlidesPerGlance))
-      show(MatrixPage::Auto);
+    if (!jumped && autoEnabled && loadAvailable && cooled && (significant || slides >= matrixSlidesPerGlance))
+      show(MatrixPage::Auto, 0);
   }
 
   if (page != MatrixPage::Art) {
-    const bool cpuPage = page == MatrixPage::Cpu || (page == MatrixPage::Auto && shownCpu >= 0
-      && (shownGpu < 0 || now - pageAt < matrixAutoPageMs));
-    const int readout = cpuPage ? 0 : 1;
+    const unsigned elapsed = now - pageAt;
+    unsigned metric = manualMetric;
+    if (page == MatrixPage::Auto)
+      metric = shown[0] >= 0 && (shown[1] < 0 || elapsed < matrixAutoPageMs) ? 0 : 1;
+    const unsigned frame = readoutFrame(page == MatrixPage::Auto ? elapsed % matrixAutoPageMs : elapsed);
+    const int readout = frame + metric * readoutFrameCount;
     if (lastReadout != readout) {
-      drawMatrixLoad(cpuPage, cpuPage ? shownCpu : shownGpu);
+      drawMatrixLoad(MatrixMetric(metric), shown[metric], frame);
       lastReadout = readout;
     }
     return;
   }
 
-  const unsigned frame = (now - clipAt) / matrixFrameMs;
+  const unsigned frame = (now - clipAt) / (clip < matrixMarqueeFrom ? matrixFrameMs : matrixNoticeFrameMs);
   if (frame != lastFrame) {
     drawMatrixClip(clip, frame);
     lastFrame = frame;
