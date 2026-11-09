@@ -7,7 +7,7 @@ import subprocess
 import sys
 import threading
 
-from walk_sim import MODEL, RUN_S
+from walk_sim import MODEL, PUSH_SPEEDS, RUN_S
 from search_mission import ARENAS, MISSION_S
 
 PYTHON = Path(__file__).resolve().parent
@@ -66,8 +66,11 @@ class WalkLab:
             command = [sys.executable, '-B', str(PYTHON / 'walk_sim.py'), '--vx', str(vx), '--yaw', str(yaw)]
             if arena:
                 command.extend(['--arena', arena])
+            else:
+                command.append('--interactive')
             self.process = subprocess.Popen(
-                command, env=env, stdout=subprocess.PIPE, text=True,
+                command, env=env, stdin=subprocess.PIPE if arena is None else None,
+                stdout=subprocess.PIPE, text=True,
             )
             self.run_id += 1
             self.latest = dict(state='loading', vx=vx, yaw=yaw, arena=arena, missed_at_start=missed_at_start)
@@ -83,15 +86,39 @@ class WalkLab:
                     continue
                 with self.lock:
                     if self.latest['state'] != 'stopping':
+                        push = sample.get('push')
+                        if push and push['time_s'] != self.latest.get('push', {}).get('time_s'):
+                            self.latest['push_pending'] = False
                         self.latest.update(sample)
         code = process.wait()
         with self.lock:
+            if process.stdin is not None:
+                process.stdin.close()
             self.process = None
+            self.latest.pop('push_pending', None)
             self.latest['missed_at_end'] = self.board_missed()
             if self.latest['state'] == 'stopping':
                 self.latest['state'] = 'stopped'
             elif self.latest['state'] not in ('complete', 'found', 'fallen', 'error'):
                 self.latest.update(state='error', detail=f'Walking worker exited ({code}). Check app logs.')
+
+    def push(self, run_id, kind):
+        if type(run_id) is not int or not isinstance(kind, str) or kind not in PUSH_SPEEDS:
+            raise ValueError('Choose Poke, Nudge, or Bash for a valid walking trial.')
+        with self.lock:
+            if (self.process is None or self.latest['state'] != 'running'
+                    or self.latest.get('arena') or self.run_id != run_id):
+                raise RuntimeError('Start a walking trial before applying a push.')
+            push = self.latest.get('push')
+            if self.latest.get('push_pending') or (push and push['recovery_s'] is None):
+                raise RuntimeError('Wait for the current push to settle.')
+            try:
+                # One short write fits in the pipe because at most one push is pending.
+                os.write(self.process.stdin.fileno(), kind.encode('ascii'))
+            except OSError as exc:
+                raise RuntimeError('The walking trial has ended.') from exc
+            self.latest['push_pending'] = True
+            return self._snapshot()
 
     def stop(self):
         with self.lock:

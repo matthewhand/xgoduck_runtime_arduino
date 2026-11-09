@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs';
-import {WalkPanel} from './walk-ui.mjs?v=3';
+import {WalkPanel} from './walk-ui.mjs?v=4';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
