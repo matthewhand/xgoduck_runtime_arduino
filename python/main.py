@@ -9,7 +9,7 @@ from arduino.app_utils import App, Bridge
 from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
 from gpu_telemetry import CPU_DISABLED, GpuTelemetry
-from matrix_scenes import CATALOG_ID, ENCORE_FROM, SCENE_NAMES
+from matrix_scenes import CATALOG_ID, ENCORE_FROM, MARQUEE_FROM, SCENE_NAMES
 from walk_lab import WalkLab, walk_command
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
@@ -128,7 +128,8 @@ def servo_action(body: dict):
 def status():
     sample = dict(gpu.latest)
     cpu = sample.pop('cpu', CPU_DISABLED)
-    return dict(controller.status(), gpu=sample, cpu=cpu)
+    health = sample.pop('health', {'ram_percent': None, 'temperature_c': None})
+    return dict(controller.status(), gpu=sample, cpu=cpu, health=health)
 
 def walk_start(body: dict):
     try:
@@ -172,7 +173,8 @@ def matrix_scene(request):
     current = response & 0xff
     if current >= len(SCENE_NAMES):
         raise HTTPException(503, 'The board reported an unknown animation.')
-    return {'current': current, 'scenes': SCENE_NAMES, 'encore_from': ENCORE_FROM}
+    return {'current': current, 'scenes': SCENE_NAMES,
+            'encore_from': ENCORE_FROM, 'marquee_from': MARQUEE_FROM}
 
 def matrix_scene_status():
     return matrix_scene(-1)
@@ -192,7 +194,7 @@ ui.expose_api('POST', '/api/matrix/scene', matrix_scene_action)
 ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
 ui.expose_api('POST', '/api/lab/walk/start', walk_start)
 ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)
-ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key != 'cpu'})
+ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key not in ('cpu', 'health')})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)
 ui.expose_api('POST', '/api/heading-hold', heading_hold)

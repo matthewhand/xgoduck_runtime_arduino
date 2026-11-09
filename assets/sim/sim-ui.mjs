@@ -437,7 +437,7 @@ function attachMatrixControls() {
       const state = await response.json();
       enabled = state.auto === true;
       connected = true;
-      note.textContent = body?.action === 'next' ? 'Tap again within 3 s to cycle.' : '';
+      note.textContent = body?.action === 'next' ? 'Tap within 3 s: CPU → GPU → RAM → TMP → art.' : '';
     } catch {
       note.textContent = 'Matrix controls unavailable.';
     } finally {
@@ -453,11 +453,12 @@ function attachMatrixControls() {
 function attachMatrixPlayer() {
   const picker = $('matrix-scenes'), play = $('matrix-play'), skip = $('matrix-skip');
   const playing = $('matrix-playing'), error = $('matrix-scene-error');
-  let requestId = 0, pending = false, available = false, catalog = null;
+  let requestId = 0, pending = false, available = false, catalog = null, noticeFrom = Infinity;
 
   function updateButtons() {
     picker.disabled = skip.disabled = pending || !available;
     play.disabled = pending || !available || picker.value === '';
+    play.textContent = picker.value !== '' && Number(picker.value) >= noticeFrom ? 'Show once' : 'Play';
   }
 
   async function request(body) {
@@ -472,13 +473,18 @@ function attachMatrixPlayer() {
     try {
       const response = await fetch('/api/matrix/scene', options);
       if (!response.ok) throw new Error('Scene controls unavailable.');
-      const {scenes, current, encore_from: encoreFrom} = await response.json();
+      const {scenes, current, encore_from: encoreFrom, marquee_from: marqueeFrom = scenes.length} = await response.json();
       if (id !== requestId) return;
-      const key = JSON.stringify([scenes, encoreFrom]);
+      noticeFrom = marqueeFrom;
+      const key = JSON.stringify([scenes, encoreFrom, marqueeFrom]);
       if (catalog !== key) {
         const selection = picker.value;
         picker.replaceChildren(new Option('Choose animation', ''));
-        for (const [label, start, end] of [['New scenes', encoreFrom, scenes.length], ['Earlier scenes', 0, encoreFrom]]) {
+        for (const [label, start, end] of [
+          ['Notifications', marqueeFrom, scenes.length],
+          ['New scenes', encoreFrom, marqueeFrom],
+          ['Earlier scenes', 0, encoreFrom],
+        ]) {
           if (start === end) continue;
           const group = document.createElement('optgroup');
           group.label = label;
@@ -488,7 +494,7 @@ function attachMatrixPlayer() {
         picker.value = selection;
         catalog = key;
       }
-      playing.textContent = `Now playing · ${scenes[current]}`;
+      playing.textContent = `${current >= noticeFrom ? 'Notification' : 'Now playing'} · ${scenes[current]}`;
       error.hidden = true;
       available = true;
     } catch {
