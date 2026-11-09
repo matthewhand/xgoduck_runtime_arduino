@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect host CPU and GPU activity into the app's shared .cache directory."""
+"""Collect host load, RAM and temperature into the app's shared .cache directory."""
 import argparse
 import json
 import os
@@ -10,6 +10,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'python'))
 from gpu_stats import GpuSampler
 from cpu_stats import CpuSampler
+from board_health import BoardHealthSampler
 
 
 def main():
@@ -34,6 +35,7 @@ def main():
         parser.exit(0, f'A GPU collector is already writing {args.output}\n')
     sampler = GpuSampler()
     cpu_sampler = CpuSampler()
+    health_sampler = BoardHealthSampler()
     deadline = time.monotonic() + args.seconds if args.seconds else float('inf')
     # Keep a real MSM client counter readable even when no application renders.
     # An idle render-node descriptor submits no GPU work; unsupported counters
@@ -47,6 +49,7 @@ def main():
         while time.monotonic() < deadline:
             sample = sampler.sample()
             sample['cpu'] = cpu_sampler.sample()
+            sample['health'] = health_sampler.sample()
             # Atomic replacement keeps the App Lab reader from seeing half a JSON file.
             temporary = args.output.with_name(args.output.name + '.tmp')
             temporary.write_text(json.dumps(sample, allow_nan=False) + '\n')
