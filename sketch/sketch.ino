@@ -630,7 +630,9 @@ static void bridgeTask(void*, void*, void*) {
       if (ready) {
         Bridge.provide("duck_gpu", receiveGpu);
         Bridge.provide("duck_load", receiveLoad);
+        Bridge.provide("duck_health", receiveHealth);
         Bridge.provide("duck_matrix", receiveMatrix);
+        Bridge.provide("duck_matrix_scene", receiveMatrixScene);
       }
     }
     if (!ready) {
