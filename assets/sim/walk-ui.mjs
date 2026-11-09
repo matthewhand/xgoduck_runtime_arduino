@@ -40,13 +40,15 @@ export class WalkPanel {
     }
   }
 
-  setMode(mode) {
+  setMode(mode, demo = false) {
     this.explore = mode === 'explore';
     $('walk-title').textContent = this.explore ? 'Beacon hunt' : 'Walking policy';
     $('walk-start').textContent = this.explore ? 'Start search' : 'Run 20 s';
-    $('walk-inputs').hidden = this.explore;
+    $('walk-inputs').hidden = this.explore || demo;
     $('walk-push-controls').hidden = this.explore;
-    $('search-inputs').hidden = $('search-map-panel').hidden = !this.explore;
+    $('search-inputs').hidden = !this.explore || demo;
+    $('search-map-panel').hidden = !this.explore;
+    $('walk-action-buttons').hidden = $('walk-push-buttons').hidden = demo;
     this.setVisible(mode === 'walk' || this.explore);
     this.update();
   }
@@ -74,13 +76,14 @@ export class WalkPanel {
     if (id !== this.requestId) return;
     this.latest = sample;
     this.lastSeen = performance.now();
+    return sample;
   }
 
   async action(name, body) {
     this.pending = true;
     this.error = '';
     this.update();
-    try { await this.request('/' + name, body); }
+    try { return await this.request('/' + name, body); }
     catch (error) { this.error = error.message; }
     finally {
       this.pending = false;
