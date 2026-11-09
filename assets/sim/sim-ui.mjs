@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs';
-import {WalkPanel} from './walk-ui.mjs?v=2';
+import {WalkPanel} from './walk-ui.mjs?v=3';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
 const walk = new WalkPanel();
+const rolloutMode = name => name === 'walk' || name === 'explore';
 let sim, renderer, orbit, camera, scene;
 let mode = 'pose', running = false, gait = false, gaitTime = 0, selected = 32;
 let lastPacket = null, lastPacketAt = 0, liveResult = null, stopping = false;
@@ -16,6 +17,7 @@ const matrix = new THREE.Matrix4();
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion();
 let walkRun = null;
+let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
 
 function showError(error) {
   $('error').hidden = false;
@@ -23,6 +25,13 @@ function showError(error) {
 }
 
 function resetCamera() {
+  orbit.maxDistance = mode === 'explore' ? 4.5 : 1.8;
+  if (mode === 'explore') {
+    camera.position.set(1.85, -2.25, 2.25);
+    orbit.target.set(.78, 0, .04);
+    orbit.update();
+    return;
+  }
   const x = mode === 'walk' ? sim.data.qpos[0] : 0;
   const y = mode === 'walk' ? sim.data.qpos[1] : 0;
   camera.position.set(x+0.36, y-0.43, 0.28);
@@ -90,14 +99,14 @@ function updateRobot() {
 }
 
 function updateRows() {
-  const angles = mode === 'walk' || (mode === 'physics' && !sim.hold) ? sim.angles() : sim.targetAngles();
+  const angles = rolloutMode(mode) || (mode === 'physics' && !sim.hold) ? sim.angles() : sim.targetAngles();
   const freshLive = lastPacket && performance.now()-lastPacketAt<2500 && liveResult?.fresh;
   for (const joint of sim.joints) {
     const row = rows.get(joint.id);
     const missing = mode === 'live' && (!freshLive || ($('live-source').value === 'measured' && !(lastPacket?.servo_ids || []).includes(joint.id)));
     row.output.textContent = missing ? '—' : `${angles[joint.id].toFixed(1)}°`;
     row.input.value = angles[joint.id].toFixed(1);
-    row.input.disabled = mode === 'walk' || mode === 'live' || (mode === 'physics' && !sim.hold);
+    row.input.disabled = rolloutMode(mode) || mode === 'live' || (mode === 'physics' && !sim.hold);
     row.element.classList.toggle('selected', selected === joint.id);
   }
 }
@@ -134,21 +143,23 @@ function buildJointControls() {
 }
 
 function updateModeText() {
+  const rollout = rolloutMode(mode);
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
   $('physics-card').hidden = mode !== 'physics'; $('live-card').hidden = mode !== 'live';
-  $('walk-card').hidden = $('walk-hud').hidden = mode !== 'walk'; $('pose-card').hidden = mode === 'walk';
-  $('play').hidden = $('reset').hidden = $('collisions').parentElement.hidden = mode === 'walk';
-  $('export').disabled = mode === 'walk';
-  collisionMeshes.forEach(mesh => { mesh.visible = mode !== 'walk' && $('collisions').checked; });
+  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout;
+  $('play').hidden = $('reset').hidden = $('collisions').parentElement.hidden = rollout;
+  $('export').disabled = rollout;
+  collisionMeshes.forEach(mesh => { mesh.visible = !rollout && $('collisions').checked; });
   $('gait').classList.toggle('active', gait);
   $('play').disabled = mode === 'pose' && !gait;
   $('play').textContent = running ? (mode === 'live' ? 'Freeze view' : 'Pause') : (mode === 'live' ? 'Resume view' : 'Play');
   $('step').disabled = running || mode !== 'physics';
   $('clock-label').textContent = gait ? 'PREVIEW TIME' : 'SIM TIME';
   $('reset').textContent = mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
-  $('scene-mode').textContent = mode === 'walk' ? 'WALKING POLICY / SIMULATION ONLY' : mode === 'physics' ? 'MUJOCO / GRAVITY + CONTACTS' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'WALKING POLICY / SIMULATION ONLY' : mode === 'physics' ? 'PHYSICS / NO BALANCE CONTROLLER' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
-    ? 'Free-body MuJoCo physics. No balance policy is running; falling is expected. Hold targets enables the model’s approximate viewer PD.'
+    ? 'Falling is expected here. Try a drop, a nudge, or lower gravity. For a Duck that balances and walks, open Walking policy.'
+    : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
     : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
     : mode === 'live' ? 'Read-only telemetry. Target previews are commanded angles; missing measured joints remain unavailable.'
     : gait ? 'A procedural joint cycle for checking articulation. It is a kinematic preview, without gravity or a walking policy.'
@@ -157,11 +168,12 @@ function updateModeText() {
 }
 
 function setMode(next) {
-  if (!['pose','physics','walk','live'].includes(next)) return;
-  const changedWalk = mode !== next && (mode === 'walk' || next === 'walk');
+  if (!['pose','physics','walk','explore','live'].includes(next)) return;
+  const changedWalk = mode !== next && (rolloutMode(mode) || rolloutMode(next));
   if (next !== mode && (mode !== 'pose' || next !== 'physics')) sim.reset('STAND');
   mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
-  walk.setVisible(mode === 'walk');
+  walk.setMode(mode);
+  if (changedWalk) searchWorld.visible = false;
   if (changedWalk) { walkRun = null; resetCamera(); }
   sim.data.qvel.fill(0); sim.accumulator = 0;
   if (mode === 'live' && lastPacket && performance.now()-lastPacketAt<2500) liveResult = sim.applyTelemetry(lastPacket, $('live-source').value);
@@ -185,9 +197,10 @@ function animateGait(dt) {
 }
 
 function animateWalk(dt) {
-  const packet = walk.latest;
+  const packet = rolloutPacket();
   const root = packet?.root;
   const angles = packet?.joints_rad;
+  searchWorld.visible = mode === 'explore' && Boolean(packet?.mission);
   if (!root || root.length !== 7 || !root.every(Number.isFinite)
       || !sim.joints.every(joint => Number.isFinite(angles?.[joint.id]))) return;
   const q = sim.data.qpos;
@@ -201,12 +214,37 @@ function animateWalk(dt) {
   q[3] = walkRotation.w; q[4] = walkRotation.x; q[5] = walkRotation.y; q[6] = walkRotation.z;
   for (const joint of sim.joints) q[joint.address] += (angles[joint.id] - q[joint.address]) * alpha;
   sim.mj.mj_forward(sim.model, sim.data);
-  if (newRun) resetCamera();
-  else {
+  if (newRun) {
+    resetCamera();
+    if (packet.mission) buildSearchArena(packet.mission.walls);
+  } else if (mode === 'walk') {
     orbit.target.x += dx; orbit.target.y += dy;
     camera.position.x += dx; camera.position.y += dy;
   }
+  if (packet.mission) {
+    const {beacon, waypoint} = packet.mission;
+    searchBeacon.visible = Boolean(beacon);
+    searchWaypoint.visible = !beacon && Boolean(waypoint);
+    if (beacon) searchBeacon.position.set(...beacon, .14);
+    if (waypoint) searchWaypoint.position.set(...waypoint, .018);
+  }
   walkRun = packet.run_id;
+}
+
+function rolloutPacket() {
+  const sample = walk.latest;
+  return Boolean(sample?.arena) === (mode === 'explore') ? sample : null;
+}
+
+function buildSearchArena(walls) {
+  searchWorld.clear();
+  searchWorld.add(searchBeacon, searchWaypoint);
+  for (const [x, y, width, depth] of walls) {
+    const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+    wall.position.set(x, y, .13);
+    wall.scale.set(width, depth, .26);
+    searchWorld.add(wall);
+  }
 }
 
 function updateBoard() {
@@ -252,7 +290,7 @@ async function pollBoard() {
       current = packet;
       if (sim && mode === 'live' && running) liveResult = sim.applyTelemetry(packet, $('live-source').value);
     } catch { /* The age check replaces stale readings with unavailable indicators. */ }
-    if (mode === 'walk') walk.recordBoard(current);
+    if (rolloutMode(mode)) walk.recordBoard(current);
   }
   updateBoard();
   setTimeout(pollBoard, mode === 'live' && !document.hidden ? 200 : 1000);
@@ -322,14 +360,14 @@ function frame(time) {
   try {
     if (running && mode === 'physics') sim.advance(dt*Number($('speed').value));
     if (running && mode === 'pose' && gait) animateGait(dt);
-    if (mode === 'walk') animateWalk(dt);
+    if (rolloutMode(mode)) animateWalk(dt);
     updateRobot(); orbit.update(); renderer.render(scene,camera);
     fpsFrames++;
     if (time-fpsStart>600) { fps=fpsFrames*1000/(time-fpsStart); fpsFrames=0; fpsStart=time; }
     if (time-lastHud>200) {
       $('fps').textContent = Math.round(fps);
-      $('sim-time').textContent = (mode === 'walk' ? walk.latest?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
-      $('contacts').textContent = mode === 'walk' ? walk.latest?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
+      $('sim-time').textContent = (rolloutMode(mode) ? rolloutPacket()?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
+      $('contacts').textContent = rolloutMode(mode) ? rolloutPacket()?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
       $('height').textContent = (sim.data.qpos[2]*100).toFixed(1);
       updateRows(); updateBoard(); lastHud=time;
     }
@@ -357,6 +395,13 @@ async function start() {
   ground.position.z=-0.0005; scene.add(ground);
   const grid = new THREE.GridHelper(14,280,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001; scene.add(grid);
   const axes = new THREE.AxesHelper(0.05); axes.position.set(-0.16,-0.13,0.001); scene.add(axes);
+  searchWorld = new THREE.Group();
+  searchWorld.visible = false;
+  wallGeometry = new THREE.BoxGeometry(1,1,1);
+  wallMaterial = new THREE.MeshStandardMaterial({color:'#657d91', roughness:.7, transparent:true, opacity:.68, depthWrite:false});
+  searchBeacon = new THREE.Mesh(new THREE.SphereGeometry(.068,16,12), new THREE.MeshBasicMaterial({color:'#ffcb72'}));
+  searchWaypoint = new THREE.Mesh(new THREE.SphereGeometry(.022,12,8), new THREE.MeshBasicMaterial({color:'#90aafa'}));
+  scene.add(searchWorld);
   const resize = new ResizeObserver(() => {
     const width = viewport.clientWidth, height = viewport.clientHeight;
     camera.aspect=width/height; camera.updateProjectionMatrix(); renderer.setSize(width,height,false);
@@ -372,10 +417,112 @@ async function start() {
     stopping=true; walk.setVisible(false); resize.disconnect(); renderer.setAnimationLoop(null); orbit.dispose();
     for (const mesh of [...visualMeshes,...collisionMeshes]) mesh.material.dispose();
     for (const geometry of geometryCache.values()) geometry.dispose();
+    wallGeometry.dispose(); wallMaterial.dispose();
+    for (const marker of [searchBeacon, searchWaypoint]) { marker.geometry.dispose(); marker.material.dispose(); }
     sim.dispose(); renderer.dispose();
   },{once:true});
 }
 
+function attachMatrixControls() {
+  const next = $('matrix-next'), automatic = $('matrix-auto'), note = $('matrix-note');
+  let enabled = false, connected = false;
+  async function request(body) {
+    next.disabled = automatic.disabled = true;
+    const options = {cache:'no-store', signal:AbortSignal.timeout(1800)};
+    if (body) Object.assign(options, {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)});
+    try {
+      const response = await fetch('/api/matrix', options);
+      if (!response.ok) throw new Error('Matrix controls unavailable.');
+      const state = await response.json();
+      enabled = state.auto === true;
+      connected = true;
+      note.textContent = body?.action === 'next' ? 'Tap within 3 s: CPU → GPU → RAM → TMP → art.' : '';
+    } catch {
+      note.textContent = 'Matrix controls unavailable.';
+    } finally {
+      automatic.checked = enabled;
+      next.disabled = automatic.disabled = !connected;
+    }
+  }
+  next.addEventListener('click', () => request({action:'next'}));
+  automatic.addEventListener('change', () => request({action:'auto', enabled:automatic.checked}));
+  request();
+}
+
+function attachMatrixPlayer() {
+  const picker = $('matrix-scenes'), play = $('matrix-play'), skip = $('matrix-skip');
+  const playing = $('matrix-playing'), error = $('matrix-scene-error');
+  let requestId = 0, pending = false, available = false, catalog = null, noticeFrom = Infinity;
+
+  function updateButtons() {
+    picker.disabled = skip.disabled = pending || !available;
+    play.disabled = pending || !available || picker.value === '';
+    play.textContent = picker.value !== '' && Number(picker.value) >= noticeFrom ? 'Show once' : 'Play';
+  }
+
+  async function request(body) {
+    const id = ++requestId;
+    if (body) {
+      pending = true;
+      updateButtons();
+    }
+    const options = {cache:'no-store', signal:AbortSignal.timeout(1800)};
+    if (body) Object.assign(options, {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)});
+    try {
+      const response = await fetch('/api/matrix/scene', options);
+      if (!response.ok) throw new Error('Scene controls unavailable.');
+      const {scenes, current, encore_from: encoreFrom, marquee_from: marqueeFrom = scenes.length} = await response.json();
+      if (id !== requestId) return;
+      noticeFrom = marqueeFrom;
+      const key = JSON.stringify([scenes, encoreFrom, marqueeFrom]);
+      if (catalog !== key) {
+        const selection = picker.value;
+        picker.replaceChildren(new Option('Choose animation', ''));
+        for (const [label, start, end] of [
+          ['Notifications', marqueeFrom, scenes.length],
+          ['New scenes', encoreFrom, marqueeFrom],
+          ['Earlier scenes', 0, encoreFrom],
+        ]) {
+          if (start === end) continue;
+          const group = document.createElement('optgroup');
+          group.label = label;
+          for (let i = start; i < end; i++) group.append(new Option(scenes[i], String(i)));
+          picker.append(group);
+        }
+        picker.value = selection;
+        catalog = key;
+      }
+      playing.textContent = `${current >= noticeFrom ? 'Notification' : 'Now playing'} · ${scenes[current]}`;
+      error.hidden = true;
+      available = true;
+    } catch {
+      if (id !== requestId) return;
+      playing.textContent = 'Board unavailable';
+      error.textContent = 'Could not reach the scene controls. Retrying…';
+      error.hidden = false;
+      available = false;
+    } finally {
+      if (id === requestId) {
+        pending = false;
+        updateButtons();
+      }
+    }
+  }
+
+  picker.addEventListener('change', updateButtons);
+  play.addEventListener('click', () => request({index:Number(picker.value)}));
+  skip.addEventListener('click', () => request({action:'skip'}));
+  async function poll() {
+    if (!document.hidden && !pending) await request();
+    if (!stopping) setTimeout(poll, 1800);
+  }
+  poll();
+}
+
+attachMatrixControls();
+attachMatrixPlayer();
 start().catch(error => {
   $('loading').textContent = 'The 3D workspace could not start.';
   showError(error);

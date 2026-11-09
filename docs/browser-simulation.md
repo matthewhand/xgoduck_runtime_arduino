@@ -38,6 +38,7 @@ optional dependency used only by Walking policy.
 | Step cycle | A labelled procedural joint animation in Pose mode. It previews articulation without physics or a trained walking policy. |
 | Physics | A free-body MuJoCo simulation using upstream masses, inertia, collision meshes and joint limits, with gravity and floor contacts. Drop, nudge, pause or step by 20 ms; adjust gravity, floor friction and playback speed. |
 | Walking policy | Run the shipped `xgoduck_walk.onnx` against the upstream walking scene on the UNO Q. Choose a forward speed and turn rate, then start a trial of up to 20 seconds. The camera follows the simulated Duck. |
+| Explore | Pick a passage and start a beacon hunt. The simulated Duck maps nearby obstacles, chooses where to walk, and reveals the beacon when its range scan hits it. |
 | Live Duck | Poll `/api/status` and display commanded targets or measured angles. No motor commands are sent. Targets and partial/unavailable measurements use a translucent model. |
 
 Drag the canvas to orbit and scroll to zoom. Collision hulls and joint axes can
@@ -82,6 +83,14 @@ docker exec xgo-duck-main-1 uv pip install \
 
 The app already includes NumPy and ONNX Runtime. Reload Duck Lab after the
 installation. Other Lab modes work without the optional package.
+
+**Explore** uses the same walking worker and timing counters. It builds an
+occupancy grid from a short-range 360° simulated rangefinder and uses simulated
+position and heading to place those readings. The route planner seeks the
+edge of the observed space and uses the shipped ONNX policy to walk there.
+The 3D view shows the arena, while the range map shows the cells seen so far,
+the route taken, and the beacon once detected. A search stops on detection,
+a fall, or after 60 seconds.
 
 ## Model fidelity
 

@@ -630,6 +630,9 @@ static void bridgeTask(void*, void*, void*) {
       if (ready) {
         Bridge.provide("duck_gpu", receiveGpu);
         Bridge.provide("duck_load", receiveLoad);
+        Bridge.provide("duck_health", receiveHealth);
+        Bridge.provide("duck_matrix", receiveMatrix);
+        Bridge.provide("duck_matrix_scene", receiveMatrixScene);
       }
     }
     if (!ready) {
@@ -693,4 +696,4 @@ void setup() {
   // Thumb JUMP24 range; the Uno Q extension loader rejects it with ENOEXEC.
   asm volatile("nop" ::: "memory");
 }
-void loop() { updateLoadMatrix(atomic_get(&bridgeReady) != 0); delay(100); }
+void loop() { updateLoadMatrix(atomic_get(&bridgeReady) != 0); delay(32); }

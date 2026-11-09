@@ -211,7 +211,7 @@ show a dash. Per-servo values are available as `servo_voltage_v` in `/api/status
 
 ## Project files
 
-Optional diagnostics: [CPU and GPU activity on the LED matrix](docs/gpu-matrix.md).
+[UNO Q matrix animations and load readouts](docs/gpu-matrix.md).
 Open **Duck Lab** for the [3D pose and physics sandbox, walking policy trials, and live telemetry](docs/browser-simulation.md).
 See [Duck experiments](docs/experiments.md) for the staged development roadmap.
 

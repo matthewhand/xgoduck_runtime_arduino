@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=3">
+  <link rel="stylesheet" href="sim/sim.css?v=5">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
@@ -13,7 +13,7 @@
   <div class="intro"><div><p class="eyebrow">EXPERIMENT 02 / DIGITAL DUCK</p><h1>A little room to experiment.</h1><p>Pose it, drop it, or try the trained walking policy. Lab controls never move the hardware.</p></div><a class="source-link" href="https://github.com/LuwuDynamics/xgoduck_rl/tree/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck" target="_blank" rel="noopener">Luwu CAD model ↗</a></div>
   <div class="lab-layout">
     <section class="stage-panel" aria-label="3D Duck workspace">
-      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="physics" aria-pressed="false" disabled>Physics</button><button data-mode="walk" aria-pressed="false" disabled>Walking policy</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
+      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="physics" aria-pressed="false" disabled>Physics</button><button data-mode="walk" aria-pressed="false" disabled>Walking policy</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
       <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit, scroll to zoom.">
         <div id="loading" role="status">Loading the Duck’s CAD model…</div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div>
         <div id="walk-hud" class="walk-hud" aria-label="Board load and missed slots" hidden>
@@ -24,17 +24,44 @@
       </div>
       <div class="stage-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
       <p class="mode-note" id="mode-note" aria-live="polite">Preparing the simulation…</p>
+      <section class="matrix-player" aria-labelledby="matrix-title">
+        <div class="matrix-heading"><h2 id="matrix-title">Back display</h2><span id="matrix-playing">Connecting…</span></div>
+        <div class="matrix-actions">
+          <select id="matrix-scenes" aria-label="Choose animation" disabled><option value="">Choose animation</option></select>
+          <button id="matrix-play" class="primary" disabled>Play</button>
+          <button id="matrix-skip" disabled>Next animation</button>
+        </div>
+        <p id="matrix-scene-error" class="muted" role="status" hidden></p>
+        <div class="matrix-readouts">
+          <button id="matrix-next" disabled>Matrix readout</button>
+          <label title="Show load after four clips or after a sustained 15 percentage point change"><input type="checkbox" id="matrix-auto" disabled> Automatic load flashes</label>
+          <span id="matrix-note" class="muted" role="status"></span>
+        </div>
+      </section>
       <div class="stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
     </section>
     <aside class="controls-panel">
       <section class="card" id="walk-card" hidden>
-        <div class="section-heading"><h2>Walking policy</h2><span>UNO Q CPU</span></div>
-        <label class="range-label" for="walk-vx">Forward speed <output id="walk-vx-value">0.20 m/s</output></label>
-        <input id="walk-vx" type="range" min="-0.25" max="0.3" step="0.05" value="0.2">
-        <label class="range-label" for="walk-yaw">Turn rate <output id="walk-yaw-value">0.00 rad/s</output></label>
-        <input id="walk-yaw" type="range" min="-1" max="1" step="0.1" value="0">
+        <div class="section-heading"><h2 id="walk-title">Walking policy</h2><span>UNO Q CPU</span></div>
+        <div id="walk-inputs">
+          <label class="range-label" for="walk-vx">Forward speed <output id="walk-vx-value">0.20 m/s</output></label>
+          <input id="walk-vx" type="range" min="-0.25" max="0.3" step="0.05" value="0.2">
+          <label class="range-label" for="walk-yaw">Turn rate <output id="walk-yaw-value">0.00 rad/s</output></label>
+          <input id="walk-yaw" type="range" min="-1" max="1" step="0.1" value="0">
+        </div>
+        <div id="search-inputs" hidden>
+          <label class="range-label" for="search-arena">Arena layout</label>
+          <select id="search-arena"><option value="north">North passage</option><option value="south">South passage</option></select>
+        </div>
         <div class="button-row walk-buttons"><button id="walk-start" class="primary" disabled>Run 20 s</button><button id="walk-stop" disabled>Stop</button></div>
         <p class="muted" id="walk-state" role="status">Checking the UNO Q…</p>
+        <div id="search-map-panel" hidden>
+          <div class="section-heading load-heading"><h3>Duck’s range map</h3><span id="search-coverage">AWAITING SCAN</span></div>
+          <canvas id="search-map" width="360" height="240" role="img" aria-label="Observed floor, walls, and the Duck’s route through the arena"></canvas>
+          <ul class="search-key" aria-label="Range map legend">
+            <li>Unknown</li><li>Seen floor</li><li>Wall</li><li>Trail</li><li>Waypoint</li><li>Beacon</li>
+          </ul>
+        </div>
         <dl class="walk-metrics">
           <div><dt>Policy rate</dt><dd id="walk-hz">—</dd></div>
           <div><dt>ONNX average</dt><dd id="walk-inference">—</dd></div>
@@ -61,5 +88,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=4"></script>
+<script type="module" src="sim/sim-ui.mjs?v=10"></script>
 </body></html>

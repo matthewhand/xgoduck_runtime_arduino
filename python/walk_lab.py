@@ -8,19 +8,24 @@ import sys
 import threading
 
 from walk_sim import MODEL, RUN_S
+from search_mission import ARENAS, MISSION_S
 
 PYTHON = Path(__file__).resolve().parent
 DEPS = PYTHON.parent / '.cache/walk-sim-deps'
 
 
 def walk_command(body):
+    if 'arena' in body:
+        if set(body) != {'arena'} or body['arena'] not in ARENAS:
+            raise ValueError('Choose a valid search arena')
+        return 0.0, 0.0, body['arena']
     if set(body) - {'vx', 'yaw'}:
-        raise ValueError('Only forward speed and turn rate are supported')
+        raise ValueError('Only forward speed and turn rate are supported for a walking trial')
     values = body.get('vx', 0.2), body.get('yaw', 0.0)
     if any(type(value) not in (int, float) for value in values) or not (
             -0.25 <= values[0] <= 0.3 and -1 <= values[1] <= 1):
         raise ValueError('Set speed within −0.25 to 0.30 m/s and turn rate within ±1 rad/s')
-    return values
+    return (*values, None)
 
 
 class WalkLab:
@@ -37,7 +42,8 @@ class WalkLab:
                      or importlib.util.find_spec('mujoco') is not None))
 
     def _snapshot(self):
-        result = dict(self.latest, available=self.available(), run_id=self.run_id, duration_s=RUN_S)
+        result = dict(self.latest, available=self.available(), run_id=self.run_id,
+                      duration_s=MISSION_S if self.latest.get('arena') else RUN_S)
         if 'missed_at_start' in result:
             end = result.get('missed_at_end', self.board_missed())
             result['board_missed_delta'] = end - result['missed_at_start']
@@ -47,7 +53,7 @@ class WalkLab:
         with self.lock:
             return self._snapshot()
 
-    def start(self, vx, yaw):
+    def start(self, vx, yaw, arena):
         with self.lock:
             if self.process is not None:
                 raise RuntimeError('A rollout is already active')
@@ -57,12 +63,14 @@ class WalkLab:
                        OMP_NUM_THREADS='1', MKL_NUM_THREADS='1',
                        PYTHONPATH=os.pathsep.join(filter(None, (str(DEPS), os.getenv('PYTHONPATH')))))
             missed_at_start = self.board_missed()
+            command = [sys.executable, '-B', str(PYTHON / 'walk_sim.py'), '--vx', str(vx), '--yaw', str(yaw)]
+            if arena:
+                command.extend(['--arena', arena])
             self.process = subprocess.Popen(
-                [sys.executable, '-B', str(PYTHON / 'walk_sim.py'), '--vx', str(vx), '--yaw', str(yaw)],
-                env=env, stdout=subprocess.PIPE, text=True,
+                command, env=env, stdout=subprocess.PIPE, text=True,
             )
             self.run_id += 1
-            self.latest = dict(state='loading', vx=vx, yaw=yaw, missed_at_start=missed_at_start)
+            self.latest = dict(state='loading', vx=vx, yaw=yaw, arena=arena, missed_at_start=missed_at_start)
             threading.Thread(target=self._collect, args=(self.process,), name='walk-lab', daemon=True).start()
             return self._snapshot()
 
@@ -82,7 +90,7 @@ class WalkLab:
             self.latest['missed_at_end'] = self.board_missed()
             if self.latest['state'] == 'stopping':
                 self.latest['state'] = 'stopped'
-            elif self.latest['state'] not in ('complete', 'fallen', 'error'):
+            elif self.latest['state'] not in ('complete', 'found', 'fallen', 'error'):
                 self.latest.update(state='error', detail=f'Walking worker exited ({code}). Check app logs.')
 
     def stop(self):

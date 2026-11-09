@@ -8,11 +8,12 @@ from pathlib import Path
 import sys
 import time
 
+from search_mission import ARENAS, MISSION_S, SearchMission
+
 STEP_S = 0.005
 SUBSTEPS = 4
 SLOT_S = STEP_S * SUBSTEPS
 RUN_S = 20
-RUN_SLOTS = round(RUN_S / SLOT_S)
 MODEL = Path(__file__).resolve().parent.parent / 'assets/sim/model/scene_walk.xml'
 JOINT_IDS = (10, 11, 12, 13, 14, 30, 31, 32, 33, 20, 21, 22, 23, 24)
 JOINT_NAMES = (
@@ -24,13 +25,14 @@ OBS_NAMES = 'base_ang_vel,projected_gravity,joint_pos,joint_vel,actions,command,
 
 
 class WalkSimulation:
-    def __init__(self, vx, yaw):
+    def __init__(self, vx, yaw, arena=None):
         import mujoco as mj
         import numpy as np
         from policy import Policy
 
         self.mj, self.np = mj, np
-        self.model = model = mj.MjModel.from_xml_path(str(MODEL))
+        self.mission = SearchMission(mj, np, MODEL, arena) if arena else None
+        self.model = model = self.mission.model if self.mission else mj.MjModel.from_xml_path(str(MODEL))
         model.opt.timestep = STEP_S
         self.data = data = mj.MjData(model)
         self.policy = policy = Policy()
@@ -71,6 +73,11 @@ class WalkSimulation:
         d, obs = self.data, self.obs[0]
         # Refresh body frame and gyro at the integrated pose before observing it.
         self.mj.mj_forward(self.model, d)
+        if self.mission:
+            vx, yaw = self.mission.steer(d, self.root)
+            obs[48:51] = (vx, 0, yaw)
+            if self.mission.found:
+                return False
         obs[:3] = d.sensordata[self.gyro]
         obs[3:6] = -d.xmat[self.trunk, 6:9]
         obs[6:20] = d.qpos[self.qpos] - self.home
@@ -103,9 +110,12 @@ class WalkSimulation:
 
     def snapshot(self):
         d = self.data
-        return dict(time_s=round(d.time, 3), root=d.qpos[self.root:self.root + 7].tolist(),
-                    joints_rad=dict(zip(JOINT_IDS, d.qpos[self.qpos].tolist())),
-                    contacts=d.ncon, footfalls=self.footfalls, path_m=round(self.path_m, 3))
+        sample = dict(time_s=round(d.time, 3), root=d.qpos[self.root:self.root + 7].tolist(),
+                      joints_rad=dict(zip(JOINT_IDS, d.qpos[self.qpos].tolist())),
+                      contacts=d.ncon, footfalls=self.footfalls, path_m=round(self.path_m, 3))
+        if self.mission:
+            sample['mission'] = self.mission.snapshot()
+        return sample
 
 
 def publish(sample):
@@ -114,6 +124,7 @@ def publish(sample):
 
 def run(sim):
     slots = missed = 0
+    run_slots = round((MISSION_S if sim.mission else RUN_S) / SLOT_S)
     inference, work = deque(maxlen=250), deque(maxlen=250)
     began = deadline = time.monotonic()
     state = 'running'
@@ -123,18 +134,21 @@ def run(sim):
             time.sleep(deadline - now)
             now = time.monotonic()
         # Skip expired release times; do not hammer the CPU with catch-up steps.
-        skipped = min(RUN_SLOTS - slots - missed, max(0, int((now - deadline) / SLOT_S)))
+        skipped = min(run_slots - slots - missed, max(0, int((now - deadline) / SLOT_S)))
         missed += skipped
         deadline += (1 + skipped) * SLOT_S
         fallen = False
-        if slots + missed < RUN_SLOTS:
+        if slots + missed < run_slots:
             fallen = sim.tick()
-            slots += 1
-            inference.append(sim.inference_ms)
-            work.append((time.monotonic() - now) * 1000)
-        if fallen:
+            if not (sim.mission and sim.mission.found):
+                slots += 1
+                inference.append(sim.inference_ms)
+                work.append((time.monotonic() - now) * 1000)
+        if sim.mission and sim.mission.found:
+            state = 'found'
+        elif fallen:
             state = 'fallen'
-        elif slots + missed >= RUN_SLOTS:
+        elif slots + missed >= run_slots:
             state = 'complete'
         if slots == 1 or slots % 5 == 0 or state != 'running':
             p95 = sorted(work)[math.ceil(0.95 * len(work)) - 1] if work else None
@@ -148,11 +162,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--vx', type=float, default=0.2)
     parser.add_argument('--yaw', type=float, default=0.0)
+    parser.add_argument('--arena', choices=ARENAS)
     args = parser.parse_args()
     try:
         if hasattr(os, 'nice'):
             os.nice(10)
-        sim = WalkSimulation(args.vx, args.yaw)
+        sim = WalkSimulation(args.vx, args.yaw, args.arena)
         run(sim)
     except Exception as exc:
         print(str(exc), file=sys.stderr)
