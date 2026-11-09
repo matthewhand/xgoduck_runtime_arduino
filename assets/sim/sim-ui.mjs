@@ -144,7 +144,11 @@ function buildJointControls() {
 
 function updateModeText() {
   const rollout = rolloutMode(mode);
-  for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
+  const physics = mode === 'walk' || mode === 'physics';
+  const tab = physics ? 'walk' : mode;
+  for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === tab));
+  $('physics-controller-label').hidden = !physics;
+  if (physics) $('physics-controller').value = mode;
   $('physics-card').hidden = mode !== 'physics'; $('live-card').hidden = mode !== 'live';
   $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout;
   $('play').hidden = $('reset').hidden = $('collisions').parentElement.hidden = rollout;
@@ -156,9 +160,9 @@ function updateModeText() {
   $('step').disabled = running || mode !== 'physics';
   $('clock-label').textContent = gait ? 'PREVIEW TIME' : 'SIM TIME';
   $('reset').textContent = mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
-  $('scene-mode').textContent = mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'WALKING POLICY / SIMULATION ONLY' : mode === 'physics' ? 'PHYSICS / NO BALANCE CONTROLLER' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
-    ? 'Falling is expected here. Try a drop, a nudge, or lower gravity. For a Duck that balances and walks, open Walking policy.'
+    ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
     : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
     : mode === 'live' ? 'Read-only telemetry. Target previews are commanded angles; missing measured joints remain unavailable.'
@@ -298,6 +302,7 @@ async function pollBoard() {
 
 function attachControls() {
   document.querySelectorAll('[data-mode]').forEach(button => { button.disabled=false; button.addEventListener('click', () => setMode(button.dataset.mode)); });
+  $('physics-controller').addEventListener('change', event => setMode(event.target.value));
   document.querySelectorAll('[data-preset]').forEach(button => { button.disabled = false; button.addEventListener('click', () => applyPreset(button.dataset.preset)); });
   for (const id of ['reset','camera','gait','export','import']) $(id).disabled = false;
   $('reset').addEventListener('click', () => {
