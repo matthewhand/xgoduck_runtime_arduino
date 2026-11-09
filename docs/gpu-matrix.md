@@ -1,6 +1,11 @@
-# CPU and GPU activity on the UNO Q LED matrix
+# UNO Q matrix animations and load readouts
 
-The UNO Q's 8 x 13 matrix shows measured host CPU and Adreno GPU activity.
+The UNO Q's 8 × 13 matrix cycles through 26 scenes, including two
+Mandelbrot dives, cosmic waves, Duckzilla and Duck Regatta, animated impasto,
+miniature nature scenes, a duck digestion cutaway, and Space Invaders.
+The Duck's back also shows tiny stories like Pond Heist, Feather Foundry,
+and Blue Hour Train. A full lap takes about four minutes and thirteen seconds. Load is
+available in Duck Lab and as a brief matrix readout.
 An optional compute proof exercises the Adreno and verifies its outputs.
 ONNX policy inference continues to use the CPU.
 
@@ -18,7 +23,7 @@ ONNX policy inference continues to use the CPU.
    python3 tools/gpu-monitor.py --seconds 60
    ```
 
-   A fresh cache file enables the matrix; no file leaves the matrix untouched.
+   A fresh cache file enables the load readout.
    Run with host permissions that can read the relevant GPU clients. Limited
    `/proc` permissions can restrict coverage. Do not make `/proc` world-readable.
 4. Run the Python compute proof in another host terminal. It uses only Python's
@@ -50,13 +55,47 @@ ONNX policy inference continues to use the CPU.
 
 ## Reading the display
 
-The matrix alternates every three seconds: **C** is total CPU busy percent and
-**G** is measured GPU activity percent. The bottom gauge shows the same value.
-The corner dot blinks on a page with a fresh numeric reading. `--` indicates
-unavailable data. Python checks the host sample age and the MCU checks when it
-last received an update; both use a five-second expiry. Older GPU-only collector
-samples still drive the G page.
-Removing `.cache/gpu-status.json` disables the display. The monitor stops after
+Use **Back display** in Duck Lab to see the current animation, choose one
+and press **Play**, or press **Next animation**. Either command starts its
+scene from the first frame, then the carousel continues from there.
+
+Choose one of the twelve **Notifications** and press **Show once** to send a
+slower marquee to the back display. It plays once, then resumes the interrupted
+animation. **Next animation** skips to the next art scene during a notification.
+
+In Duck Lab, press **Matrix readout** to slide **CPU** in from the left.
+**C** stays on the same row while **PU** continues off the right edge, then
+the percentage fades in beside it on that row.
+Tap again within three seconds to cycle through **GPU**, **RAM**, **TMP**, and
+back to the animation. Every page uses the same slide, fade, and bottom-row
+bar. RAM is the percentage of Linux host memory in use, estimated from
+`MemAvailable`. TMP is the warmer reading from the board's CPU subsystem
+thermal zones, in °C. The bar fills at 100% for CPU, GPU, and RAM, and at 100°C
+for TMP. Higher temperatures still show their numeric value.
+Each page times out after three seconds. Unavailable readings are skipped.
+Python and the MCU both check sample freshness. Older collectors still supply
+the pages for which they report data. Current RAM and temperature values are
+also available in the `health` field of `GET /api/status`.
+
+**Automatic load flashes** is off on boot. When enabled it shows a brief CPU
+and GPU readout after four clips, or when CPU or GPU changes by at least 15 percentage
+points from its reference in the same direction across two fresh samples.
+Automatic readouts wait at least 20 seconds between displays. The animations
+use a maximum level of 5 out of 7, fade at the ends, and leave a short dark
+gap between scenes. Regenerate their packed frames with
+`python3 tools/make-matrix-clips.py`.
+
+On an UNO Q configured with `HandlePowerKey=ignore` and
+`HandlePowerKeyLongPress=reboot`, the optional `tools/matrix-button.py`
+listener gives a quick tap of the power button the same behavior as the web
+button. The helper reads the existing input device without grabbing it. Start
+it as the `arduino` user with input-device access. To start it on reboot, add:
+
+```cron
+@reboot /usr/bin/python3 /home/arduino/ArduinoApps/xgo-duck/tools/matrix-button.py >> /home/arduino/ArduinoApps/xgo-duck/.cache/matrix-button.log 2>&1
+```
+
+Removing `.cache/gpu-status.json` disables the load readout. The monitor stops after
 the requested duration (1–3600 seconds); its final sample remains as evidence.
 Use `--seconds 0 --quiet` for continuous monitoring without per-sample log output.
 Only one collector can write a given output file; a second instance exits without
@@ -71,7 +110,7 @@ adjusting the app path if necessary:
 
 The Duck app must also be running to forward samples to the matrix. App Lab's
 default-app setting controls that separately. Stop the collector and remove its
-cron entry before removing the cache file to disable this experiment permanently.
+cron entry before removing the cache file to disable load collection permanently.
 
 **Control** shows total CPU, busiest core, GPU activity and **Missed Linux slots**.
 Duck Lab also shows board load and misses. The `cpu` and `gpu` fields of

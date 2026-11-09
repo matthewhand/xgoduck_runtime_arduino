@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=4">
+  <link rel="stylesheet" href="sim/sim.css?v=5">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
@@ -24,6 +24,20 @@
       </div>
       <div class="stage-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
       <p class="mode-note" id="mode-note" aria-live="polite">Preparing the simulation…</p>
+      <section class="matrix-player" aria-labelledby="matrix-title">
+        <div class="matrix-heading"><h2 id="matrix-title">Back display</h2><span id="matrix-playing">Connecting…</span></div>
+        <div class="matrix-actions">
+          <select id="matrix-scenes" aria-label="Choose animation" disabled><option value="">Choose animation</option></select>
+          <button id="matrix-play" class="primary" disabled>Play</button>
+          <button id="matrix-skip" disabled>Next animation</button>
+        </div>
+        <p id="matrix-scene-error" class="muted" role="status" hidden></p>
+        <div class="matrix-readouts">
+          <button id="matrix-next" disabled>Matrix readout</button>
+          <label title="Show load after four clips or after a sustained 15 percentage point change"><input type="checkbox" id="matrix-auto" disabled> Automatic load flashes</label>
+          <span id="matrix-note" class="muted" role="status"></span>
+        </div>
+      </section>
       <div class="stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
     </section>
     <aside class="controls-panel">
@@ -74,5 +88,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=5"></script>
+<script type="module" src="sim/sim-ui.mjs?v=10"></script>
 </body></html>
