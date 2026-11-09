@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const active = state => ['loading', 'running', 'stopping'].includes(state);
 const fmt = (value, digits, unit) => Number.isFinite(value) ? value.toFixed(digits) + unit : '—';
 const fields = {
-  loading: 'Loading the ONNX policy and MuJoCo…',
+  loading: 'Loading the ONNX policies and MuJoCo…',
   running: 'Trial running on the UNO Q CPU.',
   stopping: 'Stopping the trial…',
   stopped: 'Trial stopped.',
@@ -111,12 +111,22 @@ export class WalkPanel {
     const run = fresh ? this.latest : null;
     const busy = active(run?.state);
     const matching = Boolean(run?.arena) === this.explore;
-    const searchState = {running:'Scanning and choosing a route.', complete:'Time ran out before the beacon was seen.'};
+    const trial = matching ? run : null;
+    const recovery = trial?.recovery;
+    const searchState = {loading:'Loading the walking policy and MuJoCo…',
+      running:'Scanning and choosing a route.', complete:'Time ran out before the beacon was seen.'};
+    let walkState = '';
+    if (!this.explore && trial?.state === 'fallen') walkState = 'Time ran out before the Duck stood back up.';
+    if (!this.explore && trial?.state === 'running') {
+      if (recovery?.phase === 'default_pose') walkState = 'Fall detected. Holding the recovery pose.';
+      else if (recovery?.phase === 'getup') walkState = 'Get-up policy active · xgoduck_getup.onnx';
+      else if (recovery?.resumed_at_s != null) walkState = `Walking again since ${fmt(recovery.resumed_at_s, 2, ' s')}.`;
+    }
     $('walk-state').textContent = this.error || (!run ? 'Waiting for the UNO Q…'
       : !run.available ? 'Install headless MuJoCo on the UNO Q to enable walking trials.'
       : !matching && busy ? (run.arena ? 'A search is active in Explore.' : 'A walking trial is active.')
       : matching && run.state === 'error' ? run.detail
-      : (matching && ((this.explore && searchState[run.state]) || fields[run.state]))
+      : (matching && (walkState || (this.explore && searchState[run.state]) || fields[run.state]))
         || (this.explore ? 'The Duck scans nearby space and explores until it spots the beacon.'
           : 'Run the shipped walking policy on the UNO Q for up to 20 seconds.'));
     $('walk-start').disabled = !run?.available || busy || this.pending;
@@ -124,18 +134,18 @@ export class WalkPanel {
     $('walk-vx').disabled = busy;
     $('walk-yaw').disabled = busy;
     $('search-arena').disabled = busy;
-    const trial = matching ? run : null;
     const push = trial?.push;
     const canPush = !this.explore && trial?.state === 'running' && !this.pending
-      && !trial.push_pending && (!push || push.recovery_s != null);
+      && (!recovery || recovery.phase === 'walk') && !trial.push_pending && (!push || push.recovery_s != null);
     for (const button of this.pushButtons) button.disabled = !canPush;
-    let pushText = 'Push sideways during a trial to test balance.';
+    let pushText = 'Poke and Nudge test balance. Bash can knock the Duck over.';
     if (trial?.push_pending) pushText = 'Push queued…';
     else if (push) {
       const label = push.kind[0].toUpperCase() + push.kind.slice(1);
-      let recovery = busy ? 'checking balance…' : 'trial ended before recovery';
-      if (push.recovery_s != null) recovery = `recovered in ${fmt(push.recovery_s, 2, ' s')}`;
-      pushText = `${label} at ${fmt(push.time_s, 2, ' s')} · ${recovery} · peak tilt ${fmt(push.peak_tilt_deg, 1, '°')}`;
+      let outcome = busy ? 'checking balance…' : 'trial ended before recovery';
+      if (push.recovery_s != null) outcome = `${push.fell ? 'back walking' : 'recovered'} in ${fmt(push.recovery_s, 2, ' s')}`;
+      else if (busy && push.fell) outcome = 'getting back up…';
+      pushText = `${label} at ${fmt(push.time_s, 2, ' s')} · ${outcome} · peak tilt ${fmt(push.peak_tilt_deg, 1, '°')}`;
     }
     $('walk-push-state').textContent = pushText;
     $('walk-hz').textContent = fmt(trial?.hz, 1, ' Hz');

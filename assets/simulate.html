@@ -59,7 +59,7 @@
           <div class="button-row walk-buttons" role="group" aria-label="Push the simulated Duck">
             <button data-walk-push="poke" disabled>Poke</button><button data-walk-push="nudge" disabled>Nudge</button><button data-walk-push="bash" disabled>Bash</button>
           </div>
-          <p class="muted" id="walk-push-state" role="status">Push sideways during a trial to test balance.</p>
+          <p class="muted" id="walk-push-state" role="status">Poke and Nudge test balance. Bash can knock the Duck over.</p>
         </div>
         <div id="search-map-panel" hidden>
           <div class="section-heading load-heading"><h3>Duck’s range map</h3><span id="search-coverage">AWAITING SCAN</span></div>
@@ -94,5 +94,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=12"></script>
+<script type="module" src="sim/sim-ui.mjs?v=13"></script>
 </body></html>

@@ -110,8 +110,9 @@ class WalkLab:
                     or self.latest.get('arena') or self.run_id != run_id):
                 raise RuntimeError('Start a walking trial before applying a push.')
             push = self.latest.get('push')
-            if self.latest.get('push_pending') or (push and push['recovery_s'] is None):
-                raise RuntimeError('Wait for the current push to settle.')
+            phase = self.latest.get('recovery', {}).get('phase', 'walk')
+            if phase != 'walk' or self.latest.get('push_pending') or (push and push['recovery_s'] is None):
+                raise RuntimeError('Wait for the Duck to recover before pushing again.')
             try:
                 # One short write fits in the pipe because at most one push is pending.
                 os.write(self.process.stdin.fileno(), kind.encode('ascii'))
