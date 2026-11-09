@@ -36,8 +36,8 @@ optional dependency used only by Walking policy.
 | --- | --- |
 | Pose | Edit 14 joints within CAD limits; select parts in 3D; load upstream Stand/Sit/Fold poses; save and load local JSON poses. |
 | Step cycle | A labelled procedural joint animation in Pose mode. It previews articulation without physics or a trained walking policy. |
-| Physics | A free-body MuJoCo simulation using upstream masses, inertia, collision meshes and joint limits, with gravity and floor contacts. Drop, nudge, pause or step by 20 ms; adjust gravity, floor friction and playback speed. |
-| Walking policy | Run the shipped `xgoduck_walk.onnx` against the upstream walking scene on the UNO Q. Choose a forward speed and turn rate, then start a trial of up to 20 seconds. The camera follows the simulated Duck. |
+| Physics → Walking policy | The default controller in Physics runs the shipped `xgoduck_walk.onnx` against the upstream walking scene on the UNO Q. Choose a forward speed and turn rate, then start a trial of up to 20 seconds. The camera follows the simulated Duck. |
+| Physics → Playground | A free-body MuJoCo simulation in the browser. Drop, nudge, pause or step by 20 ms. Adjust gravity, floor friction and playback speed. |
 | Explore | Pick a passage and start a beacon hunt. The simulated Duck maps nearby obstacles, chooses where to walk, and reveals the beacon when its range scan hits it. |
 | Live Duck | Poll `/api/status` and display commanded targets or measured angles. No motor commands are sent. Targets and partial/unavailable measurements use a translucent model. |
 
@@ -54,10 +54,10 @@ measured, and the live model remains anchored in this view.
 
 ## Running a walking trial
 
-In **Walking policy**, leave the hardware runtime in **Shadow** or **Off**,
-pick a command and select **Run 20 s**. The simulation worker runs at lower
-priority in a separate process, with one ONNX CPU thread. It never calls the
-motor or MCU APIs.
+Open **Physics** with **Walking policy** selected. Leave the hardware runtime
+in **Shadow** or **Off**, pick a command and select **Run 20 s**. The simulation
+worker runs at lower priority in a separate process, with one ONNX CPU thread.
+It never calls the motor or MCU APIs.
 **Stop** ends the worker and keeps the last pose. A trial also ends if the
 simulated Duck falls or reaches the time limit.
 
@@ -130,9 +130,9 @@ and check missing/stale feedback and IMU attitude. They require Node.js, but
 the deployed browser application does not.
 
 With native MuJoCo installed, run `python -B tools/check-walk-sim.py` using the
-app's Python and dependency path. This checks six seconds of closed-loop
-locomotion with the real ONNX file, forward travel, bilateral foot contacts,
-and an upright trunk.
+app's Python and dependency path. This checks the full 20-second straight-ahead
+trial with the shipped ONNX file, forward travel, bilateral foot contacts, and
+trunk height throughout the run.
 
 Browser checks on 7 November 2026 confirmed WebGPU at approximately 60 fps on
 localhost, the WebGL 2 path over Wi-Fi HTTP, joint editing, the Sit preset,
