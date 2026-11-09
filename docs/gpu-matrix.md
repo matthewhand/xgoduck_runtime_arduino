@@ -66,14 +66,19 @@ animation. **Next animation** skips to the next art scene during a notification.
 In Duck Lab, press **Matrix readout** to slide **CPU** in from the left.
 **C** stays on the same row while **PU** continues off the right edge, then
 the percentage fades in beside it on that row.
-Tap again within three seconds for the corresponding **GPU** readout, and again
-to resume the animation. Each reading times out after three seconds. A gauge
-along the bottom shows the same percentage. Unavailable readings are skipped.
-Python and the MCU both check sample freshness. Older GPU-only collector samples
-still drive the G page.
+Tap again within three seconds to cycle through **GPU**, **RAM**, **TMP**, and
+back to the animation. Every page uses the same slide, fade, and bottom-row
+bar. RAM is the percentage of Linux host memory in use, estimated from
+`MemAvailable`. TMP is the warmer reading from the board's CPU subsystem
+thermal zones, in °C. The bar fills at 100% for CPU, GPU, and RAM, and at 100°C
+for TMP. Higher temperatures still show their numeric value.
+Each page times out after three seconds. Unavailable readings are skipped.
+Python and the MCU both check sample freshness. Older collectors still supply
+the pages for which they report data. Current RAM and temperature values are
+also available in the `health` field of `GET /api/status`.
 
-**Automatic load flashes** is off on boot. When enabled it shows a brief
-readout after four clips, or when CPU or GPU changes by at least 15 percentage
+**Automatic load flashes** is off on boot. When enabled it shows a brief CPU
+and GPU readout after four clips, or when CPU or GPU changes by at least 15 percentage
 points from its reference in the same direction across two fresh samples.
 Automatic readouts wait at least 20 seconds between displays. The animations
 use a maximum level of 5 out of 7, fade at the ends, and leave a short dark

@@ -437,7 +437,7 @@ function attachMatrixControls() {
       const state = await response.json();
       enabled = state.auto === true;
       connected = true;
-      note.textContent = body?.action === 'next' ? 'Tap again within 3 s to cycle.' : '';
+      note.textContent = body?.action === 'next' ? 'Tap within 3 s: CPU → GPU → RAM → TMP → art.' : '';
     } catch {
       note.textContent = 'Matrix controls unavailable.';
     } finally {

@@ -128,7 +128,8 @@ def servo_action(body: dict):
 def status():
     sample = dict(gpu.latest)
     cpu = sample.pop('cpu', CPU_DISABLED)
-    return dict(controller.status(), gpu=sample, cpu=cpu)
+    health = sample.pop('health', {'ram_percent': None, 'temperature_c': None})
+    return dict(controller.status(), gpu=sample, cpu=cpu, health=health)
 
 def walk_start(body: dict):
     try:
@@ -193,7 +194,7 @@ ui.expose_api('POST', '/api/matrix/scene', matrix_scene_action)
 ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
 ui.expose_api('POST', '/api/lab/walk/start', walk_start)
 ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)
-ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key != 'cpu'})
+ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key not in ('cpu', 'health')})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)
 ui.expose_api('POST', '/api/heading-hold', heading_hold)
