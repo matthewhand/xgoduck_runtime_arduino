@@ -144,8 +144,11 @@ def walk_start(body: dict):
     except RuntimeError as exc:
         raise HTTPException(409, str(exc))
 
-def walk_stop(_body: dict):
-    return walk_lab.stop()
+def walk_stop(body: dict):
+    run_key = body.get('run_key')
+    if 'run_key' in body and (not isinstance(run_key, str) or not run_key):
+        raise HTTPException(400, 'Choose a valid trial to stop.')
+    return walk_lab.stop(run_key)
 
 def walk_push(body: dict):
     try:

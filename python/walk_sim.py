@@ -1,4 +1,4 @@
-"""Headless rollout of the shipped walking policy, independent of the MCU."""
+"""Headless rollout of the shipped walking and get-up policies."""
 import argparse
 from collections import deque
 import json
@@ -8,13 +8,14 @@ from pathlib import Path
 import sys
 import time
 
+from recovery import Recovery
 from search_mission import ARENAS, MISSION_S, SearchMission
 
 STEP_S = 0.005
 SUBSTEPS = 4
 SLOT_S = STEP_S * SUBSTEPS
 RUN_S = 20
-PUSH_SPEEDS = {'poke': 0.12, 'nudge': 0.30, 'bash': 0.48}
+PUSH_SPEEDS = {'poke': 0.12, 'nudge': 0.30, 'bash': 0.80}
 RECOVERY_TILT_DEG = 15
 RECOVERY_HOLD_S = 0.5
 MODEL = Path(__file__).resolve().parent.parent / 'assets/sim/model/scene_walk.xml'
@@ -27,33 +28,56 @@ JOINT_NAMES = (
 OBS_NAMES = 'base_ang_vel,projected_gravity,joint_pos,joint_vel,actions,command,head_command,body_command'
 
 
+def load_sim_policy(np, obs, file):
+    from policy import Policy
+
+    policy = Policy()
+    ok, message = policy.load(file, use_model_home=True)
+    if not ok:
+        raise ValueError(message)
+    metadata = policy.session.get_modelmeta().custom_metadata_map
+    if tuple(metadata.get('joint_names', '').split(',')) != JOINT_NAMES:
+        raise ValueError(f'{file} has an unexpected joint order')
+    if metadata.get('observation_names') != OBS_NAMES:
+        raise ValueError(f'{file} has an unexpected observation order')
+    scale = float(metadata['action_scale'])
+    if not math.isfinite(scale) or scale <= 0:
+        raise ValueError(f'{file} has an invalid action scale')
+    home = np.asarray(metadata['default_joint_pos'].split(','), dtype=np.float32)
+    return policy, home, scale, {policy.in_name: obs}
+
+
+def load_recovery_scene(mj):
+    spec = mj.MjSpec.from_file(str(MODEL))
+    # The walking scene has foot contacts only. Enable one existing mesh per
+    # link so the Duck can brace against the floor with its body and head.
+    colliders = {}
+    for geom in spec.geoms:
+        if geom.meshname and (geom.group == 3 or geom.meshname not in colliders):
+            colliders[geom.meshname] = geom
+    for geom in colliders.values():
+        geom.contype = 1
+    # Match the stand-up training scene's head-to-trunk self contact.
+    colliders['head_roll'].contype |= 2
+    colliders['trunk_base'].conaffinity |= 2
+    return spec.compile()
+
+
 class WalkSimulation:
     def __init__(self, vx, yaw, arena=None):
         import mujoco as mj
         import numpy as np
-        from policy import Policy
-
         self.mj, self.np = mj, np
         self.mission = SearchMission(mj, np, MODEL, arena) if arena else None
-        self.model = model = self.mission.model if self.mission else mj.MjModel.from_xml_path(str(MODEL))
+        self.model = model = self.mission.model if self.mission else load_recovery_scene(mj)
         model.opt.timestep = STEP_S
         self.data = data = mj.MjData(model)
-        self.policy = policy = Policy()
-        ok, message = policy.load(use_model_home=True)
-        if not ok:
-            raise ValueError(message)
-        metadata = policy.session.get_modelmeta().custom_metadata_map
-        if tuple(metadata.get('joint_names', '').split(',')) != JOINT_NAMES:
-            raise ValueError('Walking policy has an unexpected joint order')
-        if tuple(metadata.get('observation_names', '').split(',')) != tuple(OBS_NAMES.split(',')):
-            raise ValueError('Walking policy has an unexpected observation order')
-        self.scale = float(metadata['action_scale'])
-        if not math.isfinite(self.scale) or self.scale <= 0:
-            raise ValueError('Walking policy has an invalid action scale')
-        self.home = np.asarray(metadata['default_joint_pos'].split(','), dtype=np.float32)
         self.obs = np.zeros((1, 61), dtype=np.float32)
-        self.obs[0, 48:51] = (vx, 0, yaw)
-        self.input = {policy.in_name: self.obs}
+        self.command = (vx, 0, yaw)
+        self.walk = load_sim_policy(np, self.obs, 'xgoduck_walk.onnx')
+        self.getup = None if self.mission else load_sim_policy(np, self.obs, 'xgoduck_getup.onnx')
+        self.recovery = None if self.mission else Recovery(period_s=SLOT_S)
+        self.fall_at_s = self.getup_at_s = self.resumed_at_s = None
         self.qpos = [int(model.joint(name).qposadr[0]) for name in JOINT_NAMES]
         self.qvel = [int(model.joint(name).dofadr[0]) for name in JOINT_NAMES]
         self.actuators = [model.actuator(name).id for name in JOINT_NAMES]
@@ -64,8 +88,9 @@ class WalkSimulation:
         gyro = int(model.sensor('imu_ang_vel').adr[0])
         self.gyro = slice(gyro, gyro + 3)
         mj.mj_resetDataKeyframe(model, data, model.key('STAND').id)
-        data.qpos[self.qpos] = self.home
-        data.ctrl[self.actuators] = self.home
+        walk_home = self.walk[1]
+        data.qpos[self.qpos] = walk_home
+        data.ctrl[self.actuators] = walk_home
         mj.mj_forward(model, data)
         self.path_m = 0.0
         self.feet = {model.geom(f'{side}_foot_collision').id: side for side in ('left', 'right')}
@@ -92,20 +117,42 @@ class WalkSimulation:
         self.mj.mj_forward(self.model, d)
         if self.mission:
             vx, yaw = self.mission.steer(d, self.root)
-            obs[48:51] = (vx, 0, yaw)
+            self.command = (vx, 0, yaw)
             if self.mission.found:
                 return False
         obs[:3] = d.sensordata[self.gyro]
         obs[3:6] = -d.xmat[self.trunk, 6:9]
-        obs[6:20] = d.qpos[self.qpos] - self.home
-        obs[20:34] = d.qvel[self.qvel]
-        start = time.perf_counter()
-        action = self.policy.session.run(None, self.input)[0][0]
-        self.inference_ms = (time.perf_counter() - start) * 1000
-        if not self.np.isfinite(action).all():
-            raise ValueError('Walking policy emitted a non-finite action')
-        obs[34:48] = action
-        d.ctrl[self.actuators] = self.home + action * self.scale
+        phase = 'walk'
+        if self.recovery:
+            high_enough = d.qpos[self.root + 2] >= 0.10
+            changed = self.recovery.update(obs[3:6], d.time, self.recovery.phase != 'getup' or high_enough)
+            phase = self.recovery.phase
+            if changed:
+                obs[34:48] = 0
+                if phase == 'default_pose':
+                    self.fall_at_s = round(d.time, 3)
+                    self.getup_at_s = self.resumed_at_s = None
+                    if self.push and self.push['recovery_s'] is None:
+                        self.push['fell'] = True
+                elif phase == 'getup':
+                    self.getup_at_s = round(d.time, 3)
+                else:
+                    self.resumed_at_s = round(d.time, 3)
+        policy, home, scale, feed = self.walk if phase == 'walk' else self.getup
+        self.inference_ms = None
+        if phase == 'default_pose':
+            d.ctrl[self.actuators] = home
+        else:
+            obs[6:20] = d.qpos[self.qpos] - home
+            obs[20:34] = d.qvel[self.qvel]
+            obs[48:51] = self.command if phase == 'walk' else 0
+            start = time.perf_counter()
+            action = policy.session.run(None, feed)[0][0]
+            self.inference_ms = (time.perf_counter() - start) * 1000
+            if not self.np.isfinite(action).all():
+                raise ValueError(f'{policy.file} emitted a non-finite action')
+            obs[34:48] = action
+            d.ctrl[self.actuators] = home + action * scale
         old_xy = d.qpos[self.root:self.root + 2].copy()
         for _ in range(SUBSTEPS):
             self.mj.mj_step(self.model, d)
@@ -121,7 +168,7 @@ class WalkSimulation:
         self.path_m += float(self.np.linalg.norm(d.qpos[self.root:self.root + 2] - old_xy))
         if not self.np.isfinite(d.qpos).all():
             raise ValueError('Walking simulation emitted a non-finite pose')
-        # Terminate a fallen trial instead of accumulating misleading floor motion.
+        # Explore has no recovery controller and still ends on a fall.
         q = d.qpos[self.root:self.root + 7]
         up = 1 - 2 * (q[4] ** 2 + q[5] ** 2)
         if self.push and self.push['recovery_s'] is None:
@@ -131,9 +178,9 @@ class WalkSimulation:
                 self.settled_since = None
             elif self.settled_since is None:
                 self.settled_since = d.time
-            elif d.time - self.settled_since >= RECOVERY_HOLD_S - 1e-9:
+            elif phase == 'walk' and d.time - self.settled_since >= RECOVERY_HOLD_S - 1e-9:
                 self.push['recovery_s'] = round(d.time - self.push['time_s'], 3)
-        return q[2] < 0.06 or up < 0.45
+        return bool(self.mission and (q[2] < 0.06 or up < 0.45))
 
     def snapshot(self):
         d = self.data
@@ -142,6 +189,10 @@ class WalkSimulation:
                       contacts=d.ncon, footfalls=self.footfalls, path_m=round(self.path_m, 3))
         if self.mission:
             sample['mission'] = self.mission.snapshot()
+        else:
+            phase = self.recovery.phase
+            sample['recovery'] = dict(phase=phase, fall_at_s=self.fall_at_s,
+                                      getup_at_s=self.getup_at_s, resumed_at_s=self.resumed_at_s)
         if self.push:
             sample['push'] = self.push.copy()
         return sample
@@ -183,14 +234,15 @@ def run(sim, push_fd=None):
             fallen = sim.tick()
             if not (sim.mission and sim.mission.found):
                 slots += 1
-                inference.append(sim.inference_ms)
+                if sim.inference_ms is not None:
+                    inference.append(sim.inference_ms)
                 work.append((time.monotonic() - now) * 1000)
         if sim.mission and sim.mission.found:
             state = 'found'
         elif fallen:
             state = 'fallen'
         elif slots + missed >= run_slots:
-            state = 'complete'
+            state = 'fallen' if sim.recovery and sim.recovery.phase != 'walk' else 'complete'
         if pushed or slots == 1 or slots % 5 == 0 or state != 'running':
             p95 = sorted(work)[math.ceil(0.95 * len(work)) - 1] if work else None
             elapsed = max(time.monotonic() - began, now - began + SLOT_S)

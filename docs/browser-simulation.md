@@ -40,6 +40,7 @@ optional dependency used only by Walking policy.
 | Physics → Playground | A free-body MuJoCo simulation in the browser. Drop, nudge, pause or step by 20 ms. Adjust gravity, floor friction and playback speed. |
 | Explore | Pick a passage and start a beacon hunt. The simulated Duck maps nearby obstacles, chooses where to walk, and reveals the beacon when its range scan hits it. |
 | Live Duck | Poll `/api/status` and display commanded targets or measured angles. No motor commands are sent. Targets and partial/unavailable measurements use a translucent model. |
+| Demo | Automatically cycle through the pose presets, step preview, drop test, walking and get-up, beacon hunt, and live telemetry. |
 
 Drag the canvas to orbit and scroll to zoom. Collision hulls and joint axes can
 be overlaid. Space toggles playback when the canvas has focus. Pose JSON files
@@ -52,21 +53,32 @@ readings become unavailable; fresh packets resume the view. IMU gravity supplies
 roll and pitch only when the IMU is available. Yaw and world translation are not
 measured, and the live model remains anchored in this view.
 
+## Demo circuit
+
+For a hands-free loop, select **Demo** or open `simulate.html?demo=1`.
+The walk demonstrates Poke, Nudge, and Bash. The beacon hunt alternates
+north and south passages on successive laps. The policy views retain the
+board load graph and both missed-slot counters. Keep the tab visible to see
+every scene and leave the hardware in **Shadow** or **Off**. **Stop demo** or
+another workspace ends the loop and asks the UNO Q to stop its current demo
+trial. Closing the page also ends the loop. Each rollout has a time limit.
+
 ## Running a walking trial
 
 Open **Physics** with **Walking policy** selected. Leave the hardware runtime
 in **Shadow** or **Off**, pick a command and select **Run 20 s**. The simulation
 worker runs at lower priority in a separate process, with one ONNX CPU thread.
 It never calls the motor or MCU APIs.
-**Stop** ends the worker and keeps the last pose. A trial also ends if the
-simulated Duck falls or reaches the time limit.
+**Stop** ends the worker and keeps the last pose. A walking trial runs until
+the time limit, including any time spent getting up.
 
 Use **Poke**, **Nudge**, or **Bash** during a walking trial to add a sideways
-velocity impulse of 0.12, 0.30, or 0.48 m/s to the simulated trunk. The policy
-reacts to the resulting sensor feedback. The panel reports when the push
-happened, peak tilt, and recovery time. Recovery requires at least half a
-second within 15° of upright with the trunk at least 10 cm off the floor.
-The outcome depends on the walking command and the phase of the step.
+velocity impulse of 0.12, 0.30, or 0.80 m/s to the simulated trunk. Bash can
+knock the Duck over. After a sustained fall, the simulation holds the recovery
+pose, runs the shipped `xgoduck_getup.onnx`, and resumes the original walking
+command once the trunk is upright. The panel reports the phase, peak tilt and
+recovery time. Use Bash early enough to watch the Duck resume walking before
+the 20-second limit. Outcomes depend on the command and phase of the stride.
 Pushes only affect the walking simulation.
 
 The board load graph shows total Linux CPU, the busiest core, and the Adreno
@@ -114,11 +126,13 @@ not implemented here. Servo delay, electrical behavior, calibration and
 sim-to-real agreement remain unvalidated. This is a physics/inspection sandbox,
 not an equivalent of the training environment.
 
-The walking trial uses the exported model's home pose, raw actions and action
-scale, with four 5 ms MuJoCo steps per 20 ms policy slot. It uses the pinned
-upstream `scene_walk.xml` and its approximate position actuators. It does not
-replicate the training actuator dynamics, randomized conditions, or hardware
-filtering. Results describe the simulated Duck.
+The walking trial uses each exported policy's home pose, raw actions and
+action scale, with four 5 ms MuJoCo steps per 20 ms policy slot. It builds on
+the pinned upstream `scene_walk.xml` and its approximate position actuators.
+Physics walking trials enable floor contact on the CAD links and head-to-trunk
+contact for get-up. The walking and get-up models are warmed before the clock
+starts. The recovery state machine shares the runtime's fall and stand timers.
+Results describe the simulated Duck with approximate servo dynamics.
 
 ## Reproduction and checks
 
@@ -140,8 +154,9 @@ the deployed browser application does not.
 With native MuJoCo installed, run `python -B tools/check-walk-sim.py` using the
 app's Python and dependency path. This checks the full 20-second straight-ahead
 trial with the shipped ONNX file, forward travel, bilateral foot contacts, and
-trunk height throughout the run. It also runs a trial with all three pushes
-and checks that the Duck regains balance after each one.
+trunk height throughout the run. It also checks balance after Poke and Nudge,
+and verifies that Bash causes a fall, the get-up policy runs, and both feet
+resume stepping afterwards.
 
 Browser checks on 7 November 2026 confirmed WebGPU at approximately 60 fps on
 localhost, the WebGL 2 path over Wi-Fi HTTP, joint editing, the Sit preset,

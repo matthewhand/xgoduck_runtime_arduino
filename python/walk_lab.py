@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+from uuid import uuid4
 
 from walk_sim import MODEL, PUSH_SPEEDS, RUN_S
 from search_mission import ARENAS, MISSION_S
@@ -73,7 +74,8 @@ class WalkLab:
                 stdout=subprocess.PIPE, text=True,
             )
             self.run_id += 1
-            self.latest = dict(state='loading', vx=vx, yaw=yaw, arena=arena, missed_at_start=missed_at_start)
+            self.latest = dict(state='loading', vx=vx, yaw=yaw, arena=arena,
+                               missed_at_start=missed_at_start, run_key=uuid4().hex)
             threading.Thread(target=self._collect, args=(self.process,), name='walk-lab', daemon=True).start()
             return self._snapshot()
 
@@ -110,8 +112,9 @@ class WalkLab:
                     or self.latest.get('arena') or self.run_id != run_id):
                 raise RuntimeError('Start a walking trial before applying a push.')
             push = self.latest.get('push')
-            if self.latest.get('push_pending') or (push and push['recovery_s'] is None):
-                raise RuntimeError('Wait for the current push to settle.')
+            phase = self.latest.get('recovery', {}).get('phase', 'walk')
+            if phase != 'walk' or self.latest.get('push_pending') or (push and push['recovery_s'] is None):
+                raise RuntimeError('Wait for the Duck to recover before pushing again.')
             try:
                 # One short write fits in the pipe because at most one push is pending.
                 os.write(self.process.stdin.fileno(), kind.encode('ascii'))
@@ -120,9 +123,10 @@ class WalkLab:
             self.latest['push_pending'] = True
             return self._snapshot()
 
-    def stop(self):
+    def stop(self, run_key=None):
         with self.lock:
-            if self.process is not None and self.latest['state'] in ('loading', 'running'):
+            if ((run_key is None or self.latest.get('run_key') == run_key) and self.process is not None
+                    and self.latest['state'] in ('loading', 'running')):
                 self.latest['state'] = 'stopping'
                 self.process.terminate()
             return self._snapshot()

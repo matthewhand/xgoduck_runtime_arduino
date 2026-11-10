@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs';
-import {WalkPanel} from './walk-ui.mjs?v=4';
+import {WalkPanel} from './walk-ui.mjs?v=6';
+import {DemoCircuit} from './demo-ui.mjs?v=1';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
 const walk = new WalkPanel();
+const demo = new DemoCircuit(walk, showDemoScene, updateDemoStatus);
 const rolloutMode = name => name === 'walk' || name === 'explore';
 let sim, renderer, orbit, camera, scene;
 let mode = 'pose', running = false, gait = false, gaitTime = 0, selected = 32;
+let demoMode = false;
 let lastPacket = null, lastPacketAt = 0, liveResult = null, stopping = false;
 let previousFrame = 0, fpsStart = 0, fpsFrames = 0, fps = 0, lastHud = 0;
 const geometryCache = new Map(), visualMeshes = [], collisionMeshes = [], jointMarkers = [];
@@ -145,13 +148,17 @@ function buildJointControls() {
 function updateModeText() {
   const rollout = rolloutMode(mode);
   const physics = mode === 'walk' || mode === 'physics';
-  const tab = physics ? 'walk' : mode;
+  const tab = demoMode ? 'demo' : physics ? 'walk' : mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === tab));
-  $('physics-controller-label').hidden = !physics;
+  $('physics-controller-label').hidden = !physics || demoMode;
   if (physics) $('physics-controller').value = mode;
-  $('physics-card').hidden = mode !== 'physics'; $('live-card').hidden = mode !== 'live';
-  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout;
-  $('play').hidden = $('reset').hidden = $('collisions').parentElement.hidden = rollout;
+  $('demo-card').hidden = !demoMode;
+  $('joint-card').hidden = demoMode;
+  $('physics-card').hidden = mode !== 'physics' || demoMode; $('live-card').hidden = mode !== 'live';
+  $('live-source').disabled = demoMode;
+  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode;
+  $('play').hidden = $('reset').hidden = rollout || demoMode;
+  $('collisions').parentElement.hidden = rollout;
   $('export').disabled = rollout;
   collisionMeshes.forEach(mesh => { mesh.visible = !rollout && $('collisions').checked; });
   $('gait').classList.toggle('active', gait);
@@ -176,7 +183,7 @@ function setMode(next) {
   const changedWalk = mode !== next && (rolloutMode(mode) || rolloutMode(next));
   if (next !== mode && (mode !== 'pose' || next !== 'physics')) sim.reset('STAND');
   mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
-  walk.setMode(mode);
+  walk.setMode(mode, demoMode);
   if (changedWalk) searchWorld.visible = false;
   if (changedWalk) { walkRun = null; resetCamera(); }
   sim.data.qvel.fill(0); sim.accumulator = 0;
@@ -187,6 +194,43 @@ function setMode(next) {
 function applyPreset(preset) {
   setMode('pose'); running = false; gait = false; gaitTime = 0;
   sim.reset(preset); updateModeText(); $('pose-message').textContent = `${preset.toLowerCase()} pose loaded.`;
+}
+
+function startGait() {
+  setMode('pose'); sim.reset('STAND'); gait = true; running = true;
+  updateModeText();
+}
+
+function startDrop() {
+  sim.drop(); running = true; updateModeText();
+}
+
+function showDemoScene(name, preset) {
+  if (name === 'pose') applyPreset(preset);
+  else if (name === 'gait') startGait();
+  else if (name === 'drop') { setMode('physics'); startDrop(); }
+  else setMode(name);
+}
+
+function updateDemoStatus(message, progress, active) {
+  $('demo-state').textContent = message;
+  $('demo-progress').textContent = progress;
+  $('demo-toggle').textContent = active ? 'Stop demo' : 'Start demo';
+  if (demoMode && !active) running = false;
+}
+
+function selectWorkspace(next) {
+  if (next === 'demo') {
+    if (demoMode) return;
+    demoMode = true;
+    setMode('pose');
+    updateDemoStatus('Starting the demo…', 'LOOP', true);
+    void demo.start();
+  } else {
+    demoMode = false;
+    demo.stop();
+    setMode(next);
+  }
 }
 
 function animateGait(dt) {
@@ -301,7 +345,11 @@ async function pollBoard() {
 }
 
 function attachControls() {
-  document.querySelectorAll('[data-mode]').forEach(button => { button.disabled=false; button.addEventListener('click', () => setMode(button.dataset.mode)); });
+  document.querySelectorAll('[data-mode]').forEach(button => { button.disabled=false; button.addEventListener('click', () => selectWorkspace(button.dataset.mode)); });
+  $('demo-toggle').addEventListener('click', () => {
+    if (demo.controller) demo.stop();
+    else void demo.start();
+  });
   $('physics-controller').addEventListener('change', event => setMode(event.target.value));
   document.querySelectorAll('[data-preset]').forEach(button => { button.disabled = false; button.addEventListener('click', () => applyPreset(button.dataset.preset)); });
   for (const id of ['reset','camera','gait','export','import']) $(id).disabled = false;
@@ -313,10 +361,10 @@ function attachControls() {
   $('camera').addEventListener('click', resetCamera);
   $('play').addEventListener('click', () => { running = !running; sim.accumulator = 0; updateModeText(); });
   $('gait').addEventListener('click', () => {
-    if (gait) { gait = false; running = false; } else { setMode('pose'); sim.reset('STAND'); gait = true; running = true; }
-    updateModeText();
+    if (gait) { gait = false; running = false; updateModeText(); }
+    else startGait();
   });
-  $('drop').addEventListener('click', () => { sim.drop(); mode = 'physics'; running = true; updateModeText(); });
+  $('drop').addEventListener('click', startDrop);
   $('nudge').addEventListener('click', () => sim.nudge());
   $('step').addEventListener('click', () => { if (!running && mode === 'physics') sim.step(10); });
   $('hold').addEventListener('change', () => { sim.setHold($('hold').checked); updateRows(); });
@@ -376,7 +424,7 @@ function frame(time) {
       $('height').textContent = (sim.data.qpos[2]*100).toFixed(1);
       updateRows(); updateBoard(); lastHud=time;
     }
-  } catch (error) { running=false; updateModeText(); showError(error); }
+  } catch (error) { demo.stop(); running=false; updateModeText(); showError(error); }
 }
 
 async function start() {
@@ -418,14 +466,16 @@ async function start() {
   renderer.setAnimationLoop(frame);
   pollBoard();
   window.addEventListener('pagehide',event => {
-    if (event.persisted) return;
+    demo.pageHidden();
+    if (event.persisted || stopping) return;
     stopping=true; walk.setVisible(false); resize.disconnect(); renderer.setAnimationLoop(null); orbit.dispose();
     for (const mesh of [...visualMeshes,...collisionMeshes]) mesh.material.dispose();
     for (const geometry of geometryCache.values()) geometry.dispose();
     wallGeometry.dispose(); wallMaterial.dispose();
     for (const marker of [searchBeacon, searchWaypoint]) { marker.geometry.dispose(); marker.material.dispose(); }
     sim.dispose(); renderer.dispose();
-  },{once:true});
+  });
+  if (new URLSearchParams(location.search).get('demo') === '1') selectWorkspace('demo');
 }
 
 function attachMatrixControls() {
