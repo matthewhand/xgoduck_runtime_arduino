@@ -40,6 +40,7 @@ optional dependency used only by Walking policy.
 | Physics → Playground | A free-body MuJoCo simulation in the browser. Drop, nudge, pause or step by 20 ms. Adjust gravity, floor friction and playback speed. |
 | Explore | Pick a passage and start a beacon hunt. The simulated Duck maps nearby obstacles, chooses where to walk, and reveals the beacon when its range scan hits it. |
 | Live Duck | Poll `/api/status` and display commanded targets or measured angles. No motor commands are sent. Targets and partial/unavailable measurements use a translucent model. |
+| Demo | Automatically cycle through the pose presets, step preview, drop test, walking and get-up, beacon hunt, and live telemetry. |
 
 Drag the canvas to orbit and scroll to zoom. Collision hulls and joint axes can
 be overlaid. Space toggles playback when the canvas has focus. Pose JSON files
@@ -51,6 +52,16 @@ is not applied. After a lost connection, the last pose freezes and numerical
 readings become unavailable; fresh packets resume the view. IMU gravity supplies
 roll and pitch only when the IMU is available. Yaw and world translation are not
 measured, and the live model remains anchored in this view.
+
+## Demo circuit
+
+For a hands-free loop, select **Demo** or open `simulate.html?demo=1`.
+The walk demonstrates Poke, Nudge, and Bash. The beacon hunt alternates
+north and south passages on successive laps. The policy views retain the
+board load graph and both missed-slot counters. Keep the tab visible to see
+every scene and leave the hardware in **Shadow** or **Off**. **Stop demo** or
+another workspace ends the loop and asks the UNO Q to stop its current demo
+trial. Closing the page also ends the loop. Each rollout has a time limit.
 
 ## Running a walking trial
 
