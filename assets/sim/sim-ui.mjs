@@ -3,6 +3,7 @@ import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs';
 import {WalkPanel} from './walk-ui.mjs?v=6';
 import {DemoCircuit} from './demo-ui.mjs?v=1';
+import {createDemoYard} from './demo-yard.mjs?v=1';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
@@ -21,6 +22,7 @@ const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion();
 let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
+let demoYard, grid, axes;
 
 function showError(error) {
   $('error').hidden = false;
@@ -37,7 +39,8 @@ function resetCamera() {
   }
   const x = mode === 'walk' ? sim.data.qpos[0] : 0;
   const y = mode === 'walk' ? sim.data.qpos[1] : 0;
-  camera.position.set(x+0.36, y-0.43, 0.28);
+  if (demoMode && mode === 'walk') camera.position.set(x+0.44, y-0.53, 0.35);
+  else camera.position.set(x+0.36, y-0.43, 0.28);
   orbit.target.set(x+0.012, y, 0.145);
   orbit.update();
 }
@@ -148,6 +151,9 @@ function buildJointControls() {
 function updateModeText() {
   const rollout = rolloutMode(mode);
   const physics = mode === 'walk' || mode === 'physics';
+  const pondTrail = demoMode && mode === 'walk';
+  demoYard.root.visible = pondTrail;
+  grid.visible = axes.visible = !pondTrail;
   const tab = demoMode ? 'demo' : physics ? 'walk' : mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === tab));
   $('physics-controller-label').hidden = !physics || demoMode;
@@ -167,7 +173,7 @@ function updateModeText() {
   $('step').disabled = running || mode !== 'physics';
   $('clock-label').textContent = gait ? 'PREVIEW TIME' : 'SIM TIME';
   $('reset').textContent = mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
-  $('scene-mode').textContent = mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = pondTrail ? 'DEMO / POND TRAIL' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
@@ -414,6 +420,10 @@ function frame(time) {
     if (running && mode === 'physics') sim.advance(dt*Number($('speed').value));
     if (running && mode === 'pose' && gait) animateGait(dt);
     if (rolloutMode(mode)) animateWalk(dt);
+    if (demoYard.root.visible) {
+      const [x, y] = sim.data.qpos;
+      demoYard.shadow.position.set(x, y, .002);
+    }
     updateRobot(); orbit.update(); renderer.render(scene,camera);
     fpsFrames++;
     if (time-fpsStart>600) { fps=fpsFrames*1000/(time-fpsStart); fpsFrames=0; fpsStart=time; }
@@ -446,8 +456,9 @@ async function start() {
   const fill = new THREE.DirectionalLight('#8edac8',1.8); fill.position.set(0.5,0.25,0.4); scene.add(fill);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(16,16),new THREE.MeshStandardMaterial({color:'#15252c',roughness:0.95}));
   ground.position.z=-0.0005; scene.add(ground);
-  const grid = new THREE.GridHelper(14,280,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001; scene.add(grid);
-  const axes = new THREE.AxesHelper(0.05); axes.position.set(-0.16,-0.13,0.001); scene.add(axes);
+  grid = new THREE.GridHelper(14,280,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001; scene.add(grid);
+  axes = new THREE.AxesHelper(0.05); axes.position.set(-0.16,-0.13,0.001); scene.add(axes);
+  demoYard = createDemoYard(); demoYard.root.visible = false; scene.add(demoYard.root);
   searchWorld = new THREE.Group();
   searchWorld.visible = false;
   wallGeometry = new THREE.BoxGeometry(1,1,1);
@@ -473,6 +484,7 @@ async function start() {
     for (const geometry of geometryCache.values()) geometry.dispose();
     wallGeometry.dispose(); wallMaterial.dispose();
     for (const marker of [searchBeacon, searchWaypoint]) { marker.geometry.dispose(); marker.material.dispose(); }
+    demoYard.dispose();
     sim.dispose(); renderer.dispose();
   });
   if (new URLSearchParams(location.search).get('demo') === '1') selectWorkspace('demo');
