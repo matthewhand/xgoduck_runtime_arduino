@@ -14,6 +14,13 @@ Open `http://127.0.0.1:19527/simulate.html` on that PC. Recreate the forward aft
 reconnecting USB. Plain HTTP at the board's Wi-Fi address uses the WebGL 2
 fallback. The renderer badge reports the backend actually initialized.
 
+With SSH enabled on the UNO Q, use the same localhost URL over Wi-Fi by
+leaving this tunnel open in a terminal:
+
+```sh
+ssh -NT -L 127.0.0.1:19527:127.0.0.1:9527 arduino@<board-ip>
+```
+
 ## Where the work runs
 
 The UNO Q serves the page, CAD assets and telemetry. The viewing device runs
@@ -56,8 +63,9 @@ measured, and the live model remains anchored in this view.
 ## Demo circuit
 
 For a hands-free loop, select **Demo** or open `simulate.html?demo=1`.
-The walk demonstrates Poke, Nudge, and Bash. The beacon hunt alternates
-north and south passages on successive laps. The policy views retain the
+The walk demonstrates Poke, Nudge, and Bash beside a pond with fixed trail
+markers. The scenery gives the viewer a reference for movement. The beacon
+hunt alternates north and south passages on successive laps. The policy views retain the
 board load graph and both missed-slot counters. Keep the tab visible to see
 every scene and leave the hardware in **Shadow** or **Off**. **Stop demo** or
 another workspace ends the loop and asks the UNO Q to stop its current demo
