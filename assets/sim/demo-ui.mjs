@@ -4,6 +4,7 @@ const SCENES = [
   {name:'Playground drop', mode:'drop', ms:3000},
   {name:'Walk, Bash, and get up', mode:'walk'},
   {name:'Beacon hunt', mode:'explore'},
+  {name:'Pond delivery', mode:'explore', arena:'delivery'},
   {name:'Live Duck telemetry', mode:'live', ms:4000},
 ];
 
@@ -12,10 +13,11 @@ const active = state => ['loading', 'running', 'stopping'].includes(state);
 const WALK_PUSHES = [[2, 'poke'], [4, 'nudge'], [7, 'bash']];
 
 export class DemoCircuit {
-  constructor(walk, showScene, update) {
+  constructor(walk, showScene, update, replay) {
     this.walk = walk;
     this.showScene = showScene;
     this.update = update;
+    this.replay = replay;
     this.controller = null;
     this.runKey = null;
   }
@@ -52,6 +54,7 @@ export class DemoCircuit {
         if (trial.state === 'error') throw new Error(trial.detail || 'The rollout failed.');
         if (trial.state === 'stopped') throw new Error('The rollout was stopped.');
         await this.pause(1600, signal);
+        while (!body.arena && this.replay.active) await this.pause(100, signal);
         return;
       }
       const [time, kind] = pushes[0] ?? [];
@@ -75,8 +78,8 @@ export class DemoCircuit {
       for (let lap = 1; ; lap++) {
         for (const [index, scene] of SCENES.entries()) {
           await this.visible(signal);
-          const arena = lap % 2 === 1 ? 'north' : 'south';
-          const name = scene.mode === 'explore' ? `${scene.name} · ${arena} passage` : scene.name;
+          const arena = scene.arena ?? (lap % 2 === 1 ? 'north' : 'south');
+          const name = scene.mode === 'explore' && !scene.arena ? `${scene.name} · ${arena} passage` : scene.name;
           this.update(name, `Lap ${lap} · ${index + 1}/${SCENES.length}`, true);
           if (scene.mode === 'pose') {
             for (const preset of ['STAND', 'SIT', 'FOLD']) {
@@ -87,7 +90,7 @@ export class DemoCircuit {
           } else {
             this.showScene(scene.mode, arena);
             if (scene.ms) await this.pause(scene.ms, signal);
-            else await this.rollout(scene.mode === 'walk' ? {vx:0.2, yaw:0} : {arena}, signal);
+            else await this.rollout(scene.mode === 'walk' ? {vx:0.2, yaw:0, pond:true} : {arena}, signal);
           }
         }
       }

@@ -30,7 +30,7 @@ export class WalkPanel {
     }
     $('walk-start').addEventListener('click', () => this.action('start', this.explore
       ? {arena:$('search-arena').value}
-      : {vx:Number($('walk-vx').value), yaw:Number($('walk-yaw').value)}));
+      : {vx:Number($('walk-vx').value), yaw:Number($('walk-yaw').value), pond:$('walk-pond').checked}));
     $('walk-stop').addEventListener('click', () => this.action('stop', {}));
     this.pushButtons = document.querySelectorAll('[data-walk-push]');
     for (const button of this.pushButtons) {
@@ -40,10 +40,13 @@ export class WalkPanel {
     }
   }
 
-  setMode(mode, demo = false) {
+  get arena() {
+    return this.demoArena ?? $('search-arena').value;
+  }
+
+  setMode(mode, demo = false, arena = null) {
     this.explore = mode === 'explore';
-    $('walk-title').textContent = this.explore ? 'Beacon hunt' : 'Walking policy';
-    $('walk-start').textContent = this.explore ? 'Start search' : 'Run 20 s';
+    this.demoArena = demo && this.explore ? arena : null;
     $('walk-inputs').hidden = this.explore || demo;
     $('walk-push-controls').hidden = this.explore;
     $('search-inputs').hidden = !this.explore || demo;
@@ -113,11 +116,15 @@ export class WalkPanel {
     const fresh = performance.now() - this.lastSeen < 2400;
     const run = fresh ? this.latest : null;
     const busy = active(run?.state);
-    const matching = Boolean(run?.arena) === this.explore;
+    const matching = this.explore ? run?.arena === this.arena : !run?.arena;
     const trial = matching ? run : null;
+    const delivery = this.explore && this.arena === 'delivery';
+    $('walk-title').textContent = this.explore ? (delivery ? 'Pond delivery' : 'Beacon hunt') : 'Walking policy';
+    $('walk-start').textContent = this.explore ? (delivery ? 'Start delivery' : 'Start search') : 'Run 20 s';
     const recovery = trial?.recovery;
     const searchState = {loading:'Loading the walking policy and MuJoCo…',
-      running:'Scanning and choosing a route.', complete:'Time ran out before the beacon was seen.'};
+      running:'Scanning and choosing a route.', complete:delivery ? 'Time ran out before the last delivery.' : 'Time ran out before the beacon was seen.',
+      found:delivery ? 'Deliveries complete.' : fields.found};
     let walkState = '';
     if (!this.explore && trial?.state === 'fallen') walkState = 'Time ran out before the Duck stood back up.';
     if (!this.explore && trial?.state === 'running') {
@@ -130,12 +137,13 @@ export class WalkPanel {
       : !matching && busy ? (run.arena ? 'A search is active in Explore.' : 'A walking trial is active.')
       : matching && run.state === 'error' ? run.detail
       : (matching && (walkState || (this.explore && searchState[run.state]) || fields[run.state]))
-        || (this.explore ? 'The Duck scans nearby space and explores until it spots the beacon.'
+        || (this.explore ? (delivery ? 'Deliver to the jetty and boathouse around the divider.' : 'The Duck scans nearby space and explores until it spots the beacon.')
           : 'Run the shipped walking policy on the UNO Q for up to 20 seconds.'));
     $('walk-start').disabled = !run?.available || busy || this.pending;
     $('walk-stop').disabled = !busy || run.state === 'stopping' || this.pending;
     $('walk-vx').disabled = busy;
     $('walk-yaw').disabled = busy;
+    $('walk-pond').disabled = busy;
     $('search-arena').disabled = busy;
     const push = trial?.push;
     const canPush = !this.explore && trial?.state === 'running' && !this.pending
@@ -161,7 +169,15 @@ export class WalkPanel {
     $('walk-duck-missed').classList.toggle('warning', trial?.board_missed_delta > 0);
     $('hud-misses').textContent = trial?.missed == null ? '—' : `${trial.missed} sim · ${trial.board_missed_delta ?? '—'} Duck`;
     $('hud-misses').classList.toggle('warning', trial?.missed > 0 || trial?.board_missed_delta > 0);
-    if (this.explore) drawMap(run?.mission, run?.root);
+    if (this.explore) {
+      const progress = trial?.mission?.delivery;
+      $('delivery-progress').hidden = !delivery;
+      $('search-destination').textContent = delivery ? 'Station / planned route' : 'Beacon';
+      $('delivery-progress').textContent = progress
+        ? `${progress.delivered}/${progress.stations.length} delivered${progress.stations[progress.delivered] ? ` · Next: ${progress.stations[progress.delivered][0]}` : ''}`
+        : 'Route starts at the jetty.';
+      drawMap(trial?.mission, trial?.root);
+    }
   }
 
   recordBoard(sample) {
@@ -201,7 +217,7 @@ function drawMap(map, root) {
     canvas.setAttribute('aria-label', 'Range map awaiting the first scan.');
     return;
   }
-  const tile = width / map.cols;
+  const tile = Math.min(width / map.cols, height / map.rows);
   const colors = ['#15232e', '#24444b', '#bd7958'];
   for (let i = 0; i < map.grid.length; i++) {
     const col = i % map.cols, row = Math.floor(i / map.cols);
@@ -223,8 +239,23 @@ function drawMap(map, root) {
     ctx.lineWidth = 2;
     ctx.stroke();
   }
-  if (map.beacon) dot(map.beacon, '#ffcb72', 6);
+  if (map.delivery) {
+    const {stations, delivered, plan} = map.delivery;
+    if (root && plan.length) {
+      ctx.beginPath(); ctx.moveTo(...point(root));
+      for (const cell of plan) ctx.lineTo(...point(cell));
+      ctx.strokeStyle = '#ffcb72'; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    for (const [index, [, x, y]] of stations.entries()) {
+      dot([x, y], index < delivered ? '#8edac8' : '#ffcb72', 8);
+      const [px, py] = point([x, y]);
+      ctx.fillStyle = '#12232b'; ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(index + 1), px, py);
+    }
+  } else if (map.beacon) dot(map.beacon, '#ffcb72', 6);
   else if (map.waypoint) dot(map.waypoint, '#90aafa', 3);
   if (root) dot(root, '#d8fff3', 5);
-  canvas.setAttribute('aria-label', `Range map, ${map.mapped_percent}% mapped. ${map.beacon ? 'Beacon found.' : 'Searching for beacon.'}`);
+  const state = map.delivery ? `${map.delivery.delivered} of ${map.delivery.stations.length} deliveries complete.`
+    : map.beacon ? 'Beacon found.' : 'Searching for beacon.';
+  canvas.setAttribute('aria-label', `Range map, ${map.mapped_percent}% mapped. ${state}`);
 }

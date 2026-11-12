@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=5">
+  <link rel="stylesheet" href="sim/sim.css?v=6">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
@@ -45,7 +45,7 @@
         <div class="section-heading"><h2>Demo circuit</h2><span id="demo-progress">LOOP</span></div>
         <p id="demo-state" role="status">Starting the demo…</p>
         <div class="button-row"><button id="demo-toggle">Stop demo</button></div>
-        <p class="muted">Poses, step cycle, drop test, walk and get-up, beacon hunt, and live telemetry. The circuit repeats automatically.</p>
+        <p class="muted">The circuit repeats automatically.</p>
       </section>
       <section class="card" id="walk-card" hidden>
         <div class="section-heading"><h2 id="walk-title">Walking policy</h2><span>UNO Q CPU</span></div>
@@ -54,13 +54,15 @@
           <input id="walk-vx" type="range" min="-0.25" max="0.3" step="0.05" value="0.2">
           <label class="range-label" for="walk-yaw">Turn rate <output id="walk-yaw-value">0.00 rad/s</output></label>
           <input id="walk-yaw" type="range" min="-1" max="1" step="0.1" value="0">
+          <label class="toggle"><input id="walk-pond" type="checkbox"> Pond Trail with Adreno effects</label>
         </div>
         <div id="search-inputs" hidden>
           <label class="range-label" for="search-arena">Arena layout</label>
-          <select id="search-arena"><option value="north">North passage</option><option value="south">South passage</option></select>
+          <select id="search-arena"><option value="north">North passage</option><option value="south">South passage</option><option value="delivery">Pond delivery</option></select>
         </div>
         <div id="walk-action-buttons" class="button-row walk-buttons"><button id="walk-start" class="primary" disabled>Run 20 s</button><button id="walk-stop" disabled>Stop</button></div>
         <p class="muted" id="walk-state" role="status">Checking the UNO Q…</p>
+        <p class="muted" id="pond-status" hidden></p>
         <div id="walk-push-controls">
           <div id="walk-push-buttons" class="button-row walk-buttons" role="group" aria-label="Push the simulated Duck">
             <button data-walk-push="poke" disabled>Poke</button><button data-walk-push="nudge" disabled>Nudge</button><button data-walk-push="bash" disabled>Bash</button>
@@ -69,9 +71,10 @@
         </div>
         <div id="search-map-panel" hidden>
           <div class="section-heading load-heading"><h3>Duck’s range map</h3><span id="search-coverage">AWAITING SCAN</span></div>
+          <p class="muted" id="delivery-progress" role="status" hidden></p>
           <canvas id="search-map" width="360" height="240" role="img" aria-label="Observed floor, walls, and the Duck’s route through the arena"></canvas>
           <ul class="search-key" aria-label="Range map legend">
-            <li>Unknown</li><li>Seen floor</li><li>Wall</li><li>Trail</li><li>Waypoint</li><li>Beacon</li>
+            <li>Unknown</li><li>Seen floor</li><li>Wall</li><li>Trail</li><li>Waypoint</li><li id="search-destination">Beacon</li>
           </ul>
         </div>
         <dl class="walk-metrics">
@@ -89,6 +92,17 @@
         </svg>
         <dl class="walk-legend"><div class="graph-cpu"><dt>CPU</dt><dd id="walk-cpu">—</dd></div><div class="graph-core"><dt>Top core</dt><dd id="walk-core">—</dd></div><div class="graph-gpu"><dt>GPU</dt><dd id="walk-gpu">—</dd></div></dl>
       </section>
+      <section class="card" id="replay-card" hidden>
+        <div class="section-heading"><h2>Bash replay</h2><span>0.45×</span></div>
+        <p id="replay-phase" class="muted"></p>
+        <svg class="replay-graph" viewBox="0 0 290 52" preserveAspectRatio="none" role="img" aria-label="Replay slot timing. Vertical markers show Bash, get-up and walking again.">
+          <path id="replay-budget" class="replay-budget"/><path id="replay-events" class="replay-events"/>
+          <path id="replay-work" class="replay-work"/><path id="replay-cursor" class="replay-cursor"/>
+        </svg>
+        <input id="replay-seek" type="range" step="0.01" aria-label="Replay time">
+        <p id="replay-metrics" class="muted"></p>
+        <div class="button-row walk-buttons"><button id="replay-play">Replay Bash</button><button id="replay-live" disabled>Back to trial</button></div>
+      </section>
       <section class="card" id="pose-card"><div class="section-heading"><h2>Try a pose</h2><span>01</span></div><div class="preset-grid"><button data-preset="STAND" disabled>Stand</button><button data-preset="SIT" disabled>Sit</button><button data-preset="FOLD" disabled>Fold</button><button id="gait" disabled>Step cycle</button></div><p class="muted" id="preset-note">Exact joint frames and limits from Luwu’s model.</p></section>
       <section class="card" id="physics-card" hidden><div class="section-heading"><h2>Physics playground</h2><span>02</span></div><div class="button-row"><button id="drop" class="primary">Drop test</button><button id="nudge">Nudge</button><button id="step">Step 20 ms</button></div><label class="toggle"><input id="hold" type="checkbox"> Hold joint targets <span>viewer PD</span></label><label class="range-label" for="gravity">Gravity <output id="gravity-value">9.81 m/s²</output></label><input id="gravity" type="range" min="0" max="15" value="9.81" step="0.01"><label class="range-label" for="friction">Floor friction <output id="friction-value">1.00</output></label><input id="friction" type="range" min="0.1" max="2" value="1" step="0.05"><label class="range-label" for="speed">Simulation speed</label><select id="speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Real time</option></select><p class="muted">Gravity and contacts run in MuJoCo on this browser’s CPU. Viewer PD approximates servos; training uses BAM actuator models.</p></section>
       <section class="card" id="live-card" hidden><div class="section-heading"><h2>Read the real Duck</h2><span>02</span></div><label class="range-label" for="live-source">Display source</label><select id="live-source"><option value="targets">Commanded targets</option><option value="measured">Measured joint angles</option></select><p id="live-health" class="muted" role="status">Waiting for board telemetry…</p><p class="muted">Position is anchored in this view. IMU gravity provides roll and pitch when available; yaw and world position are not measured.</p></section>
@@ -100,5 +114,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=15"></script>
+<script type="module" src="sim/sim-ui.mjs?v=17"></script>
 </body></html>
