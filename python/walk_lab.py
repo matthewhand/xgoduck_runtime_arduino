@@ -8,6 +8,7 @@ import sys
 import threading
 from uuid import uuid4
 
+from pond_state import INPUT, OUTPUT, read_sample, write_sample
 from walk_sim import MODEL, PUSH_SPEEDS, RUN_S
 from search_mission import ARENAS, MISSION_S
 
@@ -19,14 +20,17 @@ def walk_command(body):
     if 'arena' in body:
         if set(body) != {'arena'} or body['arena'] not in ARENAS:
             raise ValueError('Choose a valid search arena')
-        return 0.0, 0.0, body['arena']
-    if set(body) - {'vx', 'yaw'}:
-        raise ValueError('Only forward speed and turn rate are supported for a walking trial')
+        return 0.0, 0.0, body['arena'], False
+    if set(body) - {'vx', 'yaw', 'pond'}:
+        raise ValueError('Choose forward speed, turn rate, or Pond Trail for a walking trial')
+    pond = body.get('pond', False)
+    if type(pond) is not bool:
+        raise ValueError('Choose whether to run the Pond Trail')
     values = body.get('vx', 0.2), body.get('yaw', 0.0)
     if any(type(value) not in (int, float) for value in values) or not (
             -0.25 <= values[0] <= 0.3 and -1 <= values[1] <= 1):
         raise ValueError('Set speed within −0.25 to 0.30 m/s and turn rate within ±1 rad/s')
-    return (*values, None)
+    return (*values, None, pond)
 
 
 class WalkLab:
@@ -54,7 +58,15 @@ class WalkLab:
         with self.lock:
             return self._snapshot()
 
-    def start(self, vx, yaw, arena):
+    def pond_sample(self):
+        with self.lock:
+            if not self.latest.get('pond') or self.latest['state'] != 'running':
+                return {'available': False}
+            run_key = self.latest['run_key']
+        sample = read_sample(OUTPUT)
+        return dict(sample, available=True) if sample and sample.get('run_key') == run_key else {'available': False}
+
+    def start(self, vx, yaw, arena, pond=False):
         with self.lock:
             if self.process is not None:
                 raise RuntimeError('A rollout is already active')
@@ -74,7 +86,7 @@ class WalkLab:
                 stdout=subprocess.PIPE, text=True,
             )
             self.run_id += 1
-            self.latest = dict(state='loading', vx=vx, yaw=yaw, arena=arena,
+            self.latest = dict(state='loading', vx=vx, yaw=yaw, arena=arena, pond=pond,
                                missed_at_start=missed_at_start, run_key=uuid4().hex)
             threading.Thread(target=self._collect, args=(self.process,), name='walk-lab', daemon=True).start()
             return self._snapshot()
@@ -86,12 +98,20 @@ class WalkLab:
                     sample = json.loads(line)
                 except ValueError:
                     continue
+                demand = None
                 with self.lock:
                     if self.latest['state'] != 'stopping':
                         push = sample.get('push')
                         if push and push['time_s'] != self.latest.get('push', {}).get('time_s'):
                             self.latest['push_pending'] = False
                         self.latest.update(sample)
+                        if self.latest['pond'] and sample['state'] == 'running':
+                            demand = dict(run_key=self.latest['run_key'], xy=sample['root'][:2])
+                if demand:
+                    try:
+                        write_sample(INPUT, demand)
+                    except OSError:
+                        pass  # Pond effects are optional and must not stop the rollout.
         code = process.wait()
         with self.lock:
             if process.stdin is not None:

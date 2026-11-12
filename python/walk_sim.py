@@ -186,7 +186,8 @@ class WalkSimulation:
         d = self.data
         sample = dict(time_s=round(d.time, 3), root=d.qpos[self.root:self.root + 7].tolist(),
                       joints_rad=dict(zip(JOINT_IDS, d.qpos[self.qpos].tolist())),
-                      contacts=d.ncon, footfalls=self.footfalls, path_m=round(self.path_m, 3))
+                      contacts=d.ncon, feet_on_floor=sorted(self.last_contact),
+                      footfalls=self.footfalls, path_m=round(self.path_m, 3))
         if self.mission:
             sample['mission'] = self.mission.snapshot()
         else:

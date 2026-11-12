@@ -45,9 +45,9 @@ optional dependency used only by Walking policy.
 | Step cycle | A labelled procedural joint animation in Pose mode. It previews articulation without physics or a trained walking policy. |
 | Physics → Walking policy | The default controller in Physics runs the shipped `xgoduck_walk.onnx` against the upstream walking scene on the UNO Q. Choose a forward speed and turn rate, then start a trial of up to 20 seconds. The camera follows the simulated Duck. |
 | Physics → Playground | A free-body MuJoCo simulation in the browser. Drop, nudge, pause or step by 20 ms. Adjust gravity, floor friction and playback speed. |
-| Explore | Pick a passage and start a beacon hunt. The simulated Duck maps nearby obstacles, chooses where to walk, and reveals the beacon when its range scan hits it. |
+| Explore | Choose a beacon hunt or **Pond delivery**. Delivery visits the jetty and boathouse around a solid divider. The range map shows the planned path and marks completed stations. |
 | Live Duck | Poll `/api/status` and display commanded targets or measured angles. No motor commands are sent. Targets and partial/unavailable measurements use a translucent model. |
-| Demo | Automatically cycle through the pose presets, step preview, drop test, walking and get-up, beacon hunt, and live telemetry. |
+| Demo | Automatically cycle through the pose presets, step preview, drop test, walking and get-up replay, beacon hunt, Pond delivery, and live telemetry. |
 
 Drag the canvas to orbit and scroll to zoom. Collision hulls and joint axes can
 be overlaid. Space toggles playback when the canvas has focus. Pose JSON files
@@ -64,9 +64,9 @@ measured, and the live model remains anchored in this view.
 
 For a hands-free loop, select **Demo** or open `simulate.html?demo=1`.
 The walk demonstrates Poke, Nudge, and Bash beside a pond with fixed trail
-markers. The scenery gives the viewer a reference for movement. The beacon
-hunt alternates north and south passages on successive laps. The policy views retain the
-board load graph and both missed-slot counters. Keep the tab visible to see
+markers and GPU-simulated fish. The beacon hunt alternates north and south
+passages on successive laps. The policy views retain the board load graph
+and both missed-slot counters. Keep the tab visible to see
 every scene and leave the hardware in **Shadow** or **Off**. **Stop demo** or
 another workspace ends the loop and asks the UNO Q to stop its current demo
 trial. Closing the page also ends the loop. Each rollout has a time limit.
@@ -88,6 +88,34 @@ command once the trunk is upright. The panel reports the phase, peak tilt and
 recovery time. Use Bash early enough to watch the Duck resume walking before
 the 20-second limit. Outcomes depend on the command and phase of the stride.
 Pushes only affect the walking simulation.
+
+When a trial completes with a fall and recovery after **Bash**, Duck Lab
+automatically replays the stunt from above at 0.45× speed. The colored rings
+mark foot contacts. The replay slider synchronizes the pose, policy phase,
+CPU and GPU readings, and slot timing. **Back to trial** returns to the final
+pose. In Demo, pausing or scrubbing the replay holds the current stage until
+playback finishes or you return to the trial.
+
+## Pond life on Adreno
+
+Enable **Pond Trail with Adreno effects** in Physics before starting a walk.
+Demo requests it automatically. The UNO Q host computes the fish motion and
+water wakes with OpenGL ES 3.1 on Adreno. The browser renders the returned
+positions and heights. The Pond panel shows the GPU activity reported by the
+worker's DRM client, at finer precision than the overall board meter.
+
+Install the optional worker on the UNO Q host from the app directory:
+
+```sh
+mkdir -p ~/.config/systemd/user
+install -m 0644 tools/xgo-pond-gpu.service ~/.config/systemd/user/xgo-pond-gpu.service
+systemctl --user daemon-reload
+systemctl --user enable --now xgo-pond-gpu.service
+```
+
+The unit expects `~/ArduinoApps/xgo-duck`. Adjust its `ExecStart` path if the
+app directory has a different name. The worker idles between Pond Trail
+runs. It requires the host Mesa EGL/GLES driver and an Adreno render device.
 
 The board load graph shows total Linux CPU, the busiest core, and the Adreno
 GPU. A dash means that a reading is unavailable. **Missed sim slots** counts

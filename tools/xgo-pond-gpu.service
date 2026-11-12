@@ -1,0 +1,10 @@
+[Unit]
+Description=Duck Lab pond simulation on Adreno
+
+[Service]
+ExecStart=/usr/bin/python3 -B %h/ArduinoApps/xgo-duck/tools/pond-gpu.py
+Restart=on-failure
+RestartSec=4
+
+[Install]
+WantedBy=default.target
