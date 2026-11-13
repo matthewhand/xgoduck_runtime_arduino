@@ -1,0 +1,12 @@
+[Unit]
+Description=UNO Q Wi-Fi reboot page (trusted development network)
+After=network.target
+
+[Service]
+User=arduino
+ExecStart=/usr/bin/python3 -B /usr/local/lib/xgo-duck/wifi-reboot.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

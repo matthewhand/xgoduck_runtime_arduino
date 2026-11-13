@@ -14,6 +14,54 @@ Open `http://127.0.0.1:19527/simulate.html` on that PC. Recreate the forward aft
 reconnecting USB. Plain HTTP at the board's Wi-Fi address uses the WebGL 2
 fallback. The renderer badge reports the backend actually initialized.
 
+## Optional Wi-Fi reboot page
+
+After installation, bookmark `http://<board-wifi-ip>:9528/`. Open that address
+directly over Wi-Fi and click **Confirm reboot**. A successful request schedules
+a full UNO Q restart in about five seconds. Stop any active trial and turn motor
+torque off first. If the Wi-Fi address changes after reboot, look up the board's
+current address before reopening Duck Lab.
+
+This is an unauthenticated development tool. **Any client that can reach port
+9528 can trigger a reboot.** Use it only on a trusted network and do not expose
+it outside that network. The page requires a same-origin POST, with a short
+confirmation body and a cooldown for repeated requests. The host service binds
+to `wlan0`, follows DHCP address changes, and runs separately from App Lab and
+USB. It requires Python 3 and a systemd version with scheduled reboot support
+(`systemctl --help` should list `--when`).
+
+To opt in, run these commands from the checkout on the UNO Q Linux host:
+
+```sh
+sudo visudo -f /etc/sudoers.d/xgo-wifi-reboot
+```
+
+Add this one rule, with no wildcard arguments:
+
+```sudoers
+arduino ALL=(root) NOPASSWD: /usr/bin/systemctl --when=+5s reboot
+```
+
+Then install the unprivileged service and its script:
+
+```sh
+sudo install -D -o root -g root -m 0644 tools/wifi-reboot.py /usr/local/lib/xgo-duck/wifi-reboot.py
+sudo install -o root -g root -m 0644 tools/xgo-wifi-reboot.service /etc/systemd/system/xgo-wifi-reboot.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now xgo-wifi-reboot.service
+```
+
+To check the installation without rebooting, open the confirmation page without
+submitting it, and from the `arduino` account run
+`sudo -n -l /usr/bin/systemctl --when=+5s reboot` to list the exact allowed
+command. Check `journalctl -u xgo-wifi-reboot.service` if the page is unavailable.
+If USB or App Lab is down but SSH is still reachable, an interactive
+`sudo systemctl reboot` over SSH remains an alternative.
+
+To remove the POC, disable and stop `xgo-wifi-reboot.service`, remove the unit,
+script, and `/etc/sudoers.d/xgo-wifi-reboot`, then run
+`sudo systemctl daemon-reload`.
+
 ## Where the work runs
 
 The UNO Q serves the page, CAD assets and telemetry. The viewing device runs

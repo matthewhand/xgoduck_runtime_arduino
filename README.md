@@ -11,6 +11,9 @@ Based on [Microduck](https://github.com/pollen-robotics/microduck) by [Pollen Ro
 3. Check that **Servos online** shows **15/15** and **IMU** shows **online**.
 4. The app starts in **Inference only**, with the motors unloaded. Finish servo setup and calibration before enabling motion.
 
+For a trusted development network, the optional [Wi-Fi reboot page](docs/browser-simulation.md#optional-wi-fi-reboot-page)
+can restart the UNO Q even when the USB connection or the Duck Lab app is down.
+
 ### First-time board setup
 
 After App Lab has downloaded the board libraries, stop the app. Open a terminal on the Uno Q in this project folder and run:
