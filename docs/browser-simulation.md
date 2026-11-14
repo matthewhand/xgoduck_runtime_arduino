@@ -52,9 +52,10 @@ sudo systemctl enable --now xgo-wifi-reboot.service
 ```
 
 To check the installation without rebooting, open the confirmation page without
-submitting it, and from the `arduino` account run
-`sudo -n -l /usr/bin/systemctl --when=+5s reboot` to list the exact allowed
-command. Check `journalctl -u xgo-wifi-reboot.service` if the page is unavailable.
+submitting it. From the `arduino` account, run `sudo -n -l` and look for
+`NOPASSWD: /usr/bin/systemctl --when\=+5s reboot` in the output. The backslash
+is how sudo displays the equals sign. Check
+`journalctl -u xgo-wifi-reboot.service` if the page is unavailable.
 If USB or App Lab is down but SSH is still reachable, an interactive
 `sudo systemctl reboot` over SSH remains an alternative.
 
