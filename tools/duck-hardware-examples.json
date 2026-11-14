@@ -1,0 +1,30 @@
+{
+  "box_guard_control": [
+    {"name": "rail_left", "parent": "trunk_base", "center_m": [-0.053, 0.028, -0.023], "size_m": [0.014, 0.010, 0.066], "mass_g": 6},
+    {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "size_m": [0.014, 0.010, 0.066], "mass_g": 6}
+  ],
+  "rounded_guard": [
+    {"name": "rail_left", "parent": "trunk_base", "center_m": [-0.053, 0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6}
+  ],
+  "rounded_guard_plus_usb_hub": [
+    {"name": "rail_left", "parent": "trunk_base", "center_m": [-0.053, 0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "usb_hub_tray_and_cables", "parent": "trunk_base", "center_m": [-0.048, 0, -0.027], "size_m": [0.014, 0.035, 0.047], "mass_g": 28}
+  ],
+  "retail_hub_horizontal_60g": [
+    {"name": "rail_left", "parent": "trunk_base", "center_m": [-0.053, 0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "usb_hub_tray_and_cables", "parent": "trunk_base", "center_m": [-0.052, 0, -0.022], "size_m": [0.014, 0.102, 0.038], "mass_g": 60}
+  ],
+  "retail_hub_horizontal_90g": [
+    {"name": "rail_left", "parent": "trunk_base", "center_m": [-0.053, 0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "usb_hub_tray_and_cables", "parent": "trunk_base", "center_m": [-0.052, 0, -0.022], "size_m": [0.014, 0.102, 0.038], "mass_g": 90}
+  ],
+  "retail_hub_square_55g": [
+    {"name": "rail_left", "parent": "trunk_base", "center_m": [-0.053, 0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
+    {"name": "usb_hub_tray_and_cables", "parent": "trunk_base", "center_m": [-0.052, 0, -0.023], "size_m": [0.010, 0.060, 0.060], "mass_g": 55}
+  ]
+}

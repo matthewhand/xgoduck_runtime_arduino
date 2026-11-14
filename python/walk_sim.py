@@ -47,7 +47,7 @@ def load_sim_policy(np, obs, file):
     return policy, home, scale, {policy.in_name: obs}
 
 
-def load_recovery_scene(mj):
+def load_recovery_scene(mj, configure=None):
     spec = mj.MjSpec.from_file(str(MODEL))
     # The walking scene has foot contacts only. Enable one existing mesh per
     # link so the Duck can brace against the floor with its body and head.
@@ -60,22 +60,27 @@ def load_recovery_scene(mj):
     # Match the stand-up training scene's head-to-trunk self contact.
     colliders['head_roll'].contype |= 2
     colliders['trunk_base'].conaffinity |= 2
+    if configure is not None:
+        configure(spec)
     return spec.compile()
 
 
 class WalkSimulation:
-    def __init__(self, vx, yaw, arena=None):
+    def __init__(self, vx, yaw, arena=None, *, configure=None,
+                 walk_file='xgoduck_walk.onnx', getup_file='xgoduck_getup.onnx'):
         import mujoco as mj
         import numpy as np
         self.mj, self.np = mj, np
         self.mission = SearchMission(mj, np, MODEL, arena) if arena else None
-        self.model = model = self.mission.model if self.mission else load_recovery_scene(mj)
+        if self.mission and configure is not None:
+            raise ValueError('Hardware variants require the walking and recovery scene')
+        self.model = model = self.mission.model if self.mission else load_recovery_scene(mj, configure)
         model.opt.timestep = STEP_S
         self.data = data = mj.MjData(model)
         self.obs = np.zeros((1, 61), dtype=np.float32)
         self.command = (vx, 0, yaw)
-        self.walk = load_sim_policy(np, self.obs, 'xgoduck_walk.onnx')
-        self.getup = None if self.mission else load_sim_policy(np, self.obs, 'xgoduck_getup.onnx')
+        self.walk = load_sim_policy(np, self.obs, walk_file)
+        self.getup = None if self.mission else load_sim_policy(np, self.obs, getup_file)
         self.recovery = None if self.mission else Recovery(period_s=SLOT_S)
         self.fall_at_s = self.getup_at_s = self.resumed_at_s = None
         self.qpos = [int(model.joint(name).qposadr[0]) for name in JOINT_NAMES]
