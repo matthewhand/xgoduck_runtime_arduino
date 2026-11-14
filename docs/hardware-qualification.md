@@ -21,9 +21,15 @@ box rail design. A nonzero exit means at least one case failed. JSON includes
 metrics for every case regardless. Use `--trace-case` to include all 50 Hz
 root poses, joint angles and foot contacts for one scenario per variant,
 including failed runs. Traced cases include the module definitions and the
-names of any modules in contact with the floor at each sample. These are
-offline trials. They neither command hardware
-nor measure UNO Q scheduler timing.
+names of any modules in contact with the floor at each sample. These offline
+trials do not command hardware or measure UNO Q scheduler timing.
+
+Select **Replay** in Duck Lab and open the report. The timeline lets you
+switch between stock and a variant at the same recorded time. The metrics
+include failed trials, and the visualizer highlights accessory floor contacts.
+To serve the replay page locally without the board, run
+`python -m http.server 19528 --bind 127.0.0.1 --directory assets` and open
+`http://127.0.0.1:19528/simulate.html?replay=1`.
 
 ## Acceptance criteria
 

@@ -3,6 +3,7 @@ import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs';
 import {WalkPanel} from './walk-ui.mjs?v=6';
 import {DemoCircuit} from './demo-ui.mjs?v=1';
+import {QualificationReplay} from './qualification-replay.mjs';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
@@ -21,6 +22,7 @@ const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion();
 let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
+let replay, lastReplayPose, replayModules = [];
 
 function showError(error) {
   $('error').hidden = false;
@@ -35,8 +37,9 @@ function resetCamera() {
     orbit.update();
     return;
   }
-  const x = mode === 'walk' ? sim.data.qpos[0] : 0;
-  const y = mode === 'walk' ? sim.data.qpos[1] : 0;
+  const follow = mode === 'walk' || mode === 'replay';
+  const x = follow ? sim.data.qpos[0] : 0;
+  const y = follow ? sim.data.qpos[1] : 0;
   camera.position.set(x+0.36, y-0.43, 0.28);
   orbit.target.set(x+0.012, y, 0.145);
   orbit.update();
@@ -147,45 +150,56 @@ function buildJointControls() {
 
 function updateModeText() {
   const rollout = rolloutMode(mode);
+  const replaying = mode === 'replay';
   const physics = mode === 'walk' || mode === 'physics';
   const tab = demoMode ? 'demo' : physics ? 'walk' : mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === tab));
   $('physics-controller-label').hidden = !physics || demoMode;
   if (physics) $('physics-controller').value = mode;
   $('demo-card').hidden = !demoMode;
-  $('joint-card').hidden = demoMode;
+  $('joint-card').hidden = demoMode || replaying;
+  $('qualification-card').hidden = !replaying;
   $('physics-card').hidden = mode !== 'physics' || demoMode; $('live-card').hidden = mode !== 'live';
   $('live-source').disabled = demoMode;
-  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode;
+  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode || replaying;
   $('play').hidden = $('reset').hidden = rollout || demoMode;
   $('collisions').parentElement.hidden = rollout;
   $('export').disabled = rollout;
   collisionMeshes.forEach(mesh => { mesh.visible = !rollout && $('collisions').checked; });
   $('gait').classList.toggle('active', gait);
-  $('play').disabled = mode === 'pose' && !gait;
+  $('play').disabled = (mode === 'pose' && !gait) || (replaying && (!replay.frame || replay.duration === 0));
+  $('reset').disabled = replaying && !replay.frame;
   $('play').textContent = running ? (mode === 'live' ? 'Freeze view' : 'Pause') : (mode === 'live' ? 'Resume view' : 'Play');
   $('step').disabled = running || mode !== 'physics';
-  $('clock-label').textContent = gait ? 'PREVIEW TIME' : 'SIM TIME';
-  $('reset').textContent = mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
-  $('scene-mode').textContent = mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('clock-label').textContent = replaying ? 'REPLAY TIME' : gait ? 'PREVIEW TIME' : 'SIM TIME';
+  $('reset').textContent = replaying ? 'Rewind' : mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
+  $('scene-mode').textContent = replaying ? 'QUALIFICATION REPLAY' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
     : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
     : mode === 'live' ? 'Read-only telemetry. Target previews are commanded angles; missing measured joints remain unavailable.'
+    : replaying ? 'Recorded MuJoCo poses. Switch variants to compare at the same time. Gold accessory shapes mark ground contact.'
     : gait ? 'A procedural joint cycle for checking articulation. It is a kinematic preview, without gravity or a walking policy.'
     : 'Adjust joint angles within the CAD model’s limits. Poses are local previews; they do not send motor commands.';
   updateRows();
 }
 
 function setMode(next) {
-  if (!['pose','physics','walk','explore','live'].includes(next)) return;
+  if (!['pose','physics','walk','explore','live','replay'].includes(next)) return;
   const changedWalk = mode !== next && (rolloutMode(mode) || rolloutMode(next));
+  const changedReplay = mode !== next && (mode === 'replay' || next === 'replay');
   if (next !== mode && (mode !== 'pose' || next !== 'physics')) sim.reset('STAND');
   mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
   walk.setMode(mode, demoMode);
   if (changedWalk) searchWorld.visible = false;
   if (changedWalk) { walkRun = null; resetCamera(); }
+  if (changedReplay) {
+    lastReplayPose = null;
+    updateReplayModules(mode === 'replay' ? replay.trial?.modules : []);
+    if (mode === 'replay') applyReplayPose();
+    resetCamera();
+  }
   sim.data.qvel.fill(0); sim.accumulator = 0;
   if (mode === 'live' && lastPacket && performance.now()-lastPacketAt<2500) liveResult = sim.applyTelemetry(lastPacket, $('live-source').value);
   updateModeText();
@@ -284,6 +298,51 @@ function rolloutPacket() {
   return Boolean(sample?.arena) === (mode === 'explore') ? sample : null;
 }
 
+function updateReplayModules(modules = []) {
+  for (const {mesh} of replayModules) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+  }
+  replayModules = [];
+  for (const module of modules) {
+    const parent = sim.mj.mj_name2id(sim.model, sim.mj.mjtObj.mjOBJ_BODY.value, module.parent);
+    if (parent < 0) continue;
+    let geometry;
+    if (module.capsule_m) {
+      const [radius, length] = module.capsule_m;
+      geometry = new THREE.CapsuleGeometry(radius, length - 2 * radius, 5, 12);
+      geometry.rotateX(Math.PI / 2);
+    } else geometry = new THREE.BoxGeometry(...module.size_m);
+    geometry.translate(...module.center_m);
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color:'#7295f4'}));
+    mesh.matrixAutoUpdate = false;
+    scene.add(mesh);
+    replayModules.push({mesh, parent, name:module.name});
+  }
+}
+
+function applyReplayPose() {
+  const packet = replay.frame;
+  if (!packet || packet === lastReplayPose) return;
+  lastReplayPose = packet;
+  const data = sim.data, q = data.qpos;
+  const dx = packet.root[0] - q[0], dy = packet.root[1] - q[1];
+  q.set(packet.root, 0);
+  for (const joint of sim.joints) q[joint.address] = packet.joints_rad[joint.id];
+  sim.mj.mj_forward(sim.model, data);
+  for (const {mesh, parent, name} of replayModules) {
+    const a = data.xmat, b = data.xpos, m = parent * 9, p = parent * 3;
+    mesh.matrix.set(a[m],a[m+1],a[m+2],b[p], a[m+3],a[m+4],a[m+5],b[p+1],
+                    a[m+6],a[m+7],a[m+8],b[p+2], 0,0,0,1);
+    mesh.matrixWorldNeedsUpdate = true;
+    const contacts = packet.module_contacts;
+    mesh.material.color.set(Array.isArray(contacts) && contacts.includes(name) ? '#edc16f' : '#7295f4');
+  }
+  orbit.target.x += dx; orbit.target.y += dy;
+  camera.position.x += dx; camera.position.y += dy;
+}
+
 function buildSearchArena(walls) {
   searchWorld.clear();
   searchWorld.add(searchBeacon, searchWaypoint);
@@ -354,12 +413,16 @@ function attachControls() {
   document.querySelectorAll('[data-preset]').forEach(button => { button.disabled = false; button.addEventListener('click', () => applyPreset(button.dataset.preset)); });
   for (const id of ['reset','camera','gait','export','import']) $(id).disabled = false;
   $('reset').addEventListener('click', () => {
+    if (mode === 'replay') { replay.seek(0); return; }
     sim.reset('STAND'); gaitTime = 0;
     if (mode === 'pose') { gait=false; running=false; }
     updateModeText();
   });
   $('camera').addEventListener('click', resetCamera);
-  $('play').addEventListener('click', () => { running = !running; sim.accumulator = 0; updateModeText(); });
+  $('play').addEventListener('click', () => {
+    if (mode === 'replay' && !running && replay.time >= replay.duration) replay.seek(0);
+    running = !running; sim.accumulator = 0; updateModeText();
+  });
   $('gait').addEventListener('click', () => {
     if (gait) { gait = false; running = false; updateModeText(); }
     else startGait();
@@ -414,13 +477,18 @@ function frame(time) {
     if (running && mode === 'physics') sim.advance(dt*Number($('speed').value));
     if (running && mode === 'pose' && gait) animateGait(dt);
     if (rolloutMode(mode)) animateWalk(dt);
+    if (mode === 'replay') {
+      if (running && !replay.advance(dt)) { running = false; updateModeText(); }
+      applyReplayPose();
+    }
     updateRobot(); orbit.update(); renderer.render(scene,camera);
     fpsFrames++;
     if (time-fpsStart>600) { fps=fpsFrames*1000/(time-fpsStart); fpsFrames=0; fpsStart=time; }
     if (time-lastHud>200) {
       $('fps').textContent = Math.round(fps);
-      $('sim-time').textContent = (rolloutMode(mode) ? rolloutPacket()?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
-      $('contacts').textContent = rolloutMode(mode) ? rolloutPacket()?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
+      $('sim-time').textContent = (mode === 'replay' ? replay.time : rolloutMode(mode) ? rolloutPacket()?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
+      $('contacts').textContent = mode === 'replay' ? replay.frame?.contacts ?? '—'
+        : rolloutMode(mode) ? rolloutPacket()?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
       $('height').textContent = (sim.data.qpos[2]*100).toFixed(1);
       updateRows(); updateBoard(); lastHud=time;
     }
@@ -460,6 +528,17 @@ async function start() {
     camera.aspect=width/height; camera.updateProjectionMatrix(); renderer.setSize(width,height,false);
   }); resize.observe(viewport);
   sim = await DuckSimulation.create();
+  replay = new QualificationReplay($('qualification-card'), sim.joints.map(joint => joint.id), action => {
+    if (mode !== 'replay') return;
+    if (action !== 'variant') running = false;
+    if (action !== 'seek') {
+      lastReplayPose = null;
+      updateReplayModules(replay.trial.modules);
+    }
+    applyReplayPose();
+    if (action === 'case') resetCamera();
+    updateModeText();
+  });
   buildRobot(); buildJointControls(); attachControls(); updateModeText(); updateRobot();
   await renderer.compileAsync(scene,camera);
   $('loading').hidden=true;
@@ -473,9 +552,12 @@ async function start() {
     for (const geometry of geometryCache.values()) geometry.dispose();
     wallGeometry.dispose(); wallMaterial.dispose();
     for (const marker of [searchBeacon, searchWaypoint]) { marker.geometry.dispose(); marker.material.dispose(); }
+    updateReplayModules();
     sim.dispose(); renderer.dispose();
   });
-  if (new URLSearchParams(location.search).get('demo') === '1') selectWorkspace('demo');
+  const query = new URLSearchParams(location.search);
+  if (query.get('replay') === '1') selectWorkspace('replay');
+  else if (query.get('demo') === '1') selectWorkspace('demo');
 }
 
 function attachMatrixControls() {

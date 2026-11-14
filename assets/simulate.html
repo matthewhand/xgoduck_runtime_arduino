@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=5">
+  <link rel="stylesheet" href="sim/sim.css?v=6">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
@@ -13,7 +13,7 @@
   <div class="intro"><div><p class="eyebrow">EXPERIMENT 02 / DIGITAL DUCK</p><h1>A little room to experiment.</h1><p>Pose it, drop it, or try the trained walking policy. Lab controls never move the hardware.</p></div><a class="source-link" href="https://github.com/LuwuDynamics/xgoduck_rl/tree/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck" target="_blank" rel="noopener">Luwu CAD model ↗</a></div>
   <div class="lab-layout">
     <section class="stage-panel" aria-label="3D Duck workspace">
-      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
+      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
       <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit, scroll to zoom.">
         <div id="loading" role="status">Loading the Duck’s CAD model…</div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div>
         <div id="walk-hud" class="walk-hud" aria-label="Board load and missed slots" hidden>
@@ -41,6 +41,37 @@
       <div class="stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
     </section>
     <aside class="controls-panel">
+      <section class="card" id="qualification-card" hidden>
+        <div class="section-heading"><h2>Qualification replay</h2></div>
+        <div class="button-row">
+          <button type="button" id="qualification-open">Open recording</button>
+          <input id="qualification-file" type="file" accept=".json,application/json" hidden>
+        </div>
+        <p class="muted" id="qualification-status" role="status">Choose a qualification JSON report with a recorded trace. It stays on this device.</p>
+        <div id="qualification-controls" hidden>
+          <div id="qualification-case-field">
+            <label class="range-label" for="qualification-case">Scenario</label>
+            <select id="qualification-case"></select>
+          </div>
+          <label class="range-label" for="qualification-variant">Showing</label>
+          <select id="qualification-variant"></select>
+          <div class="button-row qualification-switch"><button type="button" id="qualification-stock">Show variant</button></div>
+          <label class="range-label" for="qualification-seek">Timeline <output id="qualification-time" for="qualification-seek">0.00 s</output></label>
+          <input id="qualification-seek" type="range" min="0" max="0" step="any" value="0">
+          <div class="button-row" id="qualification-events"></div>
+          <label class="range-label" for="qualification-speed">Playback speed</label>
+          <select id="qualification-speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Real time</option><option value="2">2× speed</option></select>
+          <dl class="walk-metrics qualification-position">
+            <div><dt>Phase</dt><dd id="qualification-phase">—</dd></div>
+            <div><dt>Footfalls</dt><dd id="qualification-footfalls">—</dd></div>
+            <div id="qualification-contact-field" class="qualification-contact" hidden><dt>Accessory ground contact</dt><dd id="qualification-contact">—</dd></div>
+          </dl>
+          <table class="qualification-summary" aria-label="Recorded qualification results">
+            <thead><tr id="qualification-head"></tr></thead>
+            <tbody id="qualification-metrics"></tbody>
+          </table>
+        </div>
+      </section>
       <section class="card" id="demo-card" hidden>
         <div class="section-heading"><h2>Demo circuit</h2><span id="demo-progress">LOOP</span></div>
         <p id="demo-state" role="status">Starting the demo…</p>
@@ -100,5 +131,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=14"></script>
+<script type="module" src="sim/sim-ui.mjs?v=15"></script>
 </body></html>
