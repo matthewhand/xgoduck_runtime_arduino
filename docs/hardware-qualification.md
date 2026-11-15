@@ -81,6 +81,37 @@ component heights in this preview are approximate. Check finger clearance at
 the UNO Q button with the carrier installed and all plugs seated. Upgrades
 that need the occupied headers require a breakout or another interface.
 
+### Wireless dock concept
+
+Open **Hardware → Dock** to compare the parked position and a separated view
+of the coils. The preview reserves a 28 × 44 mm removable cassette beside the
+matrix. The cassette keeps a thin polymer face toward the dock and ferrite
+behind the receiver winding. The dock uses foot guides and an adjustable
+transmitter support. Its dimensions are placeholders until there is a
+matched transmitter and receiver.
+
+Print the pocket and fit the receiver after printing so it can be serviced.
+Follow the selected module's allowed coil spacing and shielding. Confirm
+coil alignment, output power, heat near the battery, and foreign-object
+detection with the assembled robot and fasteners in place.
+[Wireless Power Consortium integration guidance](https://www.wirelesspowerconsortium.com/knowledge-base/testing-and-certification/qi-components-and-subsystems/)
+
+Luwu specifies an 8.4 V charger through DC5521 and requires the stock robot
+to be off while charging. The receiver supplies power to a pack-compatible
+charger. Confirm the pack label and its charge path before choosing the
+charger or changing the wiring.
+[Luwu charging instructions](https://wiki.xgorobot.com/kb/the-xgo-series-robot/duck-control?model=duck)
+
+For automatic restart, use a controller powered independently of the Duck.
+The dock confirms mechanical seating. The Duck releases torque once it is
+supported and requests a clean Linux shutdown. The controller waits for a
+verified shutdown indication, isolates the robot load, enables charging, and
+checks charge status. It disables charging before restoring robot power.
+The UNO Q boots automatically when power is supplied. A schedule or network
+command received by the dock can request restart. Verify this sequence on the
+actual kit with the approved charger before adding the wireless receiver.
+[Arduino UNO Q datasheet, section 11.5](https://docs.arduino.cc/resources/datasheets/ABX00162-datasheet.pdf)
+
 ### Earlier protective backpack trials
 
 The backpack covers the board face and edges. Its only viewing opening is

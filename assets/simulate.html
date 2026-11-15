@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=11">
+  <link rel="stylesheet" href="sim/sim.css?v=12">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
@@ -17,6 +17,7 @@
         <button type="button" data-assembly="cutout" aria-pressed="false">Open cut-out</button>
         <button type="button" data-assembly="translucent" aria-pressed="true">Translucent window</button>
         <button type="button" data-assembly="exploded" aria-pressed="false">Explode</button>
+        <button type="button" data-assembly="dock" aria-pressed="false">Dock</button>
       </div>
       <div class="button-row skate-tools" id="skate-tools" role="group" aria-label="Roller skate controls" hidden>
         <button id="roll-forward" class="primary">Roll forward</button><button id="explode-wheels" aria-pressed="false">Explode wheels</button>
@@ -57,6 +58,11 @@
       <section class="card hardware-card" id="hardware-card" hidden>
         <div class="section-heading"><h2>V5 board shroud</h2><a class="muted hardware-source" href="https://github.com/LuwuDynamics/xgoduck_hardware/tree/master/structure/V5_AUDIO_VIDEO_" target="_blank" rel="noopener">V5 parts ↗</a></div>
         <p id="hardware-note" role="status">The optional translucent window covers the display opening. Air can still pass around the open edges.</p>
+        <div id="dock-controls" hidden>
+          <label class="range-label" for="dock-spacing">Dock separation <output id="dock-spacing-value" for="dock-spacing">24 mm back</output></label>
+          <input type="range" id="dock-spacing" min="0" max="55" step="1" value="24">
+          <p class="muted">Set to zero to see the nominal parked position. The coil size and separation are packaging placeholders.</p>
+        </div>
         <dl class="hardware-legend">
           <div><dt>Matrix</dt><dd>The LEDs face through the blue carrier’s cut-out. Use the close-up to look straight through both openings.</dd></div>
           <div><dt>Open edges</dt><dd>Standoffs leave air and cable paths around the stack. Check finger room at the white UNO Q button on the actual build.</dd></div>
@@ -170,5 +176,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=24"></script>
+<script type="module" src="sim/sim-ui.mjs?v=25"></script>
 </body></html>

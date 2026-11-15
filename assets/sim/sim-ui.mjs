@@ -4,7 +4,7 @@ import {DuckSimulation, parsePose} from './sim-core.mjs?v=3';
 import {WalkPanel} from './walk-ui.mjs?v=6';
 import {DemoCircuit} from './demo-ui.mjs?v=2';
 import {QualificationReplay} from './qualification-replay.mjs';
-import {GuardPreview} from './guard-preview.mjs?v=3';
+import {GuardPreview} from './guard-preview.mjs?v=4';
 import {SKATE_SURFACES} from './skate-terrain.mjs';
 
 const $ = id => document.getElementById(id);
@@ -29,6 +29,7 @@ let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
 let terrain, towLine, towPoint;
 let replay, lastReplayPose, replayModules = [];
 let guardPreview, hardwareAssembly = 'translucent';
+const assemblyCamera = assembly => assembly === 'dock' ? 'dock' : assembly === 'exploded' ? 'side' : 'rear';
 
 function showError(error) {
   $('error').hidden = false;
@@ -39,7 +40,7 @@ function resetCamera() {
   orbit.maxDistance = mode === 'explore' ? 4.5 : 1.8;
   orbit.minDistance = mode === 'hardware' ? .075 : .15;
   if (mode === 'hardware') {
-    setHardwareCamera(hardwareAssembly === 'exploded' ? 'side' : 'rear');
+    setHardwareCamera(assemblyCamera(hardwareAssembly));
     return;
   }
   if (mode === 'explore') {
@@ -60,6 +61,9 @@ function setHardwareCamera(view = 'rear') {
   if (view === 'matrix') {
     camera.position.set(-.198,.014326,.10888);
     orbit.target.set(-.074,.014326,.10888);
+  } else if (view === 'dock') {
+    camera.position.set(-.39,-.385,.283);
+    orbit.target.set(-.082,0,.114);
   } else {
     camera.position.set(...(view === 'side' ? [-.271,-.440,.246] : [-.466,-.025,.191]));
     orbit.target.set(-.042,0,.133);
@@ -588,19 +592,28 @@ function attachControls() {
     button.addEventListener('click', () => setHardwareCamera(button.dataset.hardwareCamera));
   }
   $('hardware-test-pattern').addEventListener('change', event => guardPreview.setTestPattern(event.target.checked));
+  const dockSpacing = $('dock-spacing');
+  dockSpacing.addEventListener('input', () => {
+    const distance = Number(dockSpacing.value);
+    guardPreview.setDockSpacing(distance);
+    $('dock-spacing-value').textContent = distance ? `${distance} mm back` : 'Parked position';
+  });
   const assemblies = document.querySelectorAll('[data-assembly]');
   const hardwareNotes = {
     cutout: 'The faceplate shields the carrier. Its opening lines up with the carrier’s existing matrix cut-out.',
     translucent: 'The optional translucent window covers the display opening. Air can still pass around the open edges.',
     exploded: 'The shroud and blue carrier separate to expose the inner UNO Q, its matrix and the mated headers.',
+    dock: 'A removable receiver sits beside the matrix. The dock guides line up the two coils as the Duck backs in.',
   };
   for (const button of assemblies) {
     button.addEventListener('click', () => {
       const assembly = button.dataset.assembly;
       guardPreview.show(assembly);
+      $('dock-controls').hidden = assembly !== 'dock';
+      if (assembly === 'dock') guardPreview.setDockSpacing(Number(dockSpacing.value));
       for (const option of assemblies) option.setAttribute('aria-pressed', String(option === button));
       $('hardware-note').textContent = hardwareNotes[assembly];
-      const changedMountView = (hardwareAssembly === 'exploded') !== (assembly === 'exploded');
+      const changedMountView = assemblyCamera(hardwareAssembly) !== assemblyCamera(assembly);
       hardwareAssembly = assembly;
       if (changedMountView) resetCamera();
     });
@@ -777,7 +790,10 @@ async function start() {
     stockSim.dispose(); skateSim?.dispose(); renderer.dispose();
   });
   const query = new URLSearchParams(location.search);
-  if (query.get('hardware') === '1') selectWorkspace('hardware');
+  if (query.get('hardware') === '1') {
+    await selectWorkspace('hardware');
+    if (query.get('dock') === '1') document.querySelector('[data-assembly="dock"]').click();
+  }
   else if (query.get('skates') === '1') selectWorkspace('skates');
   else if (query.get('replay') === '1') selectWorkspace('replay');
   else if (query.get('demo') === '1') selectWorkspace('demo');

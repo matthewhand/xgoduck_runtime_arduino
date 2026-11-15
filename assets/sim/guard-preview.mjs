@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {buildDockPreview} from './dock-preview.mjs';
 
 // Dimensions are in metres, in the trunk frame. The outward normal is -X,
 // up is +Z, and +Y is left when looking directly at the back of the Duck.
@@ -80,7 +81,11 @@ export class GuardPreview {
     this.group.visible = false;
     this.shell = new THREE.Group();
     this.carrier = new THREE.Group();
-    this.group.add(this.shell, this.carrier);
+    const {receiver, dock} = buildDockPreview();
+    this.receiver = receiver;
+    this.dock = dock;
+    this.shell.add(receiver);
+    this.group.add(this.shell, this.carrier, dock);
 
     const matte = color => new THREE.MeshStandardMaterial({color, roughness:.56});
     const board = matte('#126b65'), carrier = matte('#254d9a'), rail = matte('#579eb5');
@@ -188,10 +193,16 @@ export class GuardPreview {
   }
 
   show(assembly) {
-    this.insert.visible = assembly === 'translucent';
+    const docking = assembly === 'dock';
+    this.insert.visible = assembly === 'translucent' || docking;
+    this.receiver.visible = this.dock.visible = docking;
     this.shell.position.x = assembly === 'exploded' ? EXPLODED_OFFSET : 0;
     this.carrier.position.x = assembly === 'exploded' ? -.028 : 0;
     this.guides.visible = assembly === 'exploded';
+  }
+
+  setDockSpacing(millimetres) {
+    this.dock.position.x = -millimetres/1000;
   }
 
   setTestPattern(allOn) {
