@@ -66,7 +66,22 @@ roll. Include a mass and location range to catch changes in fit between
 prints. Record the hardware revision, the geometry used and the policy
 versions with the results.
 
-### Protective backpack
+### Open-edge board shroud
+
+On the stock V5 the UNO Q sits against the battery holder with its matrix
+and Arduino headers facing the blue carrier. The carrier plugs into the
+headers and has a 27.94 × 16.76 mm matrix opening in the V1.1 STEP. The white
+UNO Q button is separate from the carrier power switch. [Luwu assembly photos](https://wiki.xgorobot.com/kb/the-xgo-series-robot/duck-guide-06?model=duck)
+
+The current Duck Lab mock-up puts a removable faceplate outside the carrier.
+Four posts leave the edges open for air and cable access. Its optional
+translucent window aligns with the carrier opening. **Explode** separates
+the faceplate and carrier to show the inner board. The mount positions and
+component heights in this preview are approximate. Check finger clearance at
+the UNO Q button with the carrier installed and all plugs seated. Upgrades
+that need the occupied headers require a breakout or another interface.
+
+### Earlier protective backpack trials
 
 The backpack covers the board face and edges. Its only viewing opening is
 over the full 8 × 13 matrix. A shallow outward bevel gives the outer pixels
@@ -75,14 +90,9 @@ rim, fasteners and window. Transfer roll contact to the chassis through the
 rails and mounts, with clearance for the shell to flex without touching the
 PCB or its components.
 
-Open **Hardware** in Duck Lab or add `?hardware=1` to `simulate.html` to
-compare the open cut-out and translucent window. The mounting view shows
-how the enclosure attaches. The mock-up uses the stock RL body and approximate
-positions for the V5 board stack, cable exits and mounts. Its contact profile
-differs from the attachment primitives used in the qualification examples.
-The nominal opening at its narrowest is about 23 × 35 mm. The rails stand
-about 2.5 mm past the shell face in the mock-up. Both dimensions need a fit
-check on the assembled Duck.
+These tests use simplified envelopes for the earlier shell, with a nominal
+23 × 35 mm display opening and 2.5 mm rail clearance beyond the face.
+The shroud preview above needs its own contact and recovery check.
 
 In a provisional MuJoCo check, a 21 × 63 × 76 mm shell envelope and two
 78 mm rounded rails extending 68 mm behind the trunk origin passed 9 of 10
@@ -103,12 +113,11 @@ enclosure mount surfaces. A redesigned mount or enclosure needs a new fit
 check before using an inset in the walking and get-up trials.
 
 The cushioned version keeps the same rear envelope and stock mounting
-position. Its rounded skids sit over proposed TPU pads. Retain the pads
-mechanically so a skid can take floor contact and transfer the load to the
-chassis mounts. The translucent window is now the default preview. It is
-1.4 mm thick in the mock-up, supported around its edge, and set back 4.3 mm
-from the skid tips. The opaque shell and translucent insert can still form
-one multi-tool print. Check the fit of the skid and pad separately.
+position of the earlier shell. Its rounded skids sit over proposed TPU pads.
+The earlier window was 1.4 mm thick and set back 4.3 mm from the skid tips.
+Retain the pads mechanically so a skid can transfer load to the chassis
+mounts. The opaque shell and translucent insert can form one multi-tool
+print. Check the fit of the skid and pad separately.
 [Flexible filament guidance](https://help.prusa3d.com/article/flexible-materials_2057)
 
 The `v5_cushioned_guard_30g` example models the shell and skids as rigid
@@ -126,8 +135,8 @@ the result to a print.
   plug overmolds. Check the enclosure for the kit's board revision. Leave
   insertion room at the USB-C edge, route the cables with strain relief and
   a usable bend radius, and check the cable path through neck and leg travel.
-  If using a captive power-button plunger, verify that it returns freely and
-  leaves the switch released when the shell is tightened or pressed.
+  Verify finger access to the white UNO Q button and clearance for plug
+  insertion, removal and strain relief with the faceplate fitted.
   [Luwu V5 hardware](https://github.com/LuwuDynamics/xgoduck_hardware/tree/4496fad52041db1cad36ded6cc49d942e037b4af/structure/V5_AUDIO_VIDEO_) ·
   [UNO Q pinout](https://docs.arduino.cc/resources/pinouts/ABX00162-full-pinout.pdf) ·
   [UNO Q STEP files](https://docs.arduino.cc/resources/models/ABX00162-step.zip)
@@ -155,6 +164,26 @@ For example, sweep the square hub's total payload mass and mounting height:
 ```sh
 python -B tools/check-duck-hardware.py tools/duck-hardware-examples.json --variant retail_hub_square_55g --sweep-module usb_hub_tray_and_cables --mass-g 45 55 65 --z-offset-mm -3 0 3
 ```
+
+## First footwear trials
+
+The [footwear examples](../tools/duck-footwear-examples.json) are rigid
+envelopes attached to the stock ankles. With the shipped policies on a flat
+floor, the light heel skids passed all ten cases at 4 g total and walked
+2.35 m in 20 s versus 2.59 m stock. Heel and toe bumpers passed nine cases,
+shallow rocker soles passed six, and wide soles passed one. The results
+include turning, falls, and forward travel after standing up.
+
+```sh
+python -B tools/check-duck-hardware.py tools/duck-footwear-examples.json --trace-case right > footwear.json
+```
+
+Keep the first grass sole close to the original footprint and try shallow,
+rounded tread with a removable pad. Verify grip, sinking, and stability on
+an uneven test bed before field use. In a roof space, use a supported path
+above the insulation. Test an equivalent board path at ground level before
+considering the actual site.
+[SafeWork NSW ceiling-space guidance](https://www.safework.nsw.gov.au/__data/assets/pdf_file/0008/965861/Guide-to-solar-safe-installation.pdf)
 
 ## Train changes that need it
 

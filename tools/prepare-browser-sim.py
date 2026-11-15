@@ -10,7 +10,8 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1] / 'assets' / 'sim'
 RL_COMMIT = 'fa621fc77ad9a05d69da13270e86118bdd3603fe'
-MODEL_PREFIX = 'src/mjlab_microduck/robot/xgoduck/'
+ROLLER_COMMIT = 'a4c78aacd5eaa724cf246fe12d24bfe1e837fa50'
+MODEL_PREFIX = 'src/mjlab_microduck/robot/'
 
 
 def fetch(url):
@@ -62,19 +63,23 @@ def main():
                 save(destination, tar.extractfile(source_name).read(), dict(package=name, version=version, integrity=integrity))
         print(f'Verified {name} {version}', flush=True)
 
-    source = json.loads((ROOT / 'model-source.json').read_text())
-    if source['commit'] != RL_COMMIT:
-        raise ValueError('Unexpected model commit')
-    for item in source['files']:
-        url = f'https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/{RL_COMMIT}/{item["path"]}'
-        data = fetch(url)
-        blob = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
-        if blob != item['sha']:
-            raise ValueError('Upstream Git blob checksum mismatch')
-        relative = item['path'].removeprefix(MODEL_PREFIX)
-        if relative == 'LICENSE':
-            relative = 'UPSTREAM-LICENSE'
-        save('model/' + relative, data, dict(url=url, commit=RL_COMMIT, git_blob=blob))
+    for manifest, commit, prefix, destination in (
+        ('model-source.json', RL_COMMIT, 'xgoduck/', 'model/'),
+        ('roller-model-source.json', ROLLER_COMMIT, 'xgoduck_roller/', 'model/roller/'),
+    ):
+        source = json.loads((ROOT / manifest).read_text())
+        if source['commit'] != commit:
+            raise ValueError('Unexpected model commit')
+        for item in source['files']:
+            url = f'https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/{commit}/{item["path"]}'
+            data = fetch(url)
+            blob = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+            if blob != item['sha']:
+                raise ValueError('Upstream Git blob checksum mismatch')
+            relative = item['path'].removeprefix(MODEL_PREFIX + prefix)
+            if relative == 'LICENSE':
+                relative = 'UPSTREAM-LICENSE'
+            save(destination + relative, data, dict(url=url, commit=commit, git_blob=blob))
     (ROOT / 'vendor/package.json').write_text('{"type":"module","private":true}\n')
     (ROOT / 'vendor-lock.json').write_text(json.dumps(dict(schema=1, files=records), indent=2) + '\n')
     print(f'Prepared {len(records)} files, {sum(x["bytes"] for x in records) / 1e6:.1f} MB', flush=True)

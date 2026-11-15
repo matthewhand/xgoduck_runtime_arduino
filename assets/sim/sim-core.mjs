@@ -1,4 +1,6 @@
 import loadMujoco from './vendor/mujoco/mujoco.js';
+import {SKATE_SURFACES, skateTerrainXml} from './skate-terrain.mjs';
+import {SkateTow} from './skate-tow.mjs';
 
 // Runtime packets include mouth motor 34; it has no corresponding MJCF joint.
 const RUNTIME_MOTOR_IDS = [10, 11, 12, 13, 14, 20, 21, 22, 23, 24, 30, 31, 32, 33, 34];
@@ -44,23 +46,35 @@ export class DuckSimulation {
     const response = await fetch(new URL(path, import.meta.url));
     if (!response.ok) throw new Error(`Could not load ${path}: HTTP ${response.status}`);
     return new Uint8Array(await response.arrayBuffer());
-  }) {
+  }, {skates = false} = {}) {
     // Download before instantiation: slow links should show the loading screen,
     // rather than trigger Emscripten's periodic "waiting on dependencies" errors.
     const wasmBinary = await readAsset('vendor/mujoco/mujoco.wasm');
     const mj = await loadMujoco({wasmBinary, locateFile: name => new URL(`./vendor/mujoco/${name}`, import.meta.url).href});
-    const manifest = JSON.parse(new TextDecoder().decode(await readAsset('model-source.json')));
-    mj.FS.mkdir('/duck');
-    mj.FS.mkdir('/duck/assets');
-    const paths = manifest.files.map(file => file.path.split('/xgoduck/')[1]).filter(path => path && (path.endsWith('.stl') || path === 'robot_allcollisions.xml'));
+    const manifestFile = skates ? 'roller-model-source.json' : 'model-source.json';
+    const manifest = JSON.parse(new TextDecoder().decode(await readAsset(manifestFile)));
+    const prefix = skates ? '/xgoduck_roller/' : '/xgoduck/';
+    const sourceDir = skates ? 'model/roller' : 'model';
+    const dir = '/duck';
+    mj.FS.mkdir(dir);
+    mj.FS.mkdir(`${dir}/assets`);
+    const robotFile = skates ? 'robot.xml' : 'robot_allcollisions.xml';
+    const paths = manifest.files.map(file => file.path.split(prefix)[1])
+      .filter(path => path && (/\.stl$/i.test(path) || path === robotFile));
     paths.push('browser_scene.xml');
-    await Promise.all(paths.map(async path => mj.FS.writeFile(`/duck/${path}`, await readAsset(`model/${path}`))));
-    const model = mj.MjModel.from_xml_path('/duck/browser_scene.xml');
+    await Promise.all(paths.map(async path => {
+      const contents = await readAsset(`${sourceDir}/${path}`);
+      const data = skates && path === 'browser_scene.xml'
+        ? new TextDecoder().decode(contents).replace('<!-- SKATE TERRAIN -->', skateTerrainXml())
+        : contents;
+      mj.FS.writeFile(`${dir}/${path}`, data);
+    }));
+    const model = mj.MjModel.from_xml_path(`${dir}/browser_scene.xml`);
     if (!model) throw new Error('MuJoCo could not compile the Duck model.');
     let data;
     try {
       data = new mj.MjData(model);
-      return new DuckSimulation(mj, model, data);
+      return new DuckSimulation(mj, model, data, skates);
     } catch (error) {
       data?.delete();
       model.delete();
@@ -68,12 +82,33 @@ export class DuckSimulation {
     }
   }
 
-  constructor(mj, model, data) {
+  constructor(mj, model, data, skates) {
     this.mj = mj; this.model = model; this.data = data;
+    this.skates = skates;
     this.option = model.opt;
     this.timestep = this.option.timestep;
     this.floor = mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, 'floor');
     if (this.floor < 0) throw new Error('Floor geom not found in Duck model.');
+    this.wheelCollisions = [];
+    this.wheelDofs = [];
+    this.surface = 'flat';
+    if (skates) {
+      for (const side of ['left', 'right']) {
+        for (const end of ['front', 'rear']) {
+          const geom = mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, `${side}_${end}_tire_collision`);
+          if (geom < 0) throw new Error('Wheel contact geom not found in Duck model.');
+          this.wheelCollisions.push(geom);
+        }
+      }
+      this.wheelDofs = ['LF','LR','RF','RR'].map(name => {
+        const joint = mj.mj_name2id(model, mj.mjtObj.mjOBJ_JOINT.value, `passive_${name}_wheel`);
+        if (joint < 0) throw new Error('Passive wheel joint not found.');
+        return model.jnt_dofadr[joint];
+      });
+      this.surfaceContacts = Object.entries(SKATE_SURFACES).map(([name, boxes]) => [
+        name, boxes.map(({name}) => mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, name)),
+      ]);
+    }
     this.joints = JOINTS.map(([id, name, label]) => {
       const index = mj.mj_name2id(model, mj.mjtObj.mjOBJ_JOINT.value, name);
       const actuator = mj.mj_name2id(model, mj.mjtObj.mjOBJ_ACTUATOR.value, name);
@@ -89,9 +124,12 @@ export class DuckSimulation {
   }
 
   reset(preset = 'STAND') {
+    if (this.skates && preset === 'STAND') preset = 'home';
     const index = this.mj.mj_name2id(this.model, this.mj.mjtObj.mjOBJ_KEY.value, preset);
     if (index < 0) throw new Error(`Unknown pose: ${preset}`);
     this.mj.mj_resetDataKeyframe(this.model, this.data, index);
+    this.tow = null;
+    if (this.surface.startsWith('tiles')) this.data.qpos[2] += .003;
     this.targets = this.data.ctrl.slice();
     this.accumulator = 0; this.skipped = 0;
     this.mj.mj_forward(this.model, this.data);
@@ -134,6 +172,25 @@ export class DuckSimulation {
   setFriction(value) {
     if (!Number.isFinite(value) || value < 0.05 || value > 3) throw new Error('Invalid floor friction.');
     this.model.geom_friction[this.floor * 3] = value;
+    // The upstream tires have higher contact priority than the floor.
+    for (const wheel of this.wheelCollisions) this.model.geom_friction[wheel * 3] = value;
+  }
+
+  setSurface(surface) {
+    if (!this.skates || !Object.hasOwn(SKATE_SURFACES,surface)) throw new Error('Unknown skate surface.');
+    this.surface = surface;
+    for (const [name, geoms] of this.surfaceContacts) {
+      for (const geom of geoms) this.model.geom_conaffinity[geom] = name === surface ? 1 : 0;
+    }
+    // Approximate rolling losses with a load on each passive axle.
+    for (const dof of this.wheelDofs) this.model.dof_damping[dof] = surface === 'carpet' ? .0015 : 0;
+  }
+
+  startTow(mount) {
+    if (!this.skates) throw new Error('Fit skates before running a tow test.');
+    this.reset();
+    this.setHold(true);
+    this.tow = new SkateTow(this.mj,this.model,this.data,mount);
   }
 
   drop() {
@@ -150,7 +207,10 @@ export class DuckSimulation {
 
   step(count = 1) {
     if (!Number.isInteger(count) || count < 1 || count > 1000) throw new Error('Invalid simulation step count.');
-    for (let i = 0; i < count; i++) this.mj.mj_step(this.model, this.data);
+    for (let i = 0; i < count; i++) {
+      this.tow?.step(this.timestep);
+      this.mj.mj_step(this.model, this.data);
+    }
     if (!this.data.qpos.every(Number.isFinite)) throw new Error('Physics state became invalid. Reset the simulation.');
   }
 

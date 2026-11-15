@@ -1,9 +1,10 @@
 const SCENES = [
   {name:'Stand, sit, and fold', mode:'pose'},
   {name:'Step cycle', mode:'gait', ms:3500},
+  {name:'Roller skate glide', mode:'skates', ms:4500},
   {name:'Playground drop', mode:'drop', ms:3000},
-  {name:'Walk, Bash, and get up', mode:'walk'},
-  {name:'Beacon hunt', mode:'explore'},
+  {name:'Walk, Bash, and get up', mode:'walk', worker:true},
+  {name:'Beacon hunt', mode:'explore', worker:true},
   {name:'Live Duck telemetry', mode:'live', ms:4000},
 ];
 
@@ -35,6 +36,15 @@ export class DemoCircuit {
     const sample = await this.walk.action(name, body);
     if (!sample) throw new Error(this.walk.error || 'The UNO Q did not confirm the request.');
     return sample;
+  }
+
+  async workerAvailable(signal) {
+    try {
+      const response = await fetch('/api/lab/walk', {
+        cache:'no-store', signal:AbortSignal.any([signal, AbortSignal.timeout(1800)]),
+      });
+      return response.ok && (await response.json()).available === true;
+    } catch { return false; }
   }
 
   async rollout(body, signal) {
@@ -73,19 +83,25 @@ export class DemoCircuit {
     let message = 'Demo stopped.';
     try {
       for (let lap = 1; ; lap++) {
+        let workerReady;
         for (const [index, scene] of SCENES.entries()) {
           await this.visible(signal);
+          if (scene.worker) {
+            workerReady ??= await this.workerAvailable(signal);
+            signal.throwIfAborted();
+            if (!workerReady) continue;
+          }
           const arena = lap % 2 === 1 ? 'north' : 'south';
           const name = scene.mode === 'explore' ? `${scene.name} · ${arena} passage` : scene.name;
           this.update(name, `Lap ${lap} · ${index + 1}/${SCENES.length}`, true);
           if (scene.mode === 'pose') {
             for (const preset of ['STAND', 'SIT', 'FOLD']) {
               await this.visible(signal);
-              this.showScene(scene.mode, preset);
+              await this.showScene(scene.mode, preset, signal);
               await this.pause(1400, signal);
             }
           } else {
-            this.showScene(scene.mode, arena);
+            await this.showScene(scene.mode, arena, signal);
             if (scene.ms) await this.pause(scene.ms, signal);
             else await this.rollout(scene.mode === 'walk' ? {vx:0.2, yaw:0} : {arena}, signal);
           }

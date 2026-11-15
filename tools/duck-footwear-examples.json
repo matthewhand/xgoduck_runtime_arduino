@@ -1,0 +1,24 @@
+{
+  "light_heel_skid": [
+    {"name": "left_heel", "parent": "ankle_left", "center_m": [0.0185, 0.019, -0.015], "capsule_m": [0.0028, 0.038], "mass_g": 2},
+    {"name": "right_heel", "parent": "ankle_right", "center_m": [0.0185, -0.019, -0.015], "capsule_m": [0.0028, 0.038], "mass_g": 2}
+  ],
+  "heel_toe_bumpers": [
+    {"name": "left_toe", "parent": "ankle_left", "center_m": [0.0185, -0.030, -0.015], "capsule_m": [0.003, 0.036], "mass_g": 2},
+    {"name": "left_heel", "parent": "ankle_left", "center_m": [0.0185, 0.016, -0.015], "capsule_m": [0.003, 0.036], "mass_g": 2},
+    {"name": "right_toe", "parent": "ankle_right", "center_m": [0.0185, 0.030, -0.015], "capsule_m": [0.003, 0.036], "mass_g": 2},
+    {"name": "right_heel", "parent": "ankle_right", "center_m": [0.0185, -0.016, -0.015], "capsule_m": [0.003, 0.036], "mass_g": 2}
+  ],
+  "shallow_rocker_sole": [
+    {"name": "left_front", "parent": "ankle_left", "center_m": [0.018, -0.025, -0.015], "capsule_m": [0.003, 0.037], "mass_g": 1.5},
+    {"name": "left_middle", "parent": "ankle_left", "center_m": [0.0205, -0.006, -0.015], "capsule_m": [0.004, 0.037], "mass_g": 2.5},
+    {"name": "left_rear", "parent": "ankle_left", "center_m": [0.0175, 0.014, -0.015], "capsule_m": [0.003, 0.037], "mass_g": 1.5},
+    {"name": "right_front", "parent": "ankle_right", "center_m": [0.018, 0.025, -0.015], "capsule_m": [0.003, 0.037], "mass_g": 1.5},
+    {"name": "right_middle", "parent": "ankle_right", "center_m": [0.0205, 0.006, -0.015], "capsule_m": [0.004, 0.037], "mass_g": 2.5},
+    {"name": "right_rear", "parent": "ankle_right", "center_m": [0.0175, -0.014, -0.015], "capsule_m": [0.003, 0.037], "mass_g": 1.5}
+  ],
+  "wide_traction_sole": [
+    {"name": "left_sole", "parent": "ankle_left", "center_m": [0.0215, -0.007, -0.015], "size_m": [0.003, 0.057, 0.048], "mass_g": 6},
+    {"name": "right_sole", "parent": "ankle_right", "center_m": [0.0215, 0.007, -0.015], "size_m": [0.003, 0.057, 0.048], "mass_g": 6}
+  ]
+}

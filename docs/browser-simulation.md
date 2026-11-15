@@ -14,6 +14,37 @@ Open `http://127.0.0.1:19527/simulate.html` on that PC. Recreate the forward aft
 reconnecting USB. Plain HTTP at the board's Wi-Fi address uses the WebGL 2
 fallback. The renderer badge reports the backend actually initialized.
 
+## Roller skates and exploded views
+
+Open **Skates** or add `?skates=1` to try the upstream roller MJCF with four
+passive wheels. **Roll forward** holds the skate stance with browser position
+actuators and gives the Duck a forward push. **Explode wheels** pauses the
+simulation and separates the four wheels along their axles. Drag to orbit and
+use **Assemble wheels** or **Play** to put them back. Demo includes a skate
+glide each lap. Its walking and beacon trials require the UNO Q worker.
+
+The skate controls include 450 mm and 600 mm tiles with 5 mm recessed grout,
+a carpet approximation with added axle drag, and 6 mm and 12 mm thresholds.
+**Run tow test** compares a rigid mouth mount with a low chassis hitch.
+Both use an elastic simulated line and a 1.5 N breakaway threshold.
+That value is a simulation setting. The model has no actuated jaw and
+cannot establish the grip strength of an actual print.
+
+This browser view uses the upstream roller model without actuator backlash.
+For training, use Luwu's full mjlab model with BAM and use
+`Mjlab-Velocity-Swizzle-XgoDuck` for skating and
+`Mjlab-RollerStandUp-Flat-XgoDuck` for recovery. The registration and asset
+source are pinned in [Luwu's RL repository](https://github.com/LuwuDynamics/xgoduck_rl/blob/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/tasks/__init__.py).
+Check wheel and floor friction, rolling resistance, installed mass, and
+recovery from falls on both sides when adapting the tasks. Keep the four
+wheel joints passive and outside the 14 servo action channels.
+For a sideways obstacle step, train against varied threshold heights, approach
+angles and friction. Check wheel clearance, stable landing, and resuming a
+forward roll on terrain and positions excluded from training.
+
+In **Hardware**, **Explode** separates the shroud, blue expansion board and
+UNO Q so you can see the display cut-outs and where the boards mate.
+
 ## Optional Wi-Fi reboot page
 
 After installation, bookmark `http://<board-wifi-ip>:9528/`. Open that address

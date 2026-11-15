@@ -280,6 +280,206 @@
         "commit": "fa621fc77ad9a05d69da13270e86118bdd3603fe",
         "git_blob": "073009f83b1ecc2c1a2f119db26807b32981a91a"
       }
+    },
+    {
+      "path": "model/roller/assets/head_pitch.STL",
+      "bytes": 58684,
+      "sha256": "b072ace626c387af4fa12c30c264a6100e722f5b41cebd938a6e11e20d43eb7d",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/head_pitch.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "c193af219730ad5aed09749c458271e3afe50a61"
+      }
+    },
+    {
+      "path": "model/roller/assets/head_roll.STL",
+      "bytes": 580534,
+      "sha256": "61f59ac1802f8ded44fe77b87f09fab0f507ab73b9943e771d5a5e69ea6ef5be",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/head_roll.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "fb641ee11d833a776e4560f3ed60f7f19eb4dc99"
+      }
+    },
+    {
+      "path": "model/roller/assets/head_yaw.STL",
+      "bytes": 180484,
+      "sha256": "489587d74dadad10a799ba2505685565b21e9a0d7263b791a0cc61c285c41f26",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/head_yaw.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "7f08d6d00529e65b2741e347365e44cd07fc1b99"
+      }
+    },
+    {
+      "path": "model/roller/assets/left_ankle.STL",
+      "bytes": 135684,
+      "sha256": "a0d61e63dcf96a1c638bd464feb73b135dca593d4fa42baa97f8d84ad4d55762",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/left_ankle.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "f3b4f21a9871cf84c928e255fbcfdacd0b94c67e"
+      }
+    },
+    {
+      "path": "model/roller/assets/left_front_tire.STL",
+      "bytes": 56484,
+      "sha256": "1a4396c9d0767122d8e65e71a5e47c9038aa6dcac46877cef22a4a94b77f3fa9",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/left_front_tire.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "e64ef1f88ee60152db612834b94c855bf478bea4"
+      }
+    },
+    {
+      "path": "model/roller/assets/left_hip_pitch.STL",
+      "bytes": 181284,
+      "sha256": "0ce880c12a9ed93e01ab4d613945234e94b88aae5b7486e97cf2eac763729f8c",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/left_hip_pitch.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "cdc577eedf264a8fb7f2a67bae9d50332b0e3ff3"
+      }
+    },
+    {
+      "path": "model/roller/assets/left_hip_roll.STL",
+      "bytes": 80784,
+      "sha256": "9841477cf8c3aa51d826b36de0400d965c13aeea62c96df7f6fa47068a3258ae",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/left_hip_roll.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "11f2facf1b7a56c2c6f607586b8a47c207fba1bd"
+      }
+    },
+    {
+      "path": "model/roller/assets/left_hip_yaw.STL",
+      "bytes": 129584,
+      "sha256": "ed76f3305838aee51e181d2dedf37b5f480d7f7b7bcaf34bfdb9b79bf82369a0",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/left_hip_yaw.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "a1cf467faf6b238ef9bc10e3ef3c689c060f8e05"
+      }
+    },
+    {
+      "path": "model/roller/assets/left_knee.STL",
+      "bytes": 101184,
+      "sha256": "f2ab0b7b405feba4914ce23acddebebb7c5af9f8baa9ce01eed9e508519f9e19",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/left_knee.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "86819123998e39b1de127931724c97e46ca13dbe"
+      }
+    },
+    {
+      "path": "model/roller/assets/left_rear_tire.STL",
+      "bytes": 55684,
+      "sha256": "4ce23a294b33c9c26debfca6879845567157dd47db796305b4f85c1f6f5f6ac8",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/left_rear_tire.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "6618d887d220c5a7676533bc330ebe8c7ede72f5"
+      }
+    },
+    {
+      "path": "model/roller/assets/neck_pitch.STL",
+      "bytes": 106484,
+      "sha256": "0788d8e329a4c0645c4f3c944e79cf637f364725fac56df177da0b0ec4cf0a2c",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/neck_pitch.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "e3fdda04361e88289e536a537fc745194d7d0143"
+      }
+    },
+    {
+      "path": "model/roller/assets/right_ankle.STL",
+      "bytes": 135384,
+      "sha256": "20ba970b52ecad96312cf0d339d54ddf1f589dbae2324bbd3ffef969e78cca16",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/right_ankle.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "70f52ae13d8e5702b2218540a7cf451117e89ebc"
+      }
+    },
+    {
+      "path": "model/roller/assets/right_front_tire.STL",
+      "bytes": 56484,
+      "sha256": "ebaabad4a83daaf9c801e9138af4adcf937799e0e0d7d648a95db371203438e0",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/right_front_tire.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "36f27e47eac12fc7e27c2d2e79d22955dd2f5dfd"
+      }
+    },
+    {
+      "path": "model/roller/assets/right_hip_pitch.STL",
+      "bytes": 181284,
+      "sha256": "fedc1ca57e718cc2a633b810a0be6a3563ed7e6324d93ec5408b8419207577c3",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/right_hip_pitch.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "8e9232f1fe464b8f7c53732d3742b832c7054385"
+      }
+    },
+    {
+      "path": "model/roller/assets/right_hip_roll.STL",
+      "bytes": 80184,
+      "sha256": "ffbef6ca425964d8e207370545b84e97653dc73616d8626dba67f09146f42d16",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/right_hip_roll.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "db4463abacbb4ff659fa0345cd2cf20f65e4f06f"
+      }
+    },
+    {
+      "path": "model/roller/assets/right_hip_yaw.STL",
+      "bytes": 129584,
+      "sha256": "ec8a13691615f8afae0b4edca6f07c809af309d86921daaa6011a3adb566e8d9",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/right_hip_yaw.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "d30efa2cbee2b08e61691bebf6428e36eb95ccc5"
+      }
+    },
+    {
+      "path": "model/roller/assets/right_knee.STL",
+      "bytes": 101684,
+      "sha256": "9ab687d05c3c9184b1af8b5d85fb585d90ea01557196b10c416ad8e750bded92",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/right_knee.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "f8e46dfc5bb58324a28a21cd04ccac5528861bf6"
+      }
+    },
+    {
+      "path": "model/roller/assets/right_rear_tire.STL",
+      "bytes": 55684,
+      "sha256": "1b050b8a29156218abede1410e4a94f6fce1e09867e6cbf791cd678a7c112583",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/right_rear_tire.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "338845015af4f0053a7410c33a405deabfd7b948"
+      }
+    },
+    {
+      "path": "model/roller/assets/trunk_base.STL",
+      "bytes": 463784,
+      "sha256": "82892da761b4d8790294139b1d6043ec1b89b7f2ed078c7b025cae1baafdb0c0",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/assets/trunk_base.STL",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "14b7f72e26068e560346520412816a9298af0c9b"
+      }
+    },
+    {
+      "path": "model/roller/robot.xml",
+      "bytes": 19711,
+      "sha256": "5097187e42d400f75f9c23f365ecee043aaeb75d5c8a279a2f1b9eb648250a1c",
+      "source": {
+        "url": "https://raw.githubusercontent.com/LuwuDynamics/xgoduck_rl/a4c78aacd5eaa724cf246fe12d24bfe1e837fa50/src/mjlab_microduck/robot/xgoduck_roller/robot.xml",
+        "commit": "a4c78aacd5eaa724cf246fe12d24bfe1e837fa50",
+        "git_blob": "6c69fe79e1361750084ddf7151f8f2ab2b20edcd"
+      }
     }
   ]
 }

@@ -21,6 +21,12 @@ License: model/UPSTREAM-LICENSE
 browser_scene.xml adds a browser playground floor and simulation settings;
 its STAND/SIT/FOLD keyframes are adapted from upstream scene_walk.xml.
 
+XGO Duck roller-skate model
+Same upstream repository and Apache-2.0 license (model/UPSTREAM-LICENSE).
+Pinned commit: a4c78aacd5eaa724cf246fe12d24bfe1e837fa50
+Original model and meshes: model/roller/robot.xml and model/roller/assets/.
+model/roller/browser_scene.xml adds a browser playground floor.
+
 The upstream model contains 14 articulated joints and does not model mouth
 motor 34. The simulator's position actuators are an approximation; upstream
 training uses BAM actuator models. The optional walking trial runs the

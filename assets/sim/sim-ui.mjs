@@ -1,17 +1,20 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
-import {DuckSimulation, parsePose} from './sim-core.mjs';
+import {DuckSimulation, parsePose} from './sim-core.mjs?v=3';
 import {WalkPanel} from './walk-ui.mjs?v=6';
-import {DemoCircuit} from './demo-ui.mjs?v=1';
+import {DemoCircuit} from './demo-ui.mjs?v=2';
 import {QualificationReplay} from './qualification-replay.mjs';
-import {GuardPreview} from './guard-preview.mjs?v=2';
+import {GuardPreview} from './guard-preview.mjs?v=3';
+import {SKATE_SURFACES} from './skate-terrain.mjs';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
 const walk = new WalkPanel();
 const demo = new DemoCircuit(walk, showDemoScene, updateDemoStatus);
 const rolloutMode = name => name === 'walk' || name === 'explore';
+const playground = name => name === 'physics' || name === 'skates';
 let sim, renderer, orbit, camera, scene;
+let stockSim, skateSim, skateLoad, workspaceRequest = 0, wheelsExploded = false;
 let mode = 'pose', running = false, gait = false, gaitTime = 0, selected = 32;
 let demoMode = false;
 let lastPacket = null, lastPacketAt = 0, liveResult = null, stopping = false;
@@ -23,6 +26,7 @@ const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion();
 let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
+let terrain, towLine, towPoint;
 let replay, lastReplayPose, replayModules = [];
 let guardPreview, hardwareAssembly = 'translucent';
 
@@ -54,10 +58,10 @@ function resetCamera() {
 
 function setHardwareCamera(view = 'rear') {
   if (view === 'matrix') {
-    camera.position.set(-.176,.028,.118);
-    orbit.target.set(-.062,.013,.1096);
+    camera.position.set(-.198,.014326,.10888);
+    orbit.target.set(-.074,.014326,.10888);
   } else {
-    camera.position.set(...(view === 'side' ? [-.246,-.414,.241] : [-.466,-.041,.214]));
+    camera.position.set(...(view === 'side' ? [-.271,-.440,.246] : [-.466,-.025,.191]));
     orbit.target.set(-.042,0,.133);
   }
   orbit.update();
@@ -85,7 +89,8 @@ function buildRobot() {
     const collision = model.geom_group[geom] === 3;
     const meshId = model.geom_dataid[geom];
     const name = sim.mj.mj_id2name(model, sim.mj.mjtObj.mjOBJ_MESH.value, meshId) || '';
-    const color = /head_roll|trunk_base/.test(name) ? '#e7e0c8' : /ankle/.test(name) ? '#e1ad58' : /hip_pitch|knee/.test(name) ? '#78b3aa' : '#526f78';
+    const wheel = /^(left|right)_(front|rear)_tire$/.exec(name);
+    const color = wheel ? '#344959' : /head_roll|trunk_base/.test(name) ? '#e7e0c8' : /ankle/.test(name) ? '#e1ad58' : /hip_pitch|knee/.test(name) ? '#78b3aa' : '#526f78';
     const material = collision
       ? new THREE.MeshBasicMaterial({color:'#edc16f', wireframe:true, transparent:true, opacity:0.32, depthWrite:false})
       : new THREE.MeshStandardMaterial({color, roughness:0.43, metalness:0.14, side:THREE.DoubleSide});
@@ -96,7 +101,7 @@ function buildRobot() {
     mesh.visible = !collision;
     const body = model.geom_bodyid[geom];
     const joint = sim.joints.find(joint => joint.index === model.body_jntadr[body]);
-    mesh.userData = {geom, jointId:joint?.id};
+    mesh.userData = {geom, jointId:joint?.id, wheelSide:wheel?.[1], bodyJoint:model.body_jntadr[body]};
     scene.add(mesh);
     (collision ? collisionMeshes : visualMeshes).push(mesh);
   }
@@ -106,13 +111,75 @@ function buildRobot() {
   }
 }
 
+function clearRobot() {
+  for (const mesh of [...visualMeshes, ...collisionMeshes]) {
+    scene.remove(mesh);
+    mesh.material.dispose();
+  }
+  for (const {arrow} of jointMarkers) {
+    scene.remove(arrow);
+    arrow.line.material.dispose();
+    arrow.cone.material.dispose();
+  }
+  for (const geometry of geometryCache.values()) geometry.dispose();
+  visualMeshes.length = collisionMeshes.length = jointMarkers.length = 0;
+  geometryCache.clear();
+}
+
+function buildSkateScene() {
+  terrain = {};
+  for (const [surface, boxes] of Object.entries(SKATE_SURFACES)) {
+    const group = terrain[surface] = new THREE.Group();
+    group.visible = false;
+    scene.add(group);
+    for (const {size, center} of boxes) {
+      const color = surface.startsWith('tiles') ? '#92998e' : '#de9c60';
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshStandardMaterial({color}));
+      mesh.position.set(...center);
+      group.add(mesh);
+    }
+  }
+  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(2.8,1.6),
+    new THREE.MeshStandardMaterial({color:'#524760',roughness:1}));
+  carpet.position.z = .0002;
+  terrain.carpet.add(carpet);
+  towLine = new THREE.Line(new THREE.BufferGeometry().setAttribute('position',
+    new THREE.Float32BufferAttribute(new Float32Array(6),3)), new THREE.LineBasicMaterial({color:'#edc16f'}));
+  towLine.frustumCulled = false;
+  towLine.visible = false;
+  towPoint = new THREE.Mesh(new THREE.SphereGeometry(.008,12,8), new THREE.MeshBasicMaterial({color:'#edc16f'}));
+  towPoint.visible = false;
+  scene.add(towLine,towPoint);
+}
+
+function updateSkateScene() {
+  for (const [name, group] of Object.entries(terrain)) group.visible = mode === 'skates' && sim.surface === name;
+  const tow = mode === 'skates' && sim.tow;
+  towPoint.visible = towLine.visible = Boolean(tow && !wheelsExploded && tow.status === 'Pulling');
+  if (towLine.visible) {
+    tow.samplePoint();
+    const line = towLine.geometry.attributes.position;
+    line.setXYZ(0,...tow.point);
+    line.setXYZ(1,...tow.target);
+    line.needsUpdate = true;
+    towPoint.position.fromArray(tow.target);
+  }
+}
+
 function updateRobot() {
   const data = sim.data;
   for (const mesh of [...visualMeshes, ...collisionMeshes]) {
     const g = mesh.userData.geom, p = g * 3, m = g * 9;
     const a = data.geom_xmat, b = data.geom_xpos;
     matrix.set(a[m],a[m+1],a[m+2],b[p], a[m+3],a[m+4],a[m+5],b[p+1], a[m+6],a[m+7],a[m+8],b[p+2], 0,0,0,1);
+    const {wheelSide, bodyJoint} = mesh.userData;
+    if (wheelsExploded && wheelSide) {
+      const axle = bodyJoint * 3;
+      const direction = (data.xaxis[axle+1] < 0 ? -1 : 1) * (wheelSide === 'left' ? .028 : -.028);
+      for (let i = 0; i < 3; i++) matrix.elements[12+i] += data.xaxis[axle+i] * direction;
+    }
     mesh.matrix.copy(matrix);
+    mesh.matrixWorldNeedsUpdate = true;
     if (mesh.material.emissive) mesh.material.emissive.set(mesh.userData.jointId === selected ? '#332512' : '#000000');
   }
   for (const {joint, arrow} of jointMarkers) {
@@ -123,14 +190,14 @@ function updateRobot() {
 }
 
 function updateRows() {
-  const angles = rolloutMode(mode) || (mode === 'physics' && !sim.hold) ? sim.angles() : sim.targetAngles();
+  const angles = rolloutMode(mode) || (playground(mode) && !sim.hold) ? sim.angles() : sim.targetAngles();
   const freshLive = lastPacket && performance.now()-lastPacketAt<2500 && liveResult?.fresh;
   for (const joint of sim.joints) {
     const row = rows.get(joint.id);
     const missing = mode === 'live' && (!freshLive || ($('live-source').value === 'measured' && !(lastPacket?.servo_ids || []).includes(joint.id)));
     row.output.textContent = missing ? '—' : `${angles[joint.id].toFixed(1)}°`;
     row.input.value = angles[joint.id].toFixed(1);
-    row.input.disabled = rolloutMode(mode) || mode === 'live' || (mode === 'physics' && !sim.hold);
+    row.input.disabled = rolloutMode(mode) || mode === 'live' || (playground(mode) && (!sim.hold || wheelsExploded));
     row.element.classList.toggle('selected', selected === joint.id);
   }
 }
@@ -170,6 +237,7 @@ function updateModeText() {
   const rollout = rolloutMode(mode);
   const replaying = mode === 'replay';
   const hardware = mode === 'hardware';
+  const skates = mode === 'skates';
   const physics = mode === 'walk' || mode === 'physics';
   const tab = demoMode ? 'demo' : physics ? 'walk' : mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === tab));
@@ -178,12 +246,20 @@ function updateModeText() {
   $('demo-card').hidden = !demoMode;
   $('joint-card').hidden = demoMode || replaying || hardware;
   $('qualification-card').hidden = !replaying;
-  $('hardware-card').hidden = $('hardware-intro').hidden = $('hardware-views').hidden = $('hardware-toolbar').hidden = !hardware;
-  $('sim-intro').hidden = $('sim-toolbar').hidden = $('matrix-player').hidden = $('sim-stats').hidden = $('board-strip').hidden = hardware;
+  $('hardware-card').hidden = $('hardware-views').hidden = $('hardware-toolbar').hidden = !hardware;
+  $('sim-toolbar').hidden = $('sim-stats').hidden = hardware;
+  $('matrix-player').hidden = $('board-strip').hidden = hardware || skates;
   $('mode-note').hidden = hardware;
-  $('physics-card').hidden = mode !== 'physics' || demoMode; $('live-card').hidden = mode !== 'live';
+  $('physics-card').hidden = !playground(mode) || demoMode;
+  $('physics-title').textContent = skates ? 'Roller skates' : 'Physics playground';
+  $('skate-tools').hidden = !skates || demoMode;
+  $('skate-settings').hidden = !skates;
+  $('joint-count').textContent = skates ? '14 SERVOS' : '14 DOF';
+  $('explode-wheels').setAttribute('aria-pressed', String(wheelsExploded));
+  $('explode-wheels').textContent = wheelsExploded ? 'Assemble wheels' : 'Explode wheels';
+  $('live-card').hidden = mode !== 'live';
   $('live-source').disabled = demoMode;
-  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode || replaying || hardware;
+  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode || replaying || hardware || skates;
   $('play').hidden = $('reset').hidden = rollout || demoMode;
   $('collisions').parentElement.hidden = rollout;
   $('export').disabled = rollout;
@@ -193,13 +269,15 @@ function updateModeText() {
   $('play').disabled = (mode === 'pose' && !gait) || (replaying && (!replay.frame || replay.duration === 0));
   $('reset').disabled = replaying && !replay.frame;
   $('play').textContent = running ? (mode === 'live' ? 'Freeze view' : 'Pause') : (mode === 'live' ? 'Resume view' : 'Play');
-  $('step').disabled = running || mode !== 'physics';
+  $('step').disabled = running || !playground(mode) || wheelsExploded;
+  $('nudge').disabled = wheelsExploded;
   $('clock-label').textContent = replaying ? 'REPLAY TIME' : gait ? 'PREVIEW TIME' : 'SIM TIME';
-  $('reset').textContent = replaying ? 'Rewind' : mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
+  $('reset').textContent = replaying ? 'Rewind' : playground(mode) ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
   $('scene-mode').parentElement.hidden = hardware;
-  $('scene-mode').textContent = replaying ? 'QUALIFICATION REPLAY' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = skates ? 'PHYSICS / ROLLER SKATES' : replaying ? 'QUALIFICATION REPLAY' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
+    : skates ? 'Roll forward gives the four passive wheels a push. Choose a surface or compare tow mounts in the skate controls.'
     : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
     : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
     : mode === 'live' ? 'Read-only telemetry. Target previews are commanded angles; missing measured joints remain unavailable.'
@@ -210,7 +288,7 @@ function updateModeText() {
 }
 
 function setMode(next) {
-  if (!['pose','physics','walk','explore','live','replay','hardware'].includes(next)) return;
+  if (!['pose','physics','walk','explore','live','replay','hardware','skates'].includes(next)) return;
   if (next === 'hardware' && !guardPreview) {
     guardPreview = new GuardPreview();
     scene.add(guardPreview.group);
@@ -218,8 +296,10 @@ function setMode(next) {
   const changedWalk = mode !== next && (rolloutMode(mode) || rolloutMode(next));
   const changedReplay = mode !== next && (mode === 'replay' || next === 'replay');
   const changedHardware = mode !== next && (mode === 'hardware' || next === 'hardware');
+  const changedSkates = mode !== next && (mode === 'skates' || next === 'skates');
   if (next !== mode && (mode !== 'pose' || next !== 'physics')) sim.reset('STAND');
-  mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
+  mode = next; sim.mode = playground(next) ? 'physics' : next;
+  wheelsExploded = false; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
   walk.setMode(mode, demoMode);
   if (changedWalk) searchWorld.visible = false;
   if (changedWalk) { walkRun = null; resetCamera(); }
@@ -230,7 +310,7 @@ function setMode(next) {
     resetCamera();
   }
   if (guardPreview) guardPreview.group.visible = mode === 'hardware';
-  if (changedHardware) resetCamera();
+  if (changedHardware || changedSkates) resetCamera();
   sim.data.qvel.fill(0); sim.accumulator = 0;
   if (mode === 'live' && lastPacket && performance.now()-lastPacketAt<2500) liveResult = sim.applyTelemetry(lastPacket, $('live-source').value);
   updateModeText();
@@ -247,13 +327,49 @@ function startGait() {
 }
 
 function startDrop() {
-  sim.drop(); running = true; updateModeText();
+  wheelsExploded = false; sim.drop(); running = true; updateModeText();
 }
 
-function showDemoScene(name, preset) {
+function startSkateRoll() {
+  wheelsExploded = false;
+  sim.reset();
+  if (!demoMode) $('hold').checked = true;
+  sim.setHold(true);
+  sim.data.qvel[0] = .28;
+  running = true;
+  resetCamera();
+  updateModeText();
+}
+
+async function prepareSkates() {
+  if (skateSim) return;
+  skateLoad ??= DuckSimulation.create(undefined, {skates:true}).then(loaded => {
+    if (stopping) loaded.dispose();
+    else skateSim = loaded;
+  }).finally(() => { skateLoad = null; });
+  await skateLoad;
+}
+
+function useSimulation(next) {
+  const nextSim = next === 'skates' ? skateSim : stockSim;
+  if (sim === nextSim) return;
+  clearRobot();
+  sim = nextSim;
+  sim.setHold($('hold').checked);
+  sim.setGravity(Number($('gravity').value));
+  sim.setFriction(Number($('friction').value));
+  if (sim.skates) sim.setSurface(demoMode ? 'flat' : $('skate-surface').value);
+  buildRobot();
+}
+
+async function showDemoScene(name, preset, signal) {
+  if (name === 'skates') await prepareSkates();
+  signal.throwIfAborted();
+  useSimulation(name);
   if (name === 'pose') applyPreset(preset);
   else if (name === 'gait') startGait();
   else if (name === 'drop') { setMode('physics'); startDrop(); }
+  else if (name === 'skates') { setMode('skates'); startSkateRoll(); }
   else setMode(name);
 }
 
@@ -264,18 +380,34 @@ function updateDemoStatus(message, progress, active) {
   if (demoMode && !active) running = false;
 }
 
-function selectWorkspace(next) {
+async function selectWorkspace(next) {
+  if (next === 'demo' && demoMode) return;
+  const request = ++workspaceRequest;
+  if (next !== 'demo') {
+    demoMode = false;
+    demo.stop();
+  }
+  if (next === 'skates' && !skateSim) {
+    $('loading-message').textContent = 'Loading the roller skate model…';
+    $('loading').hidden = false;
+    try {
+      await prepareSkates();
+    } catch (error) {
+      if (request === workspaceRequest) showError(error);
+      return;
+    } finally {
+      if (request === workspaceRequest) $('loading').hidden = true;
+    }
+    if (stopping || request !== workspaceRequest) return;
+  }
+  $('loading').hidden = true;
+  useSimulation(next);
   if (next === 'demo') {
-    if (demoMode) return;
     demoMode = true;
     setMode('pose');
     updateDemoStatus('Starting the demo…', 'LOOP', true);
     void demo.start();
-  } else {
-    demoMode = false;
-    demo.stop();
-    setMode(next);
-  }
+  } else setMode(next);
 }
 
 function animateGait(dt) {
@@ -445,8 +577,10 @@ function attachControls() {
   for (const id of ['reset','camera','gait','export','import']) $(id).disabled = false;
   $('reset').addEventListener('click', () => {
     if (mode === 'replay') { replay.seek(0); return; }
+    wheelsExploded = false;
     sim.reset('STAND'); gaitTime = 0;
-    if (mode === 'pose') { gait=false; running=false; }
+    if (mode === 'pose' || mode === 'skates') { gait=false; running=false; }
+    if (mode === 'skates') resetCamera();
     updateModeText();
   });
   $('camera').addEventListener('click', resetCamera);
@@ -456,9 +590,9 @@ function attachControls() {
   $('hardware-test-pattern').addEventListener('change', event => guardPreview.setTestPattern(event.target.checked));
   const assemblies = document.querySelectorAll('[data-assembly]');
   const hardwareNotes = {
-    cutout: 'A shallow bevel opens the view to the matrix. The shell covers the rest of the board face.',
-    translucent: 'The recessed window closes the opening over the LEDs. The shell supports the window around its perimeter.',
-    exploded: 'The shell pulls back along the dashed guides to reveal the board stack and attachment points.',
+    cutout: 'The faceplate shields the carrier. Its opening lines up with the carrier’s existing matrix cut-out.',
+    translucent: 'The optional translucent window covers the display opening. Air can still pass around the open edges.',
+    exploded: 'The shroud and blue carrier separate to expose the inner UNO Q, its matrix and the mated headers.',
   };
   for (const button of assemblies) {
     button.addEventListener('click', () => {
@@ -473,7 +607,29 @@ function attachControls() {
   }
   $('play').addEventListener('click', () => {
     if (mode === 'replay' && !running && replay.time >= replay.duration) replay.seek(0);
+    wheelsExploded = false;
     running = !running; sim.accumulator = 0; updateModeText();
+  });
+  $('roll-forward').addEventListener('click', startSkateRoll);
+  $('skate-surface').addEventListener('change', event => {
+    sim.setSurface(event.target.value);
+    sim.reset();
+    wheelsExploded = running = false;
+    resetCamera();
+    updateModeText();
+  });
+  $('start-tow').addEventListener('click', () => {
+    wheelsExploded = false;
+    sim.startTow($('tow-mount').value);
+    $('hold').checked = true;
+    running = true;
+    resetCamera();
+    updateModeText();
+  });
+  $('explode-wheels').addEventListener('click', () => {
+    wheelsExploded = !wheelsExploded;
+    running = false;
+    updateModeText();
   });
   $('gait').addEventListener('click', () => {
     if (gait) { gait = false; running = false; updateModeText(); }
@@ -481,7 +637,7 @@ function attachControls() {
   });
   $('drop').addEventListener('click', startDrop);
   $('nudge').addEventListener('click', () => sim.nudge());
-  $('step').addEventListener('click', () => { if (!running && mode === 'physics') sim.step(10); });
+  $('step').addEventListener('click', () => { if (!running && playground(mode) && !wheelsExploded) sim.step(10); });
   $('hold').addEventListener('change', () => { sim.setHold($('hold').checked); updateRows(); });
   $('gravity').addEventListener('input', () => { sim.setGravity(Number($('gravity').value)); $('gravity-value').textContent = `${Number($('gravity').value).toFixed(2)} m/s²`; });
   $('friction').addEventListener('input', () => { sim.setFriction(Number($('friction').value)); $('friction-value').textContent = Number($('friction').value).toFixed(2); });
@@ -501,7 +657,7 @@ function attachControls() {
     try {
       if (file.size > 65536) throw new Error('Pose files must be smaller than 64 KB.');
       const angles = parsePose(JSON.parse(await file.text()), sim.joints);
-      setMode('pose'); sim.applyPose(angles); updateRows();
+      await selectWorkspace('pose'); sim.applyPose(angles); updateRows();
       $('pose-message').textContent = 'Pose loaded locally. No motor commands sent.';
     } catch (error) { $('pose-message').textContent = error.message; }
     $('pose-file').value = '';
@@ -526,7 +682,7 @@ function frame(time) {
   const dt = previousFrame ? Math.min((time-previousFrame)/1000,0.05) : 0;
   previousFrame = time;
   try {
-    if (running && mode === 'physics') sim.advance(dt*Number($('speed').value));
+    if (running && playground(mode)) sim.advance(dt*Number($('speed').value));
     if (running && mode === 'pose' && gait) animateGait(dt);
     if (rolloutMode(mode)) animateWalk(dt);
     if (mode === 'replay') {
@@ -534,6 +690,7 @@ function frame(time) {
       applyReplayPose();
     }
     if (mode === 'hardware') guardPreview.followTrunk(sim.data.qpos);
+    updateSkateScene();
     updateRobot(); orbit.update(); renderer.render(scene,camera);
     fpsFrames++;
     if (time-fpsStart>600) { fps=fpsFrames*1000/(time-fpsStart); fpsFrames=0; fpsStart=time; }
@@ -541,8 +698,14 @@ function frame(time) {
       $('fps').textContent = Math.round(fps);
       $('sim-time').textContent = (mode === 'replay' ? replay.time : rolloutMode(mode) ? rolloutPacket()?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
       $('contacts').textContent = mode === 'replay' ? replay.frame?.contacts ?? '—'
-        : rolloutMode(mode) ? rolloutPacket()?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
+        : rolloutMode(mode) ? rolloutPacket()?.contacts ?? '—' : playground(mode) ? sim.data.ncon : '—';
       $('height').textContent = (sim.data.qpos[2]*100).toFixed(1);
+      if (mode === 'skates') {
+        const tow = sim.tow;
+        $('tow-status').textContent = tow
+          ? `${tow.status} · ${tow.tension.toFixed(2)} N · peak ${tow.peak.toFixed(2)} N`
+          : 'The simulated hitch releases at 1.5 N.';
+      }
       updateRows(); updateBoard(); lastHud=time;
     }
   } catch (error) { demo.stop(); running=false; updateModeText(); showError(error); }
@@ -576,11 +739,12 @@ async function start() {
   searchBeacon = new THREE.Mesh(new THREE.SphereGeometry(.068,16,12), new THREE.MeshBasicMaterial({color:'#ffcb72'}));
   searchWaypoint = new THREE.Mesh(new THREE.SphereGeometry(.022,12,8), new THREE.MeshBasicMaterial({color:'#90aafa'}));
   scene.add(searchWorld);
+  buildSkateScene();
   const resize = new ResizeObserver(() => {
     const width = viewport.clientWidth, height = viewport.clientHeight;
     camera.aspect=width/height; camera.updateProjectionMatrix(); renderer.setSize(width,height,false);
   }); resize.observe(viewport);
-  sim = await DuckSimulation.create();
+  sim = stockSim = await DuckSimulation.create();
   replay = new QualificationReplay($('qualification-card'), sim.joints.map(joint => joint.id), action => {
     if (mode !== 'replay') return;
     if (action !== 'variant') running = false;
@@ -601,16 +765,20 @@ async function start() {
     demo.pageHidden();
     if (event.persisted || stopping) return;
     stopping=true; walk.setVisible(false); resize.disconnect(); renderer.setAnimationLoop(null); orbit.dispose();
-    for (const mesh of [...visualMeshes,...collisionMeshes]) mesh.material.dispose();
-    for (const geometry of geometryCache.values()) geometry.dispose();
+    clearRobot();
     wallGeometry.dispose(); wallMaterial.dispose();
     for (const marker of [searchBeacon, searchWaypoint]) { marker.geometry.dispose(); marker.material.dispose(); }
     updateReplayModules();
+    for (const group of Object.values(terrain)) group.traverse(({geometry,material}) => {
+      geometry?.dispose(); material?.dispose();
+    });
+    for (const marker of [towLine,towPoint]) { marker.geometry.dispose(); marker.material.dispose(); }
     guardPreview?.dispose();
-    sim.dispose(); renderer.dispose();
+    stockSim.dispose(); skateSim?.dispose(); renderer.dispose();
   });
   const query = new URLSearchParams(location.search);
   if (query.get('hardware') === '1') selectWorkspace('hardware');
+  else if (query.get('skates') === '1') selectWorkspace('skates');
   else if (query.get('replay') === '1') selectWorkspace('replay');
   else if (query.get('demo') === '1') selectWorkspace('demo');
 }

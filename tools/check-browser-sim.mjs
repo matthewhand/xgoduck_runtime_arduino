@@ -72,3 +72,68 @@ try {
 } finally {
   sim.dispose();
 }
+
+const skates = await DuckSimulation.create(read, {skates:true});
+try {
+  assert.equal(skates.model.nq,25);
+  assert.equal(skates.model.nu,14);
+  skates.setFriction(.7);
+  for (const geom of skates.wheelCollisions) assert.equal(skates.model.geom_friction[geom*3], .7);
+  const passiveWheels = ['LF','LR','RF','RR'].map(name => {
+    const index = skates.mj.mj_name2id(skates.model, skates.mj.mjtObj.mjOBJ_JOINT.value, `passive_${name}_wheel`);
+    assert(index >= 0);
+    return skates.model.jnt_qposadr[index];
+  });
+  skates.setHold(true);
+  skates.data.qvel[0] = .28;
+  skates.step(250);
+  assert(skates.data.qpos[0] > .03, 'The skate model should roll forward');
+  assert(passiveWheels.every(address => Math.abs(skates.data.qpos[address]) > .5),
+    'All four passive wheels must turn under ground load');
+  const contacts = new Set();
+  const vector = skates.data.contact;
+  for (let index = 0; index < skates.data.ncon; index++) {
+    const geom = vector.get(index).geom;
+    if (geom[0] === skates.floor) contacts.add(geom[1]);
+    if (geom[1] === skates.floor) contacts.add(geom[0]);
+  }
+  assert(skates.wheelCollisions.every(geom => contacts.has(geom)), 'All four tires must contact the floor');
+  skates.reset();
+  assert(passiveWheels.every(address => skates.data.qpos[address] === 0));
+  console.log('PASS: four passive wheels roll on the floor and reset to the upstream skate pose');
+
+  function rollOn(surface) {
+    skates.setSurface(surface);
+    skates.reset();
+    skates.data.qvel[0] = .28;
+    const touched = new Set();
+    for (let tick = 0; tick < 100; tick++) {
+      skates.step(10);
+      for (let index = 0; index < skates.data.ncon; index++) {
+        for (const id of skates.data.contact.get(index).geom) {
+          touched.add(skates.mj.mj_id2name(skates.model,skates.mj.mjtObj.mjOBJ_GEOM.value,id));
+        }
+      }
+    }
+    return {distance:skates.data.qpos[0], touched};
+  }
+  const flat = rollOn('flat');
+  assert(![...flat.touched].some(name => /^(tile_|bump_)/.test(name ?? '')));
+  assert([...rollOn('tiles').touched].some(name => /^tile_[0-9]/.test(name ?? '')));
+  assert([...rollOn('tiles-xl').touched].some(name => /^tile_xl_/.test(name ?? '')));
+  assert(rollOn('carpet').distance < flat.distance * .7);
+  assert(rollOn('bumps').touched.has('bump_6mm'));
+  console.log('PASS: surface switches change floor contact and carpet rolling distance');
+
+  skates.setSurface('flat');
+  for (const mount of ['mouth','chassis']) {
+    skates.startTow(mount);
+    for (let index = 0; index < 45; index++) skates.step(50);
+    assert(skates.tow.peak > 0 && skates.tow.peak < 1.5);
+    assert.equal(skates.tow.tension,0);
+    assert(skates.data.xfrc_applied.every(force => force === 0), 'The tow releases all force');
+  }
+  console.log('PASS: both tow points receive a bounded force that clears on release');
+} finally {
+  skates.dispose();
+}
