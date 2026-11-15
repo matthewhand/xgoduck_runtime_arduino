@@ -102,6 +102,24 @@ same tab. The 14 mm shift also interferes. This checks the stock holder and
 enclosure mount surfaces. A redesigned mount or enclosure needs a new fit
 check before using an inset in the walking and get-up trials.
 
+The cushioned version keeps the same rear envelope and stock mounting
+position. Its rounded skids sit over proposed TPU pads. Retain the pads
+mechanically so a skid can take floor contact and transfer the load to the
+chassis mounts. The translucent window is now the default preview. It is
+1.4 mm thick in the mock-up, supported around its edge, and set back 4.3 mm
+from the skid tips. The opaque shell and translucent insert can still form
+one multi-tool print. Check the fit of the skid and pad separately.
+[Flexible filament guidance](https://help.prusa3d.com/article/flexible-materials_2057)
+
+The `v5_cushioned_guard_30g` example models the shell and skids as rigid
+shapes with 30 g of added mass. It passed nine of ten scenarios and walked
+2.44 m in 20 seconds versus 2.59 m for stock. The right-side fall failed
+to recover across the 26–36 g range tested. At 34 and 36 g, the late Bash
+also missed the forward-distance gate. The trial does not model pad flex or
+measure impact forces on the electronics. Use qualification replay to compare
+the recorded right-side fall, and weigh the actual assembly before applying
+the result to a print.
+
 #### Check before printing the full enclosure
 
 - Measure the assembled board stack, mounting points, tallest components and
@@ -126,8 +144,9 @@ check before using an inset in the walking and get-up trials.
   [Multi-material modeling](https://help.prusa3d.com/article/modeling-with-3d-printing-in-mind_164135) ·
   [PETG material guide](https://help.prusa3d.com/article/petg_2059)
 - Fit the prototype with power off. Verify that a slow hand roll touches the
-  rails before the window, plug or switch. Compare UNO Q temperatures with
-  the shell installed and removed under the same workload and ambient
+  skids before the window, plug or switch. Check that pads stay captured and
+  the skids have clearance from the board and window through pad compression.
+  Compare UNO Q temperatures with the shell installed and removed under the same workload and ambient
   conditions. Weigh the complete enclosure and rerun walking and recovery
   qualification with its measured mass, center and contact surfaces.
 

@@ -16,8 +16,8 @@
     <section class="stage-panel" aria-label="3D Duck workspace">
       <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button><button data-mode="hardware" aria-pressed="false" disabled>Hardware</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
       <div class="hardware-views" id="hardware-views" role="group" aria-label="Backpack configuration" hidden>
-        <button type="button" data-assembly="cutout" aria-pressed="true">Open cut-out</button>
-        <button type="button" data-assembly="translucent" aria-pressed="false">Translucent window</button>
+        <button type="button" data-assembly="cutout" aria-pressed="false">Open cut-out</button>
+        <button type="button" data-assembly="translucent" aria-pressed="true">Translucent window</button>
         <button type="button" data-assembly="exploded" aria-pressed="false">Show mounts</button>
       </div>
       <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit, scroll to zoom.">
@@ -55,10 +55,10 @@
     <aside class="controls-panel">
       <section class="card hardware-card" id="hardware-card" hidden>
         <div class="section-heading"><h2>Enclosure mock-up</h2></div>
-        <p id="hardware-note" role="status">A shallow bevel opens the view to the matrix. The shell covers the rest of the board face.</p>
+        <p id="hardware-note" role="status">The recessed window closes the opening over the LEDs. The shell supports the window around its perimeter.</p>
         <dl class="hardware-legend">
           <div><dt>8 × 13 LED matrix</dt><dd>Use the close-up and light every pixel to inspect the opening.</dd></div>
-          <div><dt>Rounded rails</dt><dd>The rails stand proud of the face and window, where the floor would bear during a roll.</dd></div>
+          <div><dt>Cushioned skids</dt><dd>The rounded outer skids take floor contact. Orange shows where cushioning sits behind them.</dd></div>
           <div><dt>Recessed fasteners</dt><dd>Show mounts separates the shell from the board stack to reveal where it would attach.</dd></div>
         </dl>
         <p class="muted">Check fit, USB-C and button clearance, roll contact, and window readability on the assembled V5 before printing the final part.</p>
@@ -153,5 +153,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=18"></script>
+<script type="module" src="sim/sim-ui.mjs?v=19"></script>
 </body></html>

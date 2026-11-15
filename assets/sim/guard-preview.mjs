@@ -67,6 +67,22 @@ function skirtGeometry(outer) {
     .applyMatrix4(PROFILE_TO_TRUNK).translate(FACE_X + .00002, 0, 0);
 }
 
+function cushionedSkidGeometry() {
+  const geometry = new THREE.CapsuleGeometry(.006, .064, 6, 16).rotateX(Math.PI / 2);
+  const faces = geometry.index.array;
+  const positions = geometry.attributes.position;
+  const skid = [], cushion = [];
+  for (let index = 0; index < faces.length; index += 3) {
+    const a = faces[index], b = faces[index + 1], c = faces[index + 2];
+    const outerFace = positions.getX(a) + positions.getX(b) + positions.getX(c) < 0;
+    (outerFace ? skid : cushion).push(a, b, c);
+  }
+  geometry.setIndex([...skid, ...cushion]);
+  geometry.addGroup(0, skid.length, 0);
+  geometry.addGroup(skid.length, cushion.length, 1);
+  return geometry;
+}
+
 export class GuardPreview {
   constructor() {
     this.group = new THREE.Group();
@@ -76,12 +92,13 @@ export class GuardPreview {
 
     const matte = color => new THREE.MeshStandardMaterial({color, roughness:.56});
     const board = matte('#126b65'), rail = matte('#579eb5'), mount = matte('#efaf51');
+    const cushion = matte('#d47c47');
     const plastic = matte('#152229'), alloy = matte('#abb9c2'), contact = matte('#b5a276');
     const casing = new THREE.MeshStandardMaterial({color:'#263d4b', roughness:.66, side:THREE.DoubleSide});
     const bevel = new THREE.MeshStandardMaterial({color:'#365d6c', roughness:.67, side:THREE.DoubleSide});
     const baffle = new THREE.MeshStandardMaterial({color:'#14232b', roughness:.9, side:THREE.DoubleSide});
     const window = new THREE.MeshStandardMaterial({
-      color:'#a6d8e6', roughness:.68, transparent:true, opacity:.38, depthWrite:false, side:THREE.DoubleSide,
+      color:'#a6d8e6', roughness:.65, transparent:true, opacity:.32, depthWrite:false,
     });
 
     function add(geometry, material, parent, position = [0, 0, 0]) {
@@ -137,20 +154,21 @@ export class GuardPreview {
     add(plateGeometry(baffleEdge, BAFFLE_X, innerOpening), baffle, this.shell);
     add(skirtGeometry(cover), casing, this.shell);
 
-    // Represent the translucent co-print region. The optical finish depends on the print.
+    // The insert overlaps the aperture wall so the shell supports it all around.
     const insert = roundedProfile(.0006, .0257, -.0476, -.0111, .0021);
-    this.insert = add(plateGeometry(insert, FACE_X + .001, null), window, this.shell);
+    const windowGeometry = new THREE.ExtrudeGeometry(new THREE.Shape(insert), {depth:.0014, bevelEnabled:false})
+      .applyMatrix4(PROFILE_TO_TRUNK).translate(FACE_X + .0018, 0, 0);
+    this.insert = add(windowGeometry, window, this.shell);
 
     const cap = add(new THREE.CylinderGeometry(.0025,.0025,.0012,24), rail,
       this.shell, [FACE_X - .0005,-.020,.0074]);
     cap.rotation.z = Math.PI / 2;
 
     const guides = [];
+    const skidGeometry = cushionedSkidGeometry();
     for (const side of [-1, 1]) {
       const y = side * MOUNT_Y;
-      const bumper = add(new THREE.CapsuleGeometry(.006,.064,6,16), rail,
-        this.shell, [-.062,y,BOARD_Z]);
-      bumper.rotation.x = Math.PI / 2;
+      add(skidGeometry, [rail, cushion], this.shell, [-.062,y,BOARD_Z]);
       for (const z of MOUNT_Z) {
         // Proposed enclosure fasteners on the outside and mounting tabs behind them.
         const seat = add(new THREE.TorusGeometry(.0021,.00055,8,20), mount,
@@ -164,7 +182,7 @@ export class GuardPreview {
       new THREE.LineDashedMaterial({color:'#efaf51',dashSize:.003,gapSize:.002}));
     this.guides.computeLineDistances();
     this.group.add(this.guides);
-    this.show('cutout');
+    this.show('translucent');
   }
 
   show(assembly) {
@@ -191,7 +209,8 @@ export class GuardPreview {
     const geometries = new Set(), materials = new Set();
     this.group.traverse(({geometry, material}) => {
       if (geometry) geometries.add(geometry);
-      if (material) materials.add(material);
+      if (Array.isArray(material)) material.forEach(item => materials.add(item));
+      else if (material) materials.add(material);
     });
     this.leds.dispose();
     for (const geometry of geometries) geometry.dispose();

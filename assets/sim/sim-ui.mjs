@@ -4,7 +4,7 @@ import {DuckSimulation, parsePose} from './sim-core.mjs';
 import {WalkPanel} from './walk-ui.mjs?v=6';
 import {DemoCircuit} from './demo-ui.mjs?v=1';
 import {QualificationReplay} from './qualification-replay.mjs';
-import {GuardPreview} from './guard-preview.mjs';
+import {GuardPreview} from './guard-preview.mjs?v=2';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
@@ -24,7 +24,7 @@ const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion()
 let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
 let replay, lastReplayPose, replayModules = [];
-let guardPreview, hardwareAssembly = 'cutout';
+let guardPreview, hardwareAssembly = 'translucent';
 
 function showError(error) {
   $('error').hidden = false;
@@ -457,7 +457,7 @@ function attachControls() {
   const assemblies = document.querySelectorAll('[data-assembly]');
   const hardwareNotes = {
     cutout: 'A shallow bevel opens the view to the matrix. The shell covers the rest of the board face.',
-    translucent: 'Print the opaque shell and translucent insert together as one part. The tint is illustrative. Check pixel clarity on a print sample.',
+    translucent: 'The recessed window closes the opening over the LEDs. The shell supports the window around its perimeter.',
     exploded: 'The shell pulls back along the dashed guides to reveal the board stack and attachment points.',
   };
   for (const button of assemblies) {

@@ -22,6 +22,11 @@
     {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
     {"name": "usb_hub_tray_and_cables", "parent": "trunk_base", "center_m": [-0.052, 0, -0.022], "size_m": [0.014, 0.102, 0.038], "mass_g": 90}
   ],
+  "v5_cushioned_guard_30g": [
+    {"name": "shell", "parent": "trunk_base", "center_m": [-0.05525, 0, -0.020], "size_m": [0.0205, 0.064, 0.076], "mass_g": 22},
+    {"name": "skid_left", "parent": "trunk_base", "center_m": [-0.062, 0.033, -0.020], "capsule_m": [0.006, 0.076], "mass_g": 4},
+    {"name": "skid_right", "parent": "trunk_base", "center_m": [-0.062, -0.033, -0.020], "capsule_m": [0.006, 0.076], "mass_g": 4}
+  ],
   "retail_hub_square_55g": [
     {"name": "rail_left", "parent": "trunk_base", "center_m": [-0.053, 0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
     {"name": "rail_right", "parent": "trunk_base", "center_m": [-0.053, -0.028, -0.023], "capsule_m": [0.006, 0.058], "mass_g": 6},
