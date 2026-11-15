@@ -4,6 +4,7 @@ import {DuckSimulation, parsePose} from './sim-core.mjs';
 import {WalkPanel} from './walk-ui.mjs?v=6';
 import {DemoCircuit} from './demo-ui.mjs?v=1';
 import {QualificationReplay} from './qualification-replay.mjs';
+import {GuardPreview} from './guard-preview.mjs';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
@@ -23,6 +24,7 @@ const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion()
 let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
 let replay, lastReplayPose, replayModules = [];
+let guardPreview, hardwareAssembly = 'cutout';
 
 function showError(error) {
   $('error').hidden = false;
@@ -31,6 +33,11 @@ function showError(error) {
 
 function resetCamera() {
   orbit.maxDistance = mode === 'explore' ? 4.5 : 1.8;
+  orbit.minDistance = mode === 'hardware' ? .075 : .15;
+  if (mode === 'hardware') {
+    setHardwareCamera(hardwareAssembly === 'exploded' ? 'side' : 'rear');
+    return;
+  }
   if (mode === 'explore') {
     camera.position.set(1.85, -2.25, 2.25);
     orbit.target.set(.78, 0, .04);
@@ -42,6 +49,17 @@ function resetCamera() {
   const y = follow ? sim.data.qpos[1] : 0;
   camera.position.set(x+0.36, y-0.43, 0.28);
   orbit.target.set(x+0.012, y, 0.145);
+  orbit.update();
+}
+
+function setHardwareCamera(view = 'rear') {
+  if (view === 'matrix') {
+    camera.position.set(-.176,.028,.118);
+    orbit.target.set(-.062,.013,.1096);
+  } else {
+    camera.position.set(...(view === 'side' ? [-.246,-.414,.241] : [-.466,-.041,.214]));
+    orbit.target.set(-.042,0,.133);
+  }
   orbit.update();
 }
 
@@ -151,21 +169,26 @@ function buildJointControls() {
 function updateModeText() {
   const rollout = rolloutMode(mode);
   const replaying = mode === 'replay';
+  const hardware = mode === 'hardware';
   const physics = mode === 'walk' || mode === 'physics';
   const tab = demoMode ? 'demo' : physics ? 'walk' : mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === tab));
   $('physics-controller-label').hidden = !physics || demoMode;
   if (physics) $('physics-controller').value = mode;
   $('demo-card').hidden = !demoMode;
-  $('joint-card').hidden = demoMode || replaying;
+  $('joint-card').hidden = demoMode || replaying || hardware;
   $('qualification-card').hidden = !replaying;
+  $('hardware-card').hidden = $('hardware-intro').hidden = $('hardware-views').hidden = $('hardware-toolbar').hidden = !hardware;
+  $('sim-intro').hidden = $('sim-toolbar').hidden = $('matrix-player').hidden = $('sim-stats').hidden = $('board-strip').hidden = hardware;
+  $('mode-note').hidden = hardware;
   $('physics-card').hidden = mode !== 'physics' || demoMode; $('live-card').hidden = mode !== 'live';
   $('live-source').disabled = demoMode;
-  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode || replaying;
+  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode || replaying || hardware;
   $('play').hidden = $('reset').hidden = rollout || demoMode;
   $('collisions').parentElement.hidden = rollout;
   $('export').disabled = rollout;
-  collisionMeshes.forEach(mesh => { mesh.visible = !rollout && $('collisions').checked; });
+  collisionMeshes.forEach(mesh => { mesh.visible = !rollout && !hardware && $('collisions').checked; });
+  jointMarkers.forEach(({arrow}) => { arrow.visible = !hardware && $('axes').checked; });
   $('gait').classList.toggle('active', gait);
   $('play').disabled = (mode === 'pose' && !gait) || (replaying && (!replay.frame || replay.duration === 0));
   $('reset').disabled = replaying && !replay.frame;
@@ -173,6 +196,7 @@ function updateModeText() {
   $('step').disabled = running || mode !== 'physics';
   $('clock-label').textContent = replaying ? 'REPLAY TIME' : gait ? 'PREVIEW TIME' : 'SIM TIME';
   $('reset').textContent = replaying ? 'Rewind' : mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
+  $('scene-mode').parentElement.hidden = hardware;
   $('scene-mode').textContent = replaying ? 'QUALIFICATION REPLAY' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
@@ -186,9 +210,14 @@ function updateModeText() {
 }
 
 function setMode(next) {
-  if (!['pose','physics','walk','explore','live','replay'].includes(next)) return;
+  if (!['pose','physics','walk','explore','live','replay','hardware'].includes(next)) return;
+  if (next === 'hardware' && !guardPreview) {
+    guardPreview = new GuardPreview();
+    scene.add(guardPreview.group);
+  }
   const changedWalk = mode !== next && (rolloutMode(mode) || rolloutMode(next));
   const changedReplay = mode !== next && (mode === 'replay' || next === 'replay');
+  const changedHardware = mode !== next && (mode === 'hardware' || next === 'hardware');
   if (next !== mode && (mode !== 'pose' || next !== 'physics')) sim.reset('STAND');
   mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
   walk.setMode(mode, demoMode);
@@ -200,6 +229,8 @@ function setMode(next) {
     if (mode === 'replay') applyReplayPose();
     resetCamera();
   }
+  if (guardPreview) guardPreview.group.visible = mode === 'hardware';
+  if (changedHardware) resetCamera();
   sim.data.qvel.fill(0); sim.accumulator = 0;
   if (mode === 'live' && lastPacket && performance.now()-lastPacketAt<2500) liveResult = sim.applyTelemetry(lastPacket, $('live-source').value);
   updateModeText();
@@ -419,6 +450,27 @@ function attachControls() {
     updateModeText();
   });
   $('camera').addEventListener('click', resetCamera);
+  for (const button of document.querySelectorAll('[data-hardware-camera]')) {
+    button.addEventListener('click', () => setHardwareCamera(button.dataset.hardwareCamera));
+  }
+  $('hardware-test-pattern').addEventListener('change', event => guardPreview.setTestPattern(event.target.checked));
+  const assemblies = document.querySelectorAll('[data-assembly]');
+  const hardwareNotes = {
+    cutout: 'A shallow bevel opens the view to the matrix. The shell covers the rest of the board face.',
+    translucent: 'Print the opaque shell and translucent insert together as one part. The tint is illustrative. Check pixel clarity on a print sample.',
+    exploded: 'The shell pulls back along the dashed guides to reveal the board stack and attachment points.',
+  };
+  for (const button of assemblies) {
+    button.addEventListener('click', () => {
+      const assembly = button.dataset.assembly;
+      guardPreview.show(assembly);
+      for (const option of assemblies) option.setAttribute('aria-pressed', String(option === button));
+      $('hardware-note').textContent = hardwareNotes[assembly];
+      const changedMountView = (hardwareAssembly === 'exploded') !== (assembly === 'exploded');
+      hardwareAssembly = assembly;
+      if (changedMountView) resetCamera();
+    });
+  }
   $('play').addEventListener('click', () => {
     if (mode === 'replay' && !running && replay.time >= replay.duration) replay.seek(0);
     running = !running; sim.accumulator = 0; updateModeText();
@@ -460,7 +512,7 @@ function attachControls() {
   let down = null;
   renderer.domElement.addEventListener('pointerdown', event => { down = {x:event.clientX,y:event.clientY}; });
   renderer.domElement.addEventListener('pointerup', event => {
-    if (!down || Math.hypot(down.x-event.clientX,down.y-event.clientY)>5) return;
+    if (mode === 'hardware' || !down || Math.hypot(down.x-event.clientX,down.y-event.clientY)>5) return;
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.set((event.clientX-rect.left)/rect.width*2-1, -(event.clientY-rect.top)/rect.height*2+1);
     raycaster.setFromCamera(pointer,camera);
@@ -481,6 +533,7 @@ function frame(time) {
       if (running && !replay.advance(dt)) { running = false; updateModeText(); }
       applyReplayPose();
     }
+    if (mode === 'hardware') guardPreview.followTrunk(sim.data.qpos);
     updateRobot(); orbit.update(); renderer.render(scene,camera);
     fpsFrames++;
     if (time-fpsStart>600) { fps=fpsFrames*1000/(time-fpsStart); fpsFrames=0; fpsStart=time; }
@@ -553,10 +606,12 @@ async function start() {
     wallGeometry.dispose(); wallMaterial.dispose();
     for (const marker of [searchBeacon, searchWaypoint]) { marker.geometry.dispose(); marker.material.dispose(); }
     updateReplayModules();
+    guardPreview?.dispose();
     sim.dispose(); renderer.dispose();
   });
   const query = new URLSearchParams(location.search);
-  if (query.get('replay') === '1') selectWorkspace('replay');
+  if (query.get('hardware') === '1') selectWorkspace('hardware');
+  else if (query.get('replay') === '1') selectWorkspace('replay');
   else if (query.get('demo') === '1') selectWorkspace('demo');
 }
 

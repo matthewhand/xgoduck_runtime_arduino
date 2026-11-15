@@ -4,16 +4,22 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=6">
+  <link rel="stylesheet" href="sim/sim.css?v=8">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
 <main>
   <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="/">Control</a><a href="/simulate.html" aria-current="page">Duck Lab</a><a href="/calibrate.html">Calibration</a></nav><span class="preview-badge">BROWSER SANDBOX</span></header>
-  <div class="intro"><div><p class="eyebrow">EXPERIMENT 02 / DIGITAL DUCK</p><h1>A little room to experiment.</h1><p>Pose it, drop it, or try the trained walking policy. Lab controls never move the hardware.</p></div><a class="source-link" href="https://github.com/LuwuDynamics/xgoduck_rl/tree/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck" target="_blank" rel="noopener">Luwu CAD model ↗</a></div>
+  <div class="intro" id="sim-intro"><div><p class="eyebrow">EXPERIMENT 02 / DIGITAL DUCK</p><h1>A little room to experiment.</h1><p>Pose it, drop it, or try the trained walking policy. Lab controls never move the hardware.</p></div><a class="source-link" href="https://github.com/LuwuDynamics/xgoduck_rl/tree/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck" target="_blank" rel="noopener">Luwu CAD model ↗</a></div>
+  <div class="intro hardware-intro" id="hardware-intro" hidden><h1>V5 backpack</h1><a class="source-link" href="https://github.com/LuwuDynamics/xgoduck_hardware/tree/master/structure/V5_AUDIO_VIDEO_" target="_blank" rel="noopener">Luwu V5 parts ↗</a></div>
   <div class="lab-layout">
     <section class="stage-panel" aria-label="3D Duck workspace">
-      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
+      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button><button data-mode="hardware" aria-pressed="false" disabled>Hardware</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
+      <div class="hardware-views" id="hardware-views" role="group" aria-label="Backpack configuration" hidden>
+        <button type="button" data-assembly="cutout" aria-pressed="true">Open cut-out</button>
+        <button type="button" data-assembly="translucent" aria-pressed="false">Translucent window</button>
+        <button type="button" data-assembly="exploded" aria-pressed="false">Show mounts</button>
+      </div>
       <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit, scroll to zoom.">
         <div id="loading" role="status">Loading the Duck’s CAD model…</div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div>
         <div id="walk-hud" class="walk-hud" aria-label="Board load and missed slots" hidden>
@@ -22,9 +28,15 @@
         </div>
         <div class="viewport-help">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div>
       </div>
-      <div class="stage-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label id="physics-controller-label" hidden>Controller <select id="physics-controller"><option value="walk">Walking policy</option><option value="physics">Playground</option></select></label><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
+      <div class="stage-toolbar" id="sim-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label id="physics-controller-label" hidden>Controller <select id="physics-controller"><option value="walk">Walking policy</option><option value="physics">Playground</option></select></label><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
+      <div class="hardware-toolbar" id="hardware-toolbar" role="group" aria-label="Inspect the backpack" hidden>
+        <button type="button" data-hardware-camera="rear">Rear view</button>
+        <button type="button" data-hardware-camera="matrix">Matrix close-up</button>
+        <button type="button" data-hardware-camera="side">Side view</button>
+        <label><input type="checkbox" id="hardware-test-pattern"> Light all LEDs</label>
+      </div>
       <p class="mode-note" id="mode-note" aria-live="polite">Preparing the simulation…</p>
-      <section class="matrix-player" aria-labelledby="matrix-title">
+      <section class="matrix-player" id="matrix-player" aria-labelledby="matrix-title">
         <div class="matrix-heading"><h2 id="matrix-title">Back display</h2><span id="matrix-playing">Connecting…</span></div>
         <div class="matrix-actions">
           <select id="matrix-scenes" aria-label="Choose animation" disabled><option value="">Choose animation</option></select>
@@ -38,9 +50,19 @@
           <span id="matrix-note" class="muted" role="status"></span>
         </div>
       </section>
-      <div class="stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
+      <div class="stats" id="sim-stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
     </section>
     <aside class="controls-panel">
+      <section class="card hardware-card" id="hardware-card" hidden>
+        <div class="section-heading"><h2>Enclosure mock-up</h2></div>
+        <p id="hardware-note" role="status">A shallow bevel opens the view to the matrix. The shell covers the rest of the board face.</p>
+        <dl class="hardware-legend">
+          <div><dt>8 × 13 LED matrix</dt><dd>Use the close-up and light every pixel to inspect the opening.</dd></div>
+          <div><dt>Rounded rails</dt><dd>The rails stand proud of the face and window, where the floor would bear during a roll.</dd></div>
+          <div><dt>Recessed fasteners</dt><dd>Show mounts separates the shell from the board stack to reveal where it would attach.</dd></div>
+        </dl>
+        <p class="muted">Check fit, USB-C and button clearance, roll contact, and window readability on the assembled V5 before printing the final part.</p>
+      </section>
       <section class="card" id="qualification-card" hidden>
         <div class="section-heading"><h2>Qualification replay</h2></div>
         <div class="button-row">
@@ -126,10 +148,10 @@
       <section class="card joint-card" id="joint-card"><div class="section-heading"><h2>Joint inspector</h2><span id="joint-count">14 DOF</span></div><p class="muted">Select a part in 3D or adjust its angle below.</p><div id="joint-controls"></div><p class="muted small-note">Motor 34 (mouth) is absent from the upstream model.</p><div class="button-row"><button id="export" disabled>Save pose</button><button id="import" disabled>Load pose</button><input id="pose-file" type="file" accept=".json,application/json" hidden></div><p id="pose-message" class="muted" role="status"></p></section>
     </aside>
   </div>
-  <section class="board-strip" aria-label="Board telemetry"><div><span class="status-dot" id="board-dot"></span><strong>UNO Q</strong><span id="board-state">Connecting…</span></div><div>Feedback <strong id="board-feedback">—</strong></div><div>Servos <strong id="board-servos">—</strong></div><div>Board CPU <strong id="board-cpu">—</strong></div><div>Board GPU <strong id="board-gpu">—</strong></div><div>Missed Linux slots <strong id="board-missed">—</strong></div><div id="board-torque">Torque status unknown</div></section>
+  <section class="board-strip" id="board-strip" aria-label="Board telemetry"><div><span class="status-dot" id="board-dot"></span><strong>UNO Q</strong><span id="board-state">Connecting…</span></div><div>Feedback <strong id="board-feedback">—</strong></div><div>Servos <strong id="board-servos">—</strong></div><div>Board CPU <strong id="board-cpu">—</strong></div><div>Board GPU <strong id="board-gpu">—</strong></div><div>Missed Linux slots <strong id="board-missed">—</strong></div><div id="board-torque">Torque status unknown</div></section>
   <footer><span id="engine-note">Graphics run on the viewing device. The UNO Q serves the app.</span><span>MuJoCo 3.12 · Three.js r187 · <a href="sim/NOTICE.txt">Sources &amp; licenses</a></span></footer>
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=15"></script>
+<script type="module" src="sim/sim-ui.mjs?v=18"></script>
 </body></html>

@@ -66,6 +66,60 @@ roll. Include a mass and location range to catch changes in fit between
 prints. Record the hardware revision, the geometry used and the policy
 versions with the results.
 
+### Protective backpack
+
+The backpack covers the board face and edges. Its only viewing opening is
+over the full 8 × 13 matrix. A shallow outward bevel gives the outer pixels
+room to be seen slightly off-axis. Keep the rounded rails proud of the display
+rim, fasteners and window. Transfer roll contact to the chassis through the
+rails and mounts, with clearance for the shell to flex without touching the
+PCB or its components.
+
+Open **Hardware** in Duck Lab or add `?hardware=1` to `simulate.html` to
+compare the open cut-out and translucent window. The mounting view shows
+how the enclosure attaches. The mock-up uses the stock RL body and approximate
+positions for the V5 board stack, cable exits and mounts. Its contact profile
+differs from the attachment primitives used in the qualification examples.
+The nominal opening at its narrowest is about 23 × 35 mm. The rails stand
+about 2.5 mm past the shell face in the mock-up. Both dimensions need a fit
+check on the assembled Duck.
+
+In a provisional MuJoCo check, a 21 × 63 × 76 mm shell envelope and two
+78 mm rounded rails extending 68 mm behind the trunk origin passed 9 of 10
+cases at 22, 30 and 38 g added mass. At each mass the right-side drop
+failed to recover. Moving the whole envelope 12 or 14 mm toward the trunk
+passed all 10 cases at 30 g in simulation. The inset may overlap the board
+or chassis in the physical build, so check fit before adopting it.
+
+#### Check before printing the full enclosure
+
+- Measure the assembled board stack, mounting points, tallest components and
+  plug overmolds. Check the enclosure for the kit's board revision. Leave
+  insertion room at the USB-C edge, route the cables with strain relief and
+  a usable bend radius, and check the cable path through neck and leg travel.
+  If using a captive power-button plunger, verify that it returns freely and
+  leaves the switch released when the shell is tightened or pressed.
+  [Luwu V5 hardware](https://github.com/LuwuDynamics/xgoduck_hardware/tree/4496fad52041db1cad36ded6cc49d942e037b4af/structure/V5_AUDIO_VIDEO_) ·
+  [UNO Q pinout](https://docs.arduino.cc/resources/pinouts/ABX00162-full-pinout.pdf) ·
+  [UNO Q STEP files](https://docs.arduino.cc/resources/models/ABX00162-step.zip)
+- Print a small sample with the same aperture, bevel and window-to-LED gap
+  as the proposed shell. Try an edge-pixel pattern and a normal animation
+  head-on and slightly off-axis. The physical check should show all 104 pixels,
+  with enough contrast to read the animation through the chosen window.
+- For a one-piece multi-tool print, import the opaque shell and translucent
+  window as two mating volumes in one slicer object and assign each to its
+  own tool. Start with compatible opaque and translucent variants
+  of the same polymer, such as PETG. Recess the window and give its perimeter
+  a retaining step in the shell. Check the sliced seam, then inspect and press
+  on a coupon to check for gaps, separation or excessive flex.
+  [Multi-material modeling](https://help.prusa3d.com/article/modeling-with-3d-printing-in-mind_164135) ·
+  [PETG material guide](https://help.prusa3d.com/article/petg_2059)
+- Fit the prototype with power off. Verify that a slow hand roll touches the
+  rails before the window, plug or switch. Compare UNO Q temperatures with
+  the shell installed and removed under the same workload and ambient
+  conditions. Weigh the complete enclosure and rerun walking and recovery
+  qualification with its measured mass, center and contact surfaces.
+
 For example, sweep the square hub's total payload mass and mounting height:
 
 ```sh
