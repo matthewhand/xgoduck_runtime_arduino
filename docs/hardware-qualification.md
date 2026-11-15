@@ -88,8 +88,19 @@ In a provisional MuJoCo check, a 21 × 63 × 76 mm shell envelope and two
 78 mm rounded rails extending 68 mm behind the trunk origin passed 9 of 10
 cases at 22, 30 and 38 g added mass. At each mass the right-side drop
 failed to recover. Moving the whole envelope 12 or 14 mm toward the trunk
-passed all 10 cases at 30 g in simulation. The inset may overlap the board
-or chassis in the physical build, so check fit before adopting it.
+passed all 10 cases at 30 g in simulation.
+
+The 12 mm inset does not fit the stock V5 mounting geometry. In the pinned
+[V5 3MF project](https://github.com/LuwuDynamics/xgoduck_hardware/blob/4496fad52041db1cad36ded6cc49d942e037b4af/3DManufacturingFormat/xgoduckV5.3mf),
+`BATTERY`, `ENCLOSURE_FOR_V1`, and `ENCLOSURE_FOR_V1P1` share an assembly
+group. The clearance check used the saved part transforms and sampled mesh
+intersections along the depth axis on a 0.5 mm lateral and vertical grid.
+The stock CAD already shows
+0.68 mm of local overlap at an upper mating tab. Shifting either enclosure
+12 mm toward the battery holder increases that overlap to 12.68 mm at the
+same tab. The 14 mm shift also interferes. This checks the stock holder and
+enclosure mount surfaces. A redesigned mount or enclosure needs a new fit
+check before using an inset in the walking and get-up trials.
 
 #### Check before printing the full enclosure
 
