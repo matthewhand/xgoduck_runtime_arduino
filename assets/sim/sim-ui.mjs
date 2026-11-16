@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs';
-import {WalkPanel} from './walk-ui.mjs?v=6';
-import {DemoCircuit} from './demo-ui.mjs?v=1';
-import {createDemoYard} from './demo-yard.mjs?v=1';
+import {WalkPanel} from './walk-ui.mjs?v=7';
+import {DemoCircuit} from './demo-ui.mjs?v=2';
+import {createDemoYard} from './demo-yard.mjs?v=2';
+import {PondLife} from './pond-ui.mjs?v=2';
+import {StuntReplay} from './replay-ui.mjs';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
 const walk = new WalkPanel();
-const demo = new DemoCircuit(walk, showDemoScene, updateDemoStatus);
+const replay = new StuntReplay();
+const demo = new DemoCircuit(walk, showDemoScene, updateDemoStatus, replay);
 const rolloutMode = name => name === 'walk' || name === 'explore';
 let sim, renderer, orbit, camera, scene;
 let mode = 'pose', running = false, gait = false, gaitTime = 0, selected = 32;
@@ -22,7 +25,10 @@ const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion();
 let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
-let demoYard, grid, axes;
+let demoYard, deliveryYard, grid, axes;
+let pondLife, deliveryLine, deliveryWallMaterial, stationGeometry, stationReady, stationDone;
+let stations = [], footMarkers = [];
+let missionPacket = null, replayView = false;
 
 function showError(error) {
   $('error').hidden = false;
@@ -39,7 +45,8 @@ function resetCamera() {
   }
   const x = mode === 'walk' ? sim.data.qpos[0] : 0;
   const y = mode === 'walk' ? sim.data.qpos[1] : 0;
-  if (demoMode && mode === 'walk') camera.position.set(x+0.44, y-0.53, 0.35);
+  if (replayView) camera.position.set(x+.12, y-.15, .69);
+  else if (demoYard?.root.visible && mode === 'walk') camera.position.set(x+0.44, y-0.53, 0.35);
   else camera.position.set(x+0.36, y-0.43, 0.28);
   orbit.target.set(x+0.012, y, 0.145);
   orbit.update();
@@ -151,9 +158,14 @@ function buildJointControls() {
 function updateModeText() {
   const rollout = rolloutMode(mode);
   const physics = mode === 'walk' || mode === 'physics';
-  const pondTrail = demoMode && mode === 'walk';
+  const pondTrail = mode === 'walk' && (demoMode || $('walk-pond').checked || (replayView && replay.clip?.frames[0].pond));
+  const delivery = mode === 'explore' && walk.arena === 'delivery';
   demoYard.root.visible = pondTrail;
-  grid.visible = axes.visible = !pondTrail;
+  deliveryYard.root.visible = delivery;
+  $('pond-status').hidden = !pondTrail;
+  $('pond-status').textContent = 'The UNO Q pond worker runs during the walk.';
+  $('replay-card').hidden = mode !== 'walk' || !replay.clip;
+  grid.visible = axes.visible = !pondTrail && !delivery;
   const tab = demoMode ? 'demo' : physics ? 'walk' : mode;
   for (const button of document.querySelectorAll('[data-mode]')) button.setAttribute('aria-pressed', String(button.dataset.mode === tab));
   $('physics-controller-label').hidden = !physics || demoMode;
@@ -173,10 +185,12 @@ function updateModeText() {
   $('step').disabled = running || mode !== 'physics';
   $('clock-label').textContent = gait ? 'PREVIEW TIME' : 'SIM TIME';
   $('reset').textContent = mode === 'physics' ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
-  $('scene-mode').textContent = pondTrail ? 'DEMO / POND TRAIL' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = replayView ? 'BASH REPLAY / OVERHEAD' : pondTrail ? 'POND TRAIL'
+    : mode === 'explore' ? (delivery ? 'EXPLORE / POND DELIVERY' : 'EXPLORE / BEACON HUNT')
+    : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
-    : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
+    : mode === 'explore' ? 'Watch the Duck scan nearby space and navigate around the divider.'
     : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
     : mode === 'live' ? 'Read-only telemetry. Target previews are commanded angles; missing measured joints remain unavailable.'
     : gait ? 'A procedural joint cycle for checking articulation. It is a kinematic preview, without gravity or a walking policy.'
@@ -184,12 +198,13 @@ function updateModeText() {
   updateRows();
 }
 
-function setMode(next) {
+function setMode(next, arena = null) {
   if (!['pose','physics','walk','explore','live'].includes(next)) return;
   const changedWalk = mode !== next && (rolloutMode(mode) || rolloutMode(next));
   if (next !== mode && (mode !== 'pose' || next !== 'physics')) sim.reset('STAND');
   mode = next; sim.mode = next; gait = false; gaitTime = 0; running = next === 'physics' || next === 'live';
-  walk.setMode(mode, demoMode);
+  replay.live(); replayView = false;
+  walk.setMode(mode, demoMode, arena);
   if (changedWalk) searchWorld.visible = false;
   if (changedWalk) { walkRun = null; resetCamera(); }
   sim.data.qvel.fill(0); sim.accumulator = 0;
@@ -215,14 +230,14 @@ function showDemoScene(name, preset) {
   if (name === 'pose') applyPreset(preset);
   else if (name === 'gait') startGait();
   else if (name === 'drop') { setMode('physics'); startDrop(); }
-  else setMode(name);
+  else setMode(name, preset);
 }
 
 function updateDemoStatus(message, progress, active) {
   $('demo-state').textContent = message;
   $('demo-progress').textContent = progress;
   $('demo-toggle').textContent = active ? 'Stop demo' : 'Start demo';
-  if (demoMode && !active) running = false;
+  if (demoMode && !active) { running = false; replay.live(); }
 }
 
 function selectWorkspace(next) {
@@ -250,8 +265,7 @@ function animateGait(dt) {
   sim.mj.mj_forward(sim.model, sim.data);
 }
 
-function animateWalk(dt) {
-  const packet = rolloutPacket();
+function animateWalk(dt, packet, replayChanged) {
   const root = packet?.root;
   const angles = packet?.joints_rad;
   searchWorld.visible = mode === 'explore' && Boolean(packet?.mission);
@@ -259,7 +273,7 @@ function animateWalk(dt) {
       || !sim.joints.every(joint => Number.isFinite(angles?.[joint.id]))) return;
   const q = sim.data.qpos;
   const newRun = packet.run_id !== walkRun;
-  const alpha = newRun ? 1 : 1 - Math.exp(-dt / 0.055);
+  const alpha = newRun || replayView ? 1 : 1 - Math.exp(-dt / 0.055);
   const dx = (root[0] - q[0]) * alpha, dy = (root[1] - q[1]) * alpha;
   q[0] += dx; q[1] += dy; q[2] += (root[2] - q[2]) * alpha;
   walkRotation.set(q[4], q[5], q[6], q[3]);
@@ -268,9 +282,9 @@ function animateWalk(dt) {
   q[3] = walkRotation.w; q[4] = walkRotation.x; q[5] = walkRotation.y; q[6] = walkRotation.z;
   for (const joint of sim.joints) q[joint.address] += (angles[joint.id] - q[joint.address]) * alpha;
   sim.mj.mj_forward(sim.model, sim.data);
-  if (newRun) {
+  if (newRun || replayChanged) {
     resetCamera();
-    if (packet.mission) buildSearchArena(packet.mission.walls);
+    if (packet.mission) buildSearchArena(packet.mission);
   } else if (mode === 'walk') {
     orbit.target.x += dx; orbit.target.y += dy;
     camera.position.x += dx; camera.position.y += dy;
@@ -281,24 +295,44 @@ function animateWalk(dt) {
     searchWaypoint.visible = !beacon && Boolean(waypoint);
     if (beacon) searchBeacon.position.set(...beacon, .14);
     if (waypoint) searchWaypoint.position.set(...waypoint, .018);
+    if (packet !== missionPacket) updateDeliveryRoute(packet);
   }
+  missionPacket = packet;
   walkRun = packet.run_id;
 }
 
 function rolloutPacket() {
   const sample = walk.latest;
-  return Boolean(sample?.arena) === (mode === 'explore') ? sample : null;
+  return mode === 'explore' ? (sample?.arena === walk.arena ? sample : null) : (sample?.arena ? null : sample);
 }
 
-function buildSearchArena(walls) {
+function buildSearchArena({walls, delivery}) {
   searchWorld.clear();
-  searchWorld.add(searchBeacon, searchWaypoint);
+  searchWorld.add(searchBeacon, searchWaypoint, deliveryLine);
   for (const [x, y, width, depth] of walls) {
-    const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+    const wall = new THREE.Mesh(wallGeometry, delivery ? deliveryWallMaterial : wallMaterial);
     wall.position.set(x, y, .13);
     wall.scale.set(width, depth, .26);
     searchWorld.add(wall);
   }
+  stations = (delivery?.stations ?? []).map(([, x, y]) => {
+    const station = new THREE.Mesh(stationGeometry, stationReady);
+    station.position.set(x, y, .012);
+    searchWorld.add(station);
+    return station;
+  });
+}
+
+function updateDeliveryRoute(packet) {
+  const delivery = packet.mission.delivery;
+  deliveryLine.visible = Boolean(delivery?.plan.length);
+  if (!delivery) return;
+  const points = [packet.root, ...delivery.plan];
+  const position = deliveryLine.geometry.attributes.position;
+  for (const [i, [x, y]] of points.entries()) position.setXYZ(i, x, y, .009);
+  position.needsUpdate = true;
+  deliveryLine.geometry.setDrawRange(0, points.length);
+  stations.forEach((station, i) => { station.material = i < delivery.delivered ? stationDone : stationReady; });
 }
 
 function updateBoard() {
@@ -357,6 +391,8 @@ function attachControls() {
     else void demo.start();
   });
   $('physics-controller').addEventListener('change', event => setMode(event.target.value));
+  $('walk-pond').addEventListener('change', () => { updateModeText(); resetCamera(); });
+  $('search-arena').addEventListener('change', () => { walk.update(); updateModeText(); });
   document.querySelectorAll('[data-preset]').forEach(button => { button.disabled = false; button.addEventListener('click', () => applyPreset(button.dataset.preset)); });
   for (const id of ['reset','camera','gait','export','import']) $(id).disabled = false;
   $('reset').addEventListener('click', () => {
@@ -419,7 +455,20 @@ function frame(time) {
   try {
     if (running && mode === 'physics') sim.advance(dt*Number($('speed').value));
     if (running && mode === 'pose' && gait) animateGait(dt);
-    if (rolloutMode(mode)) animateWalk(dt);
+    const livePacket = rolloutMode(mode) ? rolloutPacket() : null;
+    if (mode === 'walk') replay.observe(livePacket, performance.now()-lastPacketAt < 2500 ? lastPacket : null);
+    const replayPacket = mode === 'walk' ? replay.packet(dt) : null;
+    const replayChanged = replayView !== Boolean(replayPacket);
+    replayView = Boolean(replayPacket);
+    if (replayChanged) updateModeText();
+    const shown = replayPacket ?? livePacket;
+    if (rolloutMode(mode)) animateWalk(dt, shown, replayChanged);
+    const pondKey = demoYard.root.visible && livePacket?.pond && livePacket.state === 'running' ? livePacket.run_key : null;
+    pondLife.update(pondKey, time);
+    for (const [side, geom, marker] of footMarkers) {
+      marker.visible = replayView && Boolean(shown?.feet_on_floor?.includes(side));
+      if (marker.visible) marker.position.set(sim.data.geom_xpos[geom*3], sim.data.geom_xpos[geom*3+1], .012);
+    }
     if (demoYard.root.visible) {
       const [x, y] = sim.data.qpos;
       demoYard.shadow.position.set(x, y, .002);
@@ -429,8 +478,8 @@ function frame(time) {
     if (time-fpsStart>600) { fps=fpsFrames*1000/(time-fpsStart); fpsFrames=0; fpsStart=time; }
     if (time-lastHud>200) {
       $('fps').textContent = Math.round(fps);
-      $('sim-time').textContent = (rolloutMode(mode) ? rolloutPacket()?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
-      $('contacts').textContent = rolloutMode(mode) ? rolloutPacket()?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
+      $('sim-time').textContent = (rolloutMode(mode) ? shown?.time_s ?? 0 : gait ? gaitTime : sim.data.time).toFixed(2);
+      $('contacts').textContent = rolloutMode(mode) ? shown?.contacts ?? '—' : mode === 'physics' ? sim.data.ncon : '—';
       $('height').textContent = (sim.data.qpos[2]*100).toFixed(1);
       updateRows(); updateBoard(); lastHud=time;
     }
@@ -459,18 +508,37 @@ async function start() {
   grid = new THREE.GridHelper(14,280,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001; scene.add(grid);
   axes = new THREE.AxesHelper(0.05); axes.position.set(-0.16,-0.13,0.001); scene.add(axes);
   demoYard = createDemoYard(); demoYard.root.visible = false; scene.add(demoYard.root);
+  deliveryYard = createDemoYard(true); deliveryYard.root.visible = false; scene.add(deliveryYard.root);
+  pondLife = new PondLife(demoYard.root, $('pond-status'));
   searchWorld = new THREE.Group();
   searchWorld.visible = false;
   wallGeometry = new THREE.BoxGeometry(1,1,1);
   wallMaterial = new THREE.MeshStandardMaterial({color:'#657d91', roughness:.7, transparent:true, opacity:.68, depthWrite:false});
+  deliveryWallMaterial = new THREE.MeshStandardMaterial({color:'#9d714f', roughness:.9});
   searchBeacon = new THREE.Mesh(new THREE.SphereGeometry(.068,16,12), new THREE.MeshBasicMaterial({color:'#ffcb72'}));
   searchWaypoint = new THREE.Mesh(new THREE.SphereGeometry(.022,12,8), new THREE.MeshBasicMaterial({color:'#90aafa'}));
+  const routeGeometry = new THREE.BufferGeometry();
+  routeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(385 * 3), 3));
+  deliveryLine = new THREE.Line(routeGeometry, new THREE.LineBasicMaterial({color:'#ffcb72'}));
+  deliveryLine.frustumCulled = false;
+  stationGeometry = new THREE.RingGeometry(.06, .084, 32);
+  stationReady = new THREE.MeshBasicMaterial({color:'#ffcb72', side:THREE.DoubleSide});
+  stationDone = new THREE.MeshBasicMaterial({color:'#8edac8', side:THREE.DoubleSide});
   scene.add(searchWorld);
   const resize = new ResizeObserver(() => {
     const width = viewport.clientWidth, height = viewport.clientHeight;
     camera.aspect=width/height; camera.updateProjectionMatrix(); renderer.setSize(width,height,false);
   }); resize.observe(viewport);
   sim = await DuckSimulation.create();
+  const contactRing = new THREE.RingGeometry(.021, .033, 24);
+  for (const [side, color] of [['left', '#82f4e1'], ['right', '#ffcf81']]) {
+    const geom = sim.mj.mj_name2id(sim.model, sim.mj.mjtObj.mjOBJ_GEOM.value, `${side}_foot_collision`);
+    if (geom < 0) continue;
+    const marker = new THREE.Mesh(contactRing, new THREE.MeshBasicMaterial({color}));
+    marker.visible = false;
+    scene.add(marker);
+    footMarkers.push([side, geom, marker]);
+  }
   buildRobot(); buildJointControls(); attachControls(); updateModeText(); updateRobot();
   await renderer.compileAsync(scene,camera);
   $('loading').hidden=true;
@@ -484,7 +552,9 @@ async function start() {
     for (const geometry of geometryCache.values()) geometry.dispose();
     wallGeometry.dispose(); wallMaterial.dispose();
     for (const marker of [searchBeacon, searchWaypoint]) { marker.geometry.dispose(); marker.material.dispose(); }
-    demoYard.dispose();
+    pondLife.group.removeFromParent(); pondLife.dispose(); demoYard.dispose(); deliveryYard.dispose(); deliveryWallMaterial.dispose();
+    routeGeometry.dispose(); deliveryLine.material.dispose(); stationGeometry.dispose(); stationReady.dispose(); stationDone.dispose();
+    contactRing.dispose(); footMarkers.forEach(([, , marker]) => marker.material.dispose());
     sim.dispose(); renderer.dispose();
   });
   if (new URLSearchParams(location.search).get('demo') === '1') selectWorkspace('demo');

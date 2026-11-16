@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export function createDemoYard() {
+export function createDemoYard(delivery = false) {
   const root = new THREE.Group();
   const box = new THREE.BoxGeometry(1, 1, 1);
   const disk = new THREE.CircleGeometry(1, 40);
@@ -25,25 +25,33 @@ export function createDemoYard() {
   }
 
   place(box, grass, 1.55, .2, -.0027, 6, 4.8, .005);
-  for (let i = 0; i < 23; i++) {
-    const x = -.72 + i * .21;
-    place(box, paving[i % paving.length], x, 0, .0001, .204, .36, .001);
-    if (i % 3 === 0) {
-      place(box, wood, x, .24, .065, .027, .027, .13);
-      place(box, cap, x, .24, .123, .031, .031, .016);
+  const trail = delivery ? [[-.39,0],[.43,.08],[.61,.47],[1.39,.47],[1.55,-.08]] : [[-.82,0],[4.01,0]];
+  for (let segment = 1; segment < trail.length; segment++) {
+    const [x0, y0] = trail[segment - 1], [x1, y1] = trail[segment];
+    const length = Math.hypot(x1 - x0, y1 - y0), angle = Math.atan2(y1 - y0, x1 - x0);
+    const count = Math.ceil(length / .22), width = length / count;
+    for (let i = 0; i < count; i++) {
+      const t = (i + .5) / count, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+      place(box, paving[i % paving.length], x, y, .0001, width - .006, delivery ? .24 : .36, .001).rotation.z = angle;
+      if (!delivery && i % 3 === 0) {
+        place(box, wood, x, .24, .065, .027, .027, .13);
+        place(box, cap, x, .24, .123, .031, .031, .016);
+      }
     }
   }
 
-  place(disk, bank, .5, .65, .0007, .91, .37);
-  place(disk, pond, .5, .65, .0008, .86, .32);
+  const shore = delivery ? .56 : 0;
+  place(disk, bank, .5, .65 + shore, .0007, .91, .37);
+  place(disk, pond, .5, .65 + shore, .0008, .86, .32);
   for (const [x, y, size] of [[.1,.57,.043], [.23,.62,.032], [.66,.57,.055], [.8,.64,.036], [.97,.6,.042]]) {
-    place(disk, reeds[1], x, y, .001, size, size * .78);
-    place(stone, cap, x + size * .2, y, .009, .010, .009, .008);
+    place(disk, reeds[1], x, y + shore, .001, size, size * .78);
+    place(stone, cap, x + size * .2, y + shore, .009, .010, .009, .008);
   }
 
   const clusters = [[-.35,.32], [-.18,.47], [.4,.34], [.92,.43], [1.4,.36], [1.8,.56],
     [2.16,.33], [2.55,.63], [3,.35], [3.45,.51], [.82,1.25], [1.63,1.35], [2.55,1.6], [1.15,1.95]];
-  for (const [index, [x, y]] of clusters.entries()) {
+  for (const [index, [x, bankY]] of clusters.entries()) {
+    const y = bankY + shore;
     place(stone, gravel, x, y, .020, .052, .036, .032).rotation.z = index;
     place(stone, gravel, x + .055, y + .021, .014, .029, .026, .022);
     for (let i = 0; i < 3; i++) {

@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'python'))
 
 from walk_sim import JOINT_IDS, RECOVERY_HOLD_S, RUN_S, SLOT_S, WalkSimulation
+from search_mission import MISSION_S
 
 
 def check_trial(pushes):
@@ -35,6 +36,7 @@ def main():
     check_trial({})
     check_trial({200: 'nudge', 400: 'poke'})
     check_bash_getup()
+    check_delivery()
 
 
 def check_bash_getup():
@@ -61,6 +63,20 @@ def check_bash_getup():
     assert travelled > 1.0, result
     print(f"Bash: {sim.push['peak_tilt_deg']:.1f}° fall, {getup_slots} get-up inferences, "
           f"walking resumed after {sim.push['recovery_s']:.2f} s and moved {travelled:.2f} m")
+
+
+def check_delivery():
+    sim = WalkSimulation(0, 0, 'delivery')
+    passed_divider = False
+    for _ in range(round(MISSION_S / SLOT_S)):
+        assert not sim.tick(), 'Duck fell before finishing delivery'
+        x, y = sim.data.qpos[sim.root:sim.root + 2]
+        passed_divider |= .72 <= x <= .78 and y > .26
+        if sim.mission.found:
+            break
+    result = sim.snapshot()
+    assert result['mission']['delivery']['delivered'] == 2 and passed_divider, result
+    print(f"Delivery: reached both stations by the north passage in {result['time_s']:.2f} s")
 
 
 if __name__ == '__main__':
