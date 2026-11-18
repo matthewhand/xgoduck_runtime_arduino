@@ -1,0 +1,121 @@
+{
+  "format": 1,
+  "units_per_metre": 100000,
+  "hinge_mm": [
+    0.0,
+    2.8000000000000007,
+    -17.898419999999998
+  ],
+  "mass_by_variant_g": {
+    "teeth": {
+      "low": 3.9638,
+      "nominal": 4.53,
+      "high": 4.9075
+    },
+    "tusks": {
+      "low": 3.8066,
+      "nominal": 4.3504,
+      "high": 4.7129
+    },
+    "combined": {
+      "low": 6.5693,
+      "nominal": 7.5078,
+      "high": 8.1334
+    }
+  },
+  "mass_assumption": "Cuffs are additions to the stock mouth; 1.05/1.20/1.30 g/cm3 equivalent print densities. Weigh the final TPU parts.",
+  "source_head_sha256": "dcbe8ae093a842399e94eecc6f41a533575df9e8367f26690d737a9d38f8b327",
+  "source_hardware_revision": "4496fad52041db1cad36ded6cc49d942e037b4af",
+  "meshes": [
+    {
+      "name": "head-shell",
+      "group": "fixed",
+      "variant": "all",
+      "position_offset": 0,
+      "vertices": 2743,
+      "index_offset": 16458,
+      "indices": 16434
+    },
+    {
+      "name": "head-hardware",
+      "group": "fixed",
+      "variant": "all",
+      "position_offset": 49326,
+      "vertices": 4404,
+      "index_offset": 75750,
+      "indices": 26544
+    },
+    {
+      "name": "head-bottom",
+      "group": "fixed",
+      "variant": "all",
+      "position_offset": 128838,
+      "vertices": 4512,
+      "index_offset": 155910,
+      "indices": 27048
+    },
+    {
+      "name": "upper-pad",
+      "group": "fixed",
+      "variant": "all",
+      "position_offset": 210006,
+      "vertices": 425,
+      "index_offset": 212556,
+      "indices": 2538
+    },
+    {
+      "name": "upper-teeth",
+      "group": "fixed",
+      "variant": "teeth",
+      "position_offset": 217632,
+      "vertices": 1630,
+      "index_offset": 227412,
+      "indices": 9768
+    },
+    {
+      "name": "upper-tusks",
+      "group": "fixed",
+      "variant": "tusks",
+      "position_offset": 246948,
+      "vertices": 1188,
+      "index_offset": 254076,
+      "indices": 7116
+    },
+    {
+      "name": "upper-teeth-tusks",
+      "group": "fixed",
+      "variant": "teeth-tusks",
+      "position_offset": 268308,
+      "vertices": 2144,
+      "index_offset": 281172,
+      "indices": 12852
+    },
+    {
+      "name": "lower-jaw",
+      "group": "moving",
+      "variant": "all",
+      "position_offset": 306876,
+      "vertices": 1734,
+      "index_offset": 317280,
+      "indices": 10452
+    },
+    {
+      "name": "lower-pad",
+      "group": "moving",
+      "variant": "all",
+      "position_offset": 338184,
+      "vertices": 628,
+      "index_offset": 341952,
+      "indices": 3756
+    },
+    {
+      "name": "lower-teeth",
+      "group": "moving",
+      "variant": "teeth",
+      "position_offset": 349464,
+      "vertices": 1773,
+      "index_offset": 360102,
+      "indices": 10626
+    }
+  ]
+}

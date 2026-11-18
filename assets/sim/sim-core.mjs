@@ -91,6 +91,7 @@ export class DuckSimulation {
     if (this.floor < 0) throw new Error('Floor geom not found in Duck model.');
     this.wheelCollisions = [];
     this.wheelDofs = [];
+    this.wheelPositions = [];
     this.surface = 'flat';
     if (skates) {
       for (const side of ['left', 'right']) {
@@ -103,6 +104,7 @@ export class DuckSimulation {
       this.wheelDofs = ['LF','LR','RF','RR'].map(name => {
         const joint = mj.mj_name2id(model, mj.mjtObj.mjOBJ_JOINT.value, `passive_${name}_wheel`);
         if (joint < 0) throw new Error('Passive wheel joint not found.');
+        this.wheelPositions.push(model.jnt_qposadr[joint]);
         return model.jnt_dofadr[joint];
       });
       this.surfaceContacts = Object.entries(SKATE_SURFACES).map(([name, boxes]) => [

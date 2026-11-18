@@ -1,0 +1,230 @@
+{
+  "width": 96,
+  "height": 72,
+  "columns": 4,
+  "sprite": "dock-survivors.png",
+  "detail": "dock-survivors-detail.png",
+  "scale": 8,
+  "frames": [
+    {
+      "seed": 712116,
+      "azimuth": 88.2990819117347,
+      "elevation": 60.265933716464716,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 0
+    },
+    {
+      "seed": 712188,
+      "azimuth": 83.79842370178528,
+      "elevation": 57.18312273612642,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 1
+    },
+    {
+      "seed": 712224,
+      "azimuth": 255.68066057707517,
+      "elevation": 13.400183454069772,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 2
+    },
+    {
+      "seed": 712266,
+      "azimuth": 110.65246547354917,
+      "elevation": 52.051164276313266,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 3
+    },
+    {
+      "seed": 712332,
+      "azimuth": 81.24949011336139,
+      "elevation": 35.26388882319631,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 4
+    },
+    {
+      "seed": 712344,
+      "azimuth": 146.8608238443694,
+      "elevation": 50.79393889778185,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 5
+    },
+    {
+      "seed": 712374,
+      "azimuth": 288.5429504909274,
+      "elevation": 38.755381788893956,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 6
+    },
+    {
+      "seed": 712380,
+      "azimuth": 319.4577637767966,
+      "elevation": 44.681149726919685,
+      "bbox": null,
+      "condition": "survivors",
+      "tile": 7
+    },
+    {
+      "seed": 712100,
+      "azimuth": 19.06718016583302,
+      "elevation": 43.74625720515321,
+      "bbox": [
+        16,
+        24,
+        62,
+        72
+      ],
+      "condition": "pattern-examples",
+      "tile": 8
+    },
+    {
+      "seed": 712178,
+      "azimuth": 39.805022774815136,
+      "elevation": 49.95791799114968,
+      "bbox": [
+        19,
+        10,
+        60,
+        55
+      ],
+      "condition": "pattern-examples",
+      "tile": 9
+    },
+    {
+      "seed": 712244,
+      "azimuth": 12.393797369011516,
+      "elevation": 16.81967887531578,
+      "bbox": [
+        44,
+        29,
+        77,
+        58
+      ],
+      "condition": "pattern-examples",
+      "tile": 10
+    },
+    {
+      "seed": 712316,
+      "azimuth": 24.35959351653628,
+      "elevation": 6.979926684419915,
+      "bbox": [
+        25,
+        32,
+        68,
+        62
+      ],
+      "condition": "pattern-examples",
+      "tile": 11
+    },
+    {
+      "seed": 712118,
+      "azimuth": 109.43307902148263,
+      "elevation": 62.02784928305349,
+      "bbox": [
+        17,
+        11,
+        73,
+        65
+      ],
+      "condition": "marked-misses",
+      "tile": 12
+    },
+    {
+      "seed": 712172,
+      "azimuth": 10.660167219627777,
+      "elevation": 23.259360929723815,
+      "bbox": [
+        33,
+        17,
+        81,
+        64
+      ],
+      "condition": "marked-misses",
+      "tile": 13
+    },
+    {
+      "seed": 712196,
+      "azimuth": 128.40788239121383,
+      "elevation": 11.695517502078015,
+      "bbox": [
+        24,
+        24,
+        75,
+        59
+      ],
+      "condition": "marked-misses",
+      "tile": 14
+    },
+    {
+      "seed": 712202,
+      "azimuth": 158.7922200988802,
+      "elevation": 24.980341738108436,
+      "bbox": [
+        43,
+        15,
+        78,
+        41
+      ],
+      "condition": "marked-misses",
+      "tile": 15
+    },
+    {
+      "seed": 712214,
+      "azimuth": 219.9844073049731,
+      "elevation": 30.06122465871309,
+      "bbox": [
+        36,
+        32,
+        90,
+        72
+      ],
+      "condition": "marked-misses",
+      "tile": 16
+    },
+    {
+      "seed": 712232,
+      "azimuth": 328.63481018450693,
+      "elevation": 55.77013289836756,
+      "bbox": [
+        11,
+        6,
+        57,
+        57
+      ],
+      "condition": "marked-misses",
+      "tile": 17
+    },
+    {
+      "seed": 712262,
+      "azimuth": 100.46938737359508,
+      "elevation": 8.879977309493661,
+      "bbox": [
+        18,
+        19,
+        52,
+        44
+      ],
+      "condition": "marked-misses",
+      "tile": 18
+    },
+    {
+      "seed": 712280,
+      "azimuth": 201.27129387501503,
+      "elevation": 9.104221776198926,
+      "bbox": [
+        16,
+        17,
+        51,
+        42
+      ],
+      "condition": "marked-misses",
+      "tile": 19
+    }
+  ]
+}

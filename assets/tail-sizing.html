@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tail sizing · Duck Lab</title>
+  <link rel="stylesheet" href="sim/sim.css?v=15">
+  <style>
+    .study {max-width:860px;margin:auto;padding:14px;color:#e3edec;font-family:system-ui,sans-serif}
+    .study nav,.study .choices {display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .study nav {justify-content:space-between}.study h1 {font-size:1.5rem;margin:.5rem 0}
+    .study figure {margin:.6rem 0}.study img {display:block;width:100%;height:auto;border-radius:8px}
+    .study p,.study figcaption {color:#b7cacb;line-height:1.45}.study label {font-size:.9rem}
+    .study table {border-collapse:collapse;width:100%;font-size:.88rem;font-variant-numeric:tabular-nums}
+    .study th,.study td {padding:.48rem .3rem;text-align:right;border-bottom:1px solid #304047}
+    .study th:first-child,.study td:first-child {text-align:left}.study a {color:#98decd}
+    .study h2 {font-size:1.15rem;margin:1.15rem 0 .6rem}
+  </style>
+</head>
+<body><main class="study">
+  <nav><a href="simulate.html?mods=1&amp;tail=1&amp;trial=1">← Duck Lab Mods</a><h1>Tail sizing</h1></nav>
+  <label>Replay <select id="scene"><option value="walk">Walk and lean forward</option><option value="right">Right-side get-up</option></select></label>
+  <figure><img id="replay" width="796" height="298" src="sim/tail-size-walk.webp" alt="Recorded MuJoCo comparison of the bare Duck and the 132 mm single-hinge tail">
+    <figcaption id="caption">Both Ducks receive the same walking command. At 2 seconds the neck begins a 25° forward lean.</figcaption>
+  </figure>
+  <h2>20-second trials</h2>
+  <div class="choices"><label>Passive pitch hinges <select id="hinges"><option value="0">0 · rigid</option><option selected>1</option><option>2</option><option>3</option></select></label></div>
+  <table><thead><tr><th>Tail</th><th>Pack mass</th><th>Moment offset</th><th>Walk</th><th>Right get-up</th></tr></thead><tbody id="results"></tbody></table>
+  <p id="note" role="status"></p>
+  <details><summary>What the measurements mean</summary>
+    <p>Length runs from the root pivot to the tip. The widest section is 80 × 50 mm. Pack mass includes the fixed mount. The offset compares the pack’s mean rearward gravity moment during leaning gait with the extra forward head-and-neck moment in a fixed standing pose. A 100% offset describes that one pose. The tail also pulls rearward with the head upright.</p>
+    <p>Every size uses the same V5 mount, stock feet, flat floor and shipped walking and recovery policies. The get-up trial starts from a 90° right-side fall with a neutral head command. The rendered clips show the first 8 seconds. <a href="sim/tail-size-results.json">Full simulation results</a></p>
+  </details>
+</main>
+<script type="module">
+  const byId = id => document.getElementById(id);
+  byId('scene').addEventListener('change', event => {
+    const walk = event.target.value === 'walk';
+    byId('replay').src = walk ? 'sim/tail-size-walk.webp' : 'sim/tail-size-right.webp';
+    byId('caption').textContent = walk
+      ? 'Both Ducks receive the same walking command. At 2 seconds the neck begins a 25° forward lean.'
+      : 'Both Ducks start on their right side. The bare Duck resumes walking at 2.86 seconds. The tail-equipped Duck stays down.';
+  });
+  try {
+    const response = await fetch('sim/tail-size-results.json');
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    const stock = data.cases[0];
+    function draw() {
+      const rows = data.cases.filter(r => !r.length_mm || r.hinges === Number(byId('hinges').value));
+      byId('results').replaceChildren(...rows.map(r => {
+        const row = document.createElement('tr');
+        for (const value of [r.length_mm ? r.length_mm + ' mm' : 'Bare', ((r.walk.mass_g-stock.walk.mass_g).toFixed(1))+' g',
+              r.walk.offset_percent.toFixed(1)+'%', r.walk.forward_m.toFixed(2)+' m', r.right.pass ? 'Passed' : 'Failed']) {
+          row.insertCell().textContent = value;
+        }
+        return row;
+      }));
+      byId('note').textContent = 'Walking gate: at least 75% of bare forward distance ('+
+        (.75*stock.walk.forward_m).toFixed(2)+' m), upright with alternating steps. All 16 tails failed right-side recovery.';
+    }
+    byId('hinges').addEventListener('change',draw);
+    draw();
+  } catch { byId('note').textContent='The trial results could not be loaded. Reload the page to retry.'; }
+</script>
+</body></html>

@@ -1,0 +1,690 @@
+{
+  "revision": "v1p1-contact-harness-concept-1",
+  "frame": "Seated V5 V1.1 stock enclosure STL local millimetres. +Y headward, +Z into Duck; print-bed export of cover must shift -3.2 on Z.",
+  "wire": {
+    "awg": 24,
+    "strands": 11,
+    "strand_diameter_mm": 0.16,
+    "conductor_area_mm2": 0.22116812,
+    "jacket_od_mm": 1.4,
+    "density_copper_g_cm3": 8.96,
+    "density_jacket_g_cm3": 1.4,
+    "source": "https://www.pololu.com/category/139/stranded-wire",
+    "assumption": "Copper area uses the strand table. The remaining circular section is treated as PVC at assumed density 1.40 g/cm3. The mass band uses 0.8 and 1.3 times nominal. Final gauge, bend radius and temperature rating depend on measured charger current, supplier and routing."
+  },
+  "leads": [
+    {
+      "id": "pad-a-to-isolator",
+      "side": "pack",
+      "pole": "A",
+      "points_mm": [
+        [
+          -19,
+          30,
+          -0.9
+        ],
+        [
+          -19,
+          35.5,
+          -0.9
+        ],
+        [
+          -18.4,
+          37.6,
+          -0.8
+        ],
+        [
+          -16.8,
+          38.65,
+          -0.5
+        ],
+        [
+          -13.4,
+          39.05,
+          -0.25
+        ],
+        [
+          -8,
+          39.05,
+          -0.25
+        ],
+        [
+          -5.4,
+          39.5,
+          0
+        ]
+      ],
+      "length_mm": 21.10649,
+      "mass_g": {
+        "low": 0.06462,
+        "nominal": 0.08078,
+        "high": 0.10501
+      },
+      "center_mm": [
+        -14.53807,
+        37.06019,
+        -0.52287
+      ]
+    },
+    {
+      "id": "pad-b-to-isolator",
+      "side": "pack",
+      "pole": "B",
+      "points_mm": [
+        [
+          19,
+          30,
+          -0.9
+        ],
+        [
+          19,
+          35.5,
+          -0.9
+        ],
+        [
+          18.4,
+          37.6,
+          -0.8
+        ],
+        [
+          16.8,
+          38.65,
+          -0.5
+        ],
+        [
+          13,
+          39.0,
+          -0.25
+        ],
+        [
+          4,
+          39.0,
+          -0.25
+        ],
+        [
+          1.4,
+          39.5,
+          0
+        ]
+      ],
+      "length_mm": 25.10714,
+      "mass_g": {
+        "low": 0.07687,
+        "nominal": 0.09609,
+        "high": 0.12492
+      },
+      "center_mm": [
+        12.75095,
+        37.34984,
+        -0.4813
+      ]
+    },
+    {
+      "id": "isolator-a-to-key",
+      "side": "pack",
+      "pole": "A",
+      "points_mm": [
+        [
+          -5.4,
+          46.5,
+          0
+        ],
+        [
+          -5.2,
+          48.3,
+          0
+        ],
+        [
+          -3.8,
+          50.0,
+          0
+        ],
+        [
+          -1,
+          50.7,
+          0
+        ],
+        [
+          26.3,
+          50.7,
+          0
+        ],
+        [
+          30.8,
+          50.2,
+          0
+        ],
+        [
+          33.4,
+          48.3,
+          0
+        ],
+        [
+          35.3,
+          45.0,
+          0
+        ],
+        [
+          37.0,
+          42.8,
+          0
+        ],
+        [
+          40,
+          42.1,
+          0
+        ]
+      ],
+      "length_mm": 51.61622,
+      "mass_g": {
+        "low": 0.15803,
+        "nominal": 0.19754,
+        "high": 0.25681
+      },
+      "center_mm": [
+        17.46458,
+        49.22868,
+        0.0
+      ]
+    },
+    {
+      "id": "isolator-b-to-key",
+      "side": "pack",
+      "pole": "B",
+      "points_mm": [
+        [
+          1.4,
+          46.5,
+          0
+        ],
+        [
+          2.6,
+          48.0,
+          0
+        ],
+        [
+          4.3,
+          48.7,
+          0
+        ],
+        [
+          25.8,
+          48.7,
+          0
+        ],
+        [
+          29.0,
+          48.3,
+          0
+        ],
+        [
+          31.4,
+          46.9,
+          0
+        ],
+        [
+          34,
+          42.4,
+          0
+        ],
+        [
+          36.8,
+          40.4,
+          0
+        ],
+        [
+          40,
+          39.5,
+          0
+        ]
+      ],
+      "length_mm": 43.22501,
+      "mass_g": {
+        "low": 0.13234,
+        "nominal": 0.16543,
+        "high": 0.21506
+      },
+      "center_mm": [
+        21.4097,
+        46.79408,
+        0.0
+      ]
+    },
+    {
+      "id": "pigtail-a",
+      "side": "carrier",
+      "pole": "A",
+      "points_mm": [
+        [
+          45,
+          13.3,
+          13
+        ],
+        [
+          48,
+          13.3,
+          12.7
+        ],
+        [
+          50.8,
+          13.3,
+          12.8
+        ],
+        [
+          54,
+          12,
+          9.7
+        ],
+        [
+          58.2,
+          13.4,
+          8.15
+        ],
+        [
+          61.4,
+          16.9,
+          7.2
+        ],
+        [
+          62.5,
+          22.2,
+          5.6000000000000005
+        ],
+        [
+          62.5,
+          29.2,
+          3.4000000000000004
+        ],
+        [
+          61.2,
+          36.8,
+          1.9000000000000004
+        ],
+        [
+          59.3,
+          42.099999999999994,
+          0
+        ],
+        [
+          56,
+          42.099999999999994,
+          0
+        ]
+      ],
+      "length_mm": 50.06433,
+      "mass_g": {
+        "low": 0.15328,
+        "nominal": 0.1916,
+        "high": 0.24909
+      },
+      "park_rotate_from_index": 3,
+      "center_mm": [
+        58.25581,
+        23.9773,
+        6.0176
+      ]
+    },
+    {
+      "id": "pigtail-b",
+      "side": "carrier",
+      "pole": "B",
+      "points_mm": [
+        [
+          45,
+          10.7,
+          13
+        ],
+        [
+          48,
+          10.7,
+          12.7
+        ],
+        [
+          50.8,
+          10.7,
+          10.3
+        ],
+        [
+          54,
+          12,
+          6.3
+        ],
+        [
+          56.2,
+          13.4,
+          6.35
+        ],
+        [
+          59.4,
+          16.9,
+          5.3999999999999995
+        ],
+        [
+          60.5,
+          22.2,
+          3.8
+        ],
+        [
+          60.5,
+          29.2,
+          1.5999999999999996
+        ],
+        [
+          59.2,
+          36.8,
+          0.09999999999999964
+        ],
+        [
+          57.3,
+          39.5,
+          0
+        ],
+        [
+          56,
+          39.5,
+          0
+        ]
+      ],
+      "length_mm": 44.87241,
+      "mass_g": {
+        "low": 0.13739,
+        "nominal": 0.17173,
+        "high": 0.22325
+      },
+      "park_rotate_from_index": 3,
+      "center_mm": [
+        56.6281,
+        21.69706,
+        4.95953
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "id": "pad-a",
+      "side": "pack",
+      "center_mm": [
+        -28,
+        30,
+        -3.0
+      ],
+      "size_mm": [
+        18.5,
+        2.6,
+        0.5
+      ],
+      "mass_g": {
+        "low": 0.18,
+        "nominal": 0.267,
+        "high": 0.42
+      },
+      "kind": "strip",
+      "label": "Folded contact A"
+    },
+    {
+      "id": "pad-b",
+      "side": "pack",
+      "center_mm": [
+        28,
+        30,
+        -3.0
+      ],
+      "size_mm": [
+        18.5,
+        2.6,
+        0.5
+      ],
+      "mass_g": {
+        "low": 0.18,
+        "nominal": 0.267,
+        "high": 0.42
+      },
+      "kind": "strip",
+      "label": "Folded contact B"
+    },
+    {
+      "id": "keyed-isolator",
+      "side": "pack",
+      "center_mm": [
+        -2,
+        43,
+        0
+      ],
+      "size_mm": [
+        14,
+        7,
+        6
+      ],
+      "mass_g": {
+        "low": 2,
+        "nominal": 4,
+        "high": 8
+      },
+      "kind": "isolator",
+      "label": "Normally open two-pole isolator"
+    },
+    {
+      "id": "disconnect-pack",
+      "side": "pack",
+      "center_mm": [
+        44,
+        40.8,
+        0
+      ],
+      "size_mm": [
+        8,
+        7.6,
+        6
+      ],
+      "mass_g": {
+        "low": 0.6,
+        "nominal": 1.0,
+        "high": 2
+      },
+      "kind": "connector",
+      "label": "Keyed disconnect, cover half"
+    },
+    {
+      "id": "disconnect-carrier",
+      "side": "carrier",
+      "center_mm": [
+        52,
+        40.8,
+        0
+      ],
+      "size_mm": [
+        8,
+        7.6,
+        6
+      ],
+      "mass_g": {
+        "low": 0.6,
+        "nominal": 1.0,
+        "high": 2
+      },
+      "kind": "connector",
+      "label": "Keyed disconnect, carrier half"
+    },
+    {
+      "id": "plug-envelope",
+      "side": "carrier",
+      "center_mm": [
+        38,
+        12,
+        13
+      ],
+      "size_mm": [
+        14,
+        8,
+        8
+      ],
+      "mass_g": {
+        "low": 2,
+        "nominal": 4,
+        "high": 7
+      },
+      "kind": "plug",
+      "label": "Barrel pigtail envelope; carrier registration pending"
+    },
+    {
+      "id": "relief-pack",
+      "side": "pack",
+      "center_mm": [
+        26,
+        49.7,
+        0
+      ],
+      "size_mm": [
+        3,
+        4.8,
+        3
+      ],
+      "mass_g": {
+        "low": 0.2,
+        "nominal": 0.55,
+        "high": 1.2
+      },
+      "kind": "relief",
+      "label": "Two-lead strain relief"
+    },
+    {
+      "id": "relief-carrier",
+      "side": "carrier",
+      "center_mm": [
+        54,
+        12,
+        8
+      ],
+      "size_mm": [
+        4,
+        4,
+        5
+      ],
+      "mass_g": {
+        "low": 0.2,
+        "nominal": 0.55,
+        "high": 1.2
+      },
+      "kind": "relief",
+      "label": "Fixed pigtail clip and pivot"
+    },
+    {
+      "id": "mount-envelope",
+      "side": "pack",
+      "center_mm": [
+        14,
+        46.2,
+        4
+      ],
+      "size_mm": [
+        68,
+        14,
+        1.5
+      ],
+      "mass_g": {
+        "low": 1.3,
+        "nominal": 2.2,
+        "high": 4.5
+      },
+      "kind": "mount",
+      "label": "Carrier tray and attachment allowance"
+    }
+  ],
+  "printed": [
+    {
+      "id": "rail-addition",
+      "side": "carrier",
+      "center_mm": [
+        0.3164392,
+        -14.2824654,
+        4.0277915
+      ],
+      "size_mm": [
+        0,
+        0,
+        0
+      ],
+      "mass_g": {
+        "low": 3.28324,
+        "nominal": 4.52358,
+        "high": 4.8519
+      },
+      "kind": "print",
+      "label": "Net change from stock enclosure"
+    },
+    {
+      "id": "printed-cover",
+      "side": "pack",
+      "center_mm": [
+        -1.7555875,
+        -0.4889853,
+        -1.7411617
+      ],
+      "size_mm": [
+        0,
+        0,
+        0
+      ],
+      "mass_g": {
+        "low": 7.92166,
+        "nominal": 10.91428,
+        "high": 11.70645
+      },
+      "kind": "print",
+      "label": "Cover at 0.25 mm clearance"
+    }
+  ],
+  "parking": {
+    "pivot_mm": [
+      54,
+      12,
+      8
+    ],
+    "rotation_z_deg": -26,
+    "moving_parts": [
+      "disconnect-carrier"
+    ],
+    "notes": "Manually unplug toward +X and park before sliding. The free pigtail bends about its clip. The animation uses a rotating service arc as a routing approximation. No rolling or sliding requires an electrical connection."
+  },
+  "estimate": {
+    "conductor_length_mm": 235.9916,
+    "harness": {
+      "mass_g": {
+        "low": 7.9825,
+        "nominal": 14.7372,
+        "high": 27.9141
+      },
+      "centroid_mm": [
+        23.2561,
+        32.94822,
+        4.44551
+      ]
+    },
+    "with_printed": {
+      "mass_g": {
+        "low": 19.1874,
+        "nominal": 30.175,
+        "high": 44.4725
+      },
+      "centroid_mm": [
+        10.77048,
+        13.7736,
+        2.14517
+      ]
+    },
+    "scope": "Increment relative to the stock Duck only. Includes the fixed pigtail and replacement enclosure material delta. No dock mass."
+  },
+  "assumptions": [
+    "Material-only printed estimates use 0.90/1.24/1.33 g/cm3 equivalent printed density. Measure the difference against the stock enclosure on a scale.",
+    "Each 0.50 mm folded strip is budgeted as 23.3 x 2.6 x 0.5 mm brass at 8.8 g/cm3. The visible straight section spans 18.5 mm. Include folded tabs and terminals in weigh-in.",
+    "Body dimensions, local CGs, switch, clips, mating connector halves, tray and plug masses are layout and mass allowances with independent low/high values, not a selected BOM. The plate is an envelope for an insulated mount with strain relief. No electrical current passes through the plastic.",
+    "A and B mean centre and sleeve respectively; these are topology identifiers, not asserted voltage polarity. The colour pair illustrates paths.",
+    "Illustrative plug envelope and connector orientation. DC1 is the intended electrical destination per the carrier documentation; exact hole location, plug orientation, mating depth and component clearance are unregistered."
+  ],
+  "pending": [
+    "Measure actual carrier/plug geometry with the boards mated and SW1 accessible.",
+    "Select the keyed two-pole normally-open isolator, mate and insulated mount; verify charge current, switch DC ratings, seating sequence and battery isolation.",
+    "Verify wire OD, bend radius, full removal with parked pigtail and docking clearance. Verify landing does not strike the offboard tray or tether.",
+    "Weigh harness and printed assembly including terminations, crimps, fasteners and strain relief. Remeasure centre of mass before gait or get-up qualification."
+  ]
+}

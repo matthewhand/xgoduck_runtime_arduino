@@ -1,10 +1,70 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
+import {modPolicyStatus, TRAINED_LAYOUTS} from '../assets/sim/mod-policy.mjs';
+import {markerCodebook, readDockPattern} from '../assets/sim/dock-pattern.mjs';
 import {DuckSimulation, parsePose, attitudeFromGravity} from '../assets/sim/sim-core.mjs';
+import {QualificationReplay, SKATE_TURN_LOOP, TURN_SEEK_LOOP, CLEAR_LANE_LOOP, LOWERING_PAIR, RELEASE_PAIR, TRIP_PAIR, mergeDockRecordings, parseQualificationReport} from '../assets/sim/qualification-replay.mjs';
 
 const base = new URL('../assets/sim/',import.meta.url);
 const read = path => readFile(new URL(path,base));
+const stockModels = TRAINED_LAYOUTS['v5-stock-feet'];
+for (const [role, digest] of Object.entries(stockModels)) {
+  const file = await readFile(new URL('../../python/xgoduck_' + role + '.onnx', base));
+  assert.equal(createHash('sha256').update(file).digest('hex'), digest);
+}
+const stockSessions = {loaded_policy_sha256: stockModels};
+assert.equal(modPolicyStatus(false, false, stockSessions).state, 'matched');
+assert.equal(modPolicyStatus(true, false, stockSessions).state, 'untrained');
+assert.equal(modPolicyStatus(false, true, stockSessions).state, 'untrained');
+assert.equal(modPolicyStatus(true, true, stockSessions).state, 'untrained');
+assert.equal(modPolicyStatus(false, false, null).state, 'offline');
+assert.equal(modPolicyStatus(false, false, {active_model: 'xgoduck_walk.onnx'}).state, 'unverified');
+for (const [getup, expected] of [[null, 'mismatch'], [stockModels.walk, 'mismatch'], ['unverified', 'unverified']]) {
+  assert.equal(modPolicyStatus(false, false, {loaded_policy_sha256: {...stockModels, getup}}).state, expected);
+}
+assert.equal(modPolicyStatus(false, false, stockSessions, undefined, {teeth: true}).state, 'candidate');
+assert.equal(modPolicyStatus(true, false, stockSessions, undefined, {teeth: true}).state, 'untrained');
+assert.equal(modPolicyStatus(false, false, stockSessions, undefined, {tusks: true}).state, 'untrained');
+assert.equal(modPolicyStatus(false, false, null, undefined, {teeth: true}).state, 'untrained');
+assert.equal(modPolicyStatus(false, false, stockSessions, undefined, {tail: true}).state, 'untrained');
+assert.equal(modPolicyStatus(false, false, stockSessions, undefined, {tail: true, teeth: true}).state, 'untrained');
+assert.equal(modPolicyStatus(false, true, stockSessions, undefined, {tail: true}).state, 'untrained');
+const transferred = {...stockModels, transferReport: 'test-report'};
+const trained = {...TRAINED_LAYOUTS, 'v5-stock-feet-teeth-r2': transferred};
+assert.equal(modPolicyStatus(false, false, stockSessions, trained, {teeth: true}).state, 'transfer');
+assert.equal(modPolicyStatus(false, true, stockSessions, trained, {teeth: true}).state, 'untrained');
+const harness = JSON.parse(await read('contact-harness.json'));
+const carried = [...harness.printed, ...harness.parts, ...harness.leads];
+for (const key of ['nominal','low','high']) {
+  const mass = carried.reduce((sum, part) => sum + part.mass_g[key], 0);
+  assert(Math.abs(mass - harness.estimate.with_printed.mass_g[key]) < .001);
+}
+for (const lead of harness.leads) {
+  const length = lead.points_mm.slice(1).reduce((sum, point, i) =>
+    sum + Math.hypot(...point.map((value, axis) => value - lead.points_mm[i][axis])), 0);
+  assert(Math.abs(length - lead.length_mm) < .001);
+}
+console.log('PASS: live policy identities and complete weight layouts');
+const {panels} = JSON.parse(await read('dock-vision-layout.json'));
+const codes = markerCodebook(panels);
+function readFixture(bitmap) {
+  const size = 28, pixels = new Uint8Array(size*size*4);
+  for (let y=0; y<size; y++) for (let x=0; x<size; x++) {
+    const ink = bitmap[Math.floor(y/4)][Math.floor(x/4)] === '1';
+    pixels.fill(ink ? 25 : 215,(y*size+x)*4,(y*size+x)*4+3);
+  }
+  return readDockPattern(pixels,size,size,[0,0,size,size],codes);
+}
+for (const {name,bitmap} of panels) {
+  let bits = bitmap.map(row => [...row]);
+  for (let i=0; i<4; i++) {
+    assert.equal(readFixture(bits),name);
+    bits = bits[0].map((_,x) => bits.map(row=>row[x]).reverse());
+  }
+}
+assert.equal(readFixture(['0000000','0111110','0100010','0100010','0100010','0111110','0000000']),null);
+console.log('PASS: all five printed marker IDs in four rotations and an unknown payload');
 const lock = JSON.parse(await read('vendor-lock.json'));
 for (const file of lock.files) {
   const data = await read(file.path);
@@ -26,6 +86,147 @@ try {
     for (const index of sim.model.mesh_face.slice(begin,end)) assert(index>=0&&index<sim.model.mesh_vertnum[mesh]);
   }
   console.log('PASS: real MJCF compiles; 14 distinct motor/joint mappings and valid CAD mesh indices');
+
+  const dockReport = mergeDockRecordings(await Promise.all([
+    'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
+    'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',
+  ]
+    .map(async name => JSON.parse(await read(`${name}-recording.json`)))));
+  const dockCases = parseQualificationReport(dockReport, sim.joints.map(joint => joint.id));
+  const centred = dockCases.get('Centred entry');
+  const footPad = centred.get('Rails + foot pad');
+  assert(footPad.result.passed && footPad.events.has('Foot on pad') && footPad.events.has('Walk again'));
+  assert(footPad.result.dock.sideways_mm > 100);
+  const wide = dockCases.get('Nearly flat').get('Wide exit channel').result;
+  assert(wide.passed && wide.dock.headward_mm < -300 && wide.dock.sideways_mm < 50);
+  for (const angle of [30,45]) {
+    const ramp = centred.get(`Rails + ${angle}° ramp`);
+    assert(ramp.modules.some(module => module.parent === 'world' && module.ramp_deg === angle));
+    assert.equal(ramp.result.dock.recovered, false);
+  }
+  for (const label of ['Low chair', 'Low chair · Skates']) {
+    const trial = centred.get(label);
+    assert(trial.result.passed && trial.events.has('Chair rise'));
+    assert(trial.result.dock.side_tilt_deg < 5 && trial.result.dock.sideways_mm < 10);
+    assert(trial.modules.some(module => module.name === 'Backrest' && module.pitch_deg === 45));
+  }
+  const skating = centred.get('Low chair · Skates');
+  assert(skating.events.has('Roll away'));
+  assert(skating.result.trace.some(frame => frame.wheels_rad.some(angle => Math.abs(angle) > 1)));
+  const approach = dockCases.get('Approach · centred').get('Funnel chair');
+  assert(approach.result.trace[0].root[0] >= .3 && approach.events.has('Lower') && approach.events.has('Seated'));
+  assert(approach.result.passed && approach.result.dock.side_tilt_deg < 5);
+  assert(approach.modules.some(module => module.name === 'Left entry rail' && module.yaw_deg === 14));
+  const fast = dockCases.get('Approach · fast');
+  assert(!fast.get('Low chair · Skates').result.dock.approach_reached);
+  assert(fast.get('Floor-level chair · Skates').result.passed);
+  const pads = dockCases.get('Pad approach · centred');
+  const feetPads = pads.get('Fixed pad chair').result.dock;
+  const skatePads = pads.get('Fixed pad chair · Skates, later tuck').result.dock;
+  assert(feetPads.pads_loaded && feetPads.side_tilt_deg < 25);
+  assert(skatePads.pads_loaded && skatePads.backrest_deg === feetPads.backrest_deg);
+  assert(feetPads.seat_trigger_m > skatePads.seat_trigger_m);
+  assert(Object.values(skatePads.contact_force_n).every(force => force > 1));
+  const refinedName = 'Fixed pad chair · Wider pads and skate roll-off';
+  for (const entry of ['centred', 'left', 'right', 'yaw left', 'yaw right']) {
+    const trial = dockCases.get(`Pad approach · ${entry}`).get(refinedName);
+    const result = trial.result.dock;
+    assert(trial.result.passed && result.roller_release.wheels_only_exit);
+    assert(result.contact_force_n.Left >= 2 && result.contact_force_n.Right >= 2);
+    assert(trial.events.has('Seated') && trial.events.has('Roll away'));
+  }
+  console.log('PASS: docking replay includes the approach, seating, chair rise, and independent wheel motion');
+
+  const stress = dockCases.get('Skate approach · 0.32 m/s · centred');
+  const distance = stress.get('Skate stress · Distance handoff');
+  const clearance = stress.get('Skate stress · Clearance handoff');
+  assert(distance.result.dock.pads_loaded && !distance.events.has('Roll away') && !distance.result.passed);
+  assert(clearance.events.has('Roll away') && clearance.result.passed);
+  assert(clearance.result.dock.roller_release.chair_clearance_mm >= 3);
+  assert(clearance.result.dock.roller_release.after_handoff_m >= .15);
+  const angled = dockCases.get('Seated restart · 10 s · angled left').get('Skate stress · Clearance handoff');
+  assert(angled.result.dock.pads_loaded && !angled.result.passed);
+  console.log('PASS: skate stress replay preserves the failed distance check, successful clearance check, and hard restart');
+
+  const lowering = dockCases.get('Slow skate approach · 0.22 m/s · centred');
+  const [before, after] = LOWERING_PAIR.map(name => lowering.get(name));
+  assert(before.result.dock.pads_loaded && !before.result.passed && after.result.passed);
+  assert(after.events.get('Lower') > before.events.get('Lower'));
+  assert(after.events.get('Roll away') > after.events.get('Seated'));
+  for (const angle of [20,25,30]) {
+    const {modules} = lowering.get(`Controlled · ${angle}° lip`);
+    const lip = modules.find(module => module.name === 'Seat lip');
+    const flatLip = before.modules.find(module => module.name === lip.name);
+    assert.equal(lip.ramp_deg, angle);
+    assert.equal(lip.center_m[0], flatLip.center_m[0]);
+    assert(Math.abs(lip.size_m[2] - flatLip.size_m[2] - .018*Math.tan(angle*Math.PI/180)) < 1e-10);
+    assert(modules.filter(module => module.name.endsWith('seat contact')).every(module => module.pitch_deg === -angle));
+  }
+  console.log('PASS: paired slow skate replay and correctly inclined lips and pads');
+
+  const releaseTrial = dockCases.get('Skate release · 20° lip · 0.32 m/s · centred');
+  const [clearanceCheck, contactCheck] = RELEASE_PAIR.map(name => releaseTrial.get(name));
+  assert(clearanceCheck.result.dock.pads_loaded && !clearanceCheck.events.has('Roll away'));
+  assert(contactCheck.result.passed && contactCheck.events.has('Roll away'));
+  assert(contactCheck.result.dock.roller_release.chair_clearance_mm < 0);
+  assert.deepEqual(contactCheck.result.dock.roller_release.exit_chair_contacts, []);
+  const recess = dockCases.get('Recess trial · 0.28 m/s · 20 mm left');
+  assert(recess.get('Flat seat').result.passed && !recess.get('Raised sides · 5 mm').result.passed);
+  assert.equal(recess.get('Raised sides · 5 mm').modules.filter(module => module.name.endsWith('seat guide')).length, 2);
+  console.log('PASS: skating from a free upright stance and recess trial with both side ramps');
+
+  const bar = dockCases.get('Trip bar · 6 mm · centred');
+  const [trip, stepOver] = TRIP_PAIR.map(name => bar.get(name));
+  assert(trip.events.get('Foot caught') >= trip.events.get('Lean back'));
+  assert(trip.events.get('Seated') > trip.events.get('Foot caught') && trip.result.dock.pads_loaded);
+  assert(!trip.result.passed && !trip.result.dock.bar_entry.dock_and_exit);
+  assert(stepOver.events.get('Right step') > stepOver.events.get('Left step'));
+  assert(!stepOver.events.has('Seated') && !stepOver.result.dock.bar_entry.clean_step);
+  assert(stepOver.result.dock.bar_entry.bar_hit_during_step);
+  for (const trial of [trip, stepOver]) {
+    assert.deepEqual(trial.modules.find(m => m.name === 'Trip bar').size_m, [.008, .22, .006]);
+  }
+  assert(bar.get('Skates · Coast beside short bar').result.passed);
+  assert(bar.get('Feet · Clear lane').result.passed && bar.get('Skates · Clear lane').result.passed);
+  console.log('PASS: foot trip, failed skate step-over and successful clear-lane departures');
+
+  const qualification = dockCases.get('Clear lane · 100 approaches per footwear');
+  assert.deepEqual([...qualification.keys()], CLEAR_LANE_LOOP);
+  for (const name of CLEAR_LANE_LOOP) {
+    const trial = qualification.get(name);
+    const {dock, passed} = trial.result;
+    assert.equal(passed, name.endsWith('Success'));
+    assert.equal(dock.qualification.outcome === 'Clean exit', passed);
+    assert.equal(dock.qualification.cohort_clean, dock.skates ? 49 : 54);
+    assert(!trial.modules.some(module => module.name === 'Trip bar'));
+  }
+  const playlist = {
+    time:1, duration:1, alternating:true, playlist:CLEAR_LANE_LOOP, selected:CLEAR_LANE_LOOP[0],
+    get:() => ({value:1}), select(name) { this.selected = name; },
+  };
+  for (const expected of [...CLEAR_LANE_LOOP.slice(1), CLEAR_LANE_LOOP[0]]) {
+    QualificationReplay.prototype.advance.call(playlist, 1, true);
+    assert.equal(playlist.selected, expected);
+  }
+  console.log('PASS: 200-trial qualification samples and four-clip playback wraparound');
+
+  const turns = dockCases.get('Turn around and seek backwards');
+  for (const name of TURN_SEEK_LOOP.slice(0, 2)) {
+    const clip = turns.get(name);
+    assert(clip.result.passed && clip.events.get('Seek backwards') > clip.events.get('Turn around'));
+    assert(clip.result.dock.navigation.reverse_m > .17 && clip.events.get('Seated') > clip.events.get('Seek backwards'));
+  }
+  const skateTurns = dockCases.get('Skate turnaround trials');
+  for (const name of SKATE_TURN_LOOP) {
+    const clip = skateTurns.get(name);
+    assert(clip.result.dock.skates && !clip.events.has('Seated') && !clip.events.has('Seek backwards'));
+    assert.equal(clip.result.dock.navigation.cohort.total, 9);
+    assert.equal(clip.result.dock.navigation.cohort.ready, 0);
+  }
+  const arc = skateTurns.get('Rolling arc · Anticlockwise');
+  assert(arc.events.has('Slow for reverse') && arc.result.dock.navigation.cohort.held === 9);
+  assert(arc.result.dock.navigation.speed_at_heading > .12);
+  console.log('PASS: walking turn/reverse sequence and matched skate pivot and rolling-arc replays');
 
   const pose = {schema:1,robot:'xgoduck',joints_deg:sim.targetAngles()};
   assert.deepEqual(parsePose(pose,sim.joints),pose.joints_deg);

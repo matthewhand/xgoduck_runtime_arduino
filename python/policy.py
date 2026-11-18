@@ -1,5 +1,6 @@
 """ONNX policy adapter matching the Raspberry Pi deployment math."""
 from __future__ import annotations
+import hashlib
 import math
 from pathlib import Path
 from typing import Optional
@@ -31,6 +32,7 @@ class Policy:
     def unload(self):
         self.session = None
         self.in_name = self.file = ''
+        self.sha256 = None
         self.home_deg = HOME_DEG.copy()
         self._obs = np.empty(OBS_DIM, dtype=np.float32)
         self.reset_action_filter()
@@ -48,7 +50,16 @@ class Policy:
             options = ort.SessionOptions()
             options.intra_op_num_threads = 1
             options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-            sess = ort.InferenceSession(str(p), sess_options=options, providers=['CPUExecutionProvider'])
+            # Bind the reported digest to the same bytes ORT loaded. Models
+            # with external weights still need path-based session loading.
+            model_bytes = p.read_bytes()
+            try:
+                sess = ort.InferenceSession(model_bytes, sess_options=options, providers=['CPUExecutionProvider'])
+                fingerprint = hashlib.sha256(model_bytes).hexdigest()
+            except Exception:
+                sess = ort.InferenceSession(str(p), sess_options=options, providers=['CPUExecutionProvider'])
+                fingerprint = 'unverified'
+            del model_bytes
             inp, out = sess.get_inputs()[0], sess.get_outputs()[0]
             if len(inp.shape) != 2 or inp.shape[-1] != OBS_DIM:
                 raise ValueError(f'expected observation shape [1,61], got {inp.shape}')
@@ -65,6 +76,7 @@ class Policy:
             self.session, self.in_name = sess, inp.name
             self._outputs = [out.name]
             self.file = p.name
+            self.sha256 = fingerprint
             self._feed = {self.in_name: self._obs.reshape(1, OBS_DIM)}
             # Touch all graph arenas before the control loop so the first live
             # switch does not pay cold-session latency.

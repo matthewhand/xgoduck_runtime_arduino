@@ -8,6 +8,7 @@ __pycache__/
 *.a
 *.elf
 *.bin
+!assets/sim/dino-head.bin
 *.hex
 *.map
 *.lst

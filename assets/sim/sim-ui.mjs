@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
-import {DuckSimulation, parsePose} from './sim-core.mjs?v=3';
+import {DuckSimulation, parsePose} from './sim-core.mjs?v=4';
 import {WalkPanel} from './walk-ui.mjs?v=6';
 import {DemoCircuit} from './demo-ui.mjs?v=2';
-import {QualificationReplay} from './qualification-replay.mjs';
-import {GuardPreview} from './guard-preview.mjs?v=4';
+import {QualificationReplay, SKATE_TURN_LOOP, mergeDockRecordings} from './qualification-replay.mjs?v=18';
+import {GuardPreview} from './guard-preview.mjs?v=10';
+import {DOCK_DESIGNS, dockSurfaceGeometry} from './dock-preview.mjs?v=7';
 import {SKATE_SURFACES} from './skate-terrain.mjs';
+
+import {modPolicyStatus} from './mod-policy.mjs?v=4';
+import {loadModPreview, showModLayers} from './mod-preview.mjs?v=2';
 
 const $ = id => document.getElementById(id);
 const viewport = $('viewport');
@@ -28,6 +32,10 @@ let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
 let terrain, towLine, towPoint;
 let replay, lastReplayPose, replayModules = [];
+let dockOverhead = false;
+let modPreview, modLoad, dino, dinoModule, dinoLoad, skinModule;
+let tailPreview, tailLoad, tailGeneration = 0, tailClock = 0, tailPlaying = false;
+let modRequest = 0, jawBody = -1, appliedSkin = 'plain', appliedJawSkin = 'plain';
 let guardPreview, hardwareAssembly = 'translucent';
 const assemblyCamera = assembly => assembly === 'dock' ? 'dock' : assembly === 'exploded' ? 'side' : 'rear';
 
@@ -38,7 +46,13 @@ function showError(error) {
 
 function resetCamera() {
   orbit.maxDistance = mode === 'explore' ? 4.5 : 1.8;
-  orbit.minDistance = mode === 'hardware' ? .075 : .15;
+  orbit.minDistance = mode === 'hardware' || mode === 'mods' ? .075 : .15;
+  if (mode === 'mods') {
+    if (($('mod-teeth').checked || $('mod-tusks').checked) && jawBody >= 0) setJawCamera();
+    else if ($('mod-tail').checked) setTailCamera();
+    else setHardwareCamera($('mod-skin').value !== 'plain' && !$('mod-pack').checked ? 'side' : 'rear');
+    return;
+  }
   if (mode === 'hardware') {
     setHardwareCamera(assemblyCamera(hardwareAssembly));
     return;
@@ -52,8 +66,49 @@ function resetCamera() {
   const follow = mode === 'walk' || mode === 'replay';
   const x = follow ? sim.data.qpos[0] : 0;
   const y = follow ? sim.data.qpos[1] : 0;
-  camera.position.set(x+0.36, y-0.43, 0.28);
-  orbit.target.set(x+0.012, y, 0.145);
+  if (mode === 'replay' && replay.trial?.result.dock) {
+    const approach = typeof replay.trial.result.dock.approach_reached === 'boolean';
+    if (approach) {
+      if (replay.trial.result.dock.navigation) {
+        const points = replay.trial.result.trace.map(frame => frame.root);
+        const xs = [0, ...points.map(p => p[0])], ys = [0, ...points.map(p => p[1])];
+        const cx = (Math.min(...xs) + Math.max(...xs))/2, cy = (Math.min(...ys) + Math.max(...ys))/2;
+        const rx = Math.max(...xs) - cx + .13, ry = Math.max(...ys) - cy + .15;
+        const t = Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+        const range = Math.max(.65, rx/(t*camera.aspect), ry/t);
+        orbit.maxDistance = Math.max(1.8, range*2);
+        camera.position.set(cx, cy-(dockOverhead ? .002 : range*.8), .08+range*(dockOverhead ? 1 : .8));
+        orbit.target.set(cx, cy, .08);
+      } else if (replay.trial.result.dock.qualification || replay.trial.result.dock.lowering_test || replay.trial.result.dock.bar_entry) {
+        // Frame the chair and the farthest roll-away from either clip.
+        let far = 0;
+        for (const {result} of replay.trials.values()) for (const frame of result.trace) {
+          far = Math.max(far, frame.root[0]);
+        }
+        const near = -.08;
+        far += .16;
+        const centre = (near + far) / 2;
+        const distance = Math.max(.75, (far - near) * .58 /
+          (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect));
+        camera.position.set(centre + (dockOverhead ? 0 : .14), dockOverhead ? -.002 : -distance,
+          dockOverhead ? Math.max(.88, distance) : .36);
+        orbit.target.set(centre, 0, .08);
+      } else {
+        const centre = replay.trial.result.trace[0].root[0] / 2;
+        camera.position.set(centre + (dockOverhead ? 0 : .2), dockOverhead ? -.002 : -.63, dockOverhead ? .82 : .38);
+        orbit.target.set(centre, 0, .05);
+      }
+    } else if (dockOverhead) {
+      camera.position.set(x, y-.002, .64);
+      orbit.target.set(x, y, .055);
+    } else {
+      camera.position.set(x+.27, y-.36, .26);
+      orbit.target.set(x+.025, y, .10);
+    }
+  } else {
+    camera.position.set(x+0.36, y-0.43, 0.28);
+    orbit.target.set(x+0.012, y, 0.145);
+  }
   orbit.update();
 }
 
@@ -68,6 +123,19 @@ function setHardwareCamera(view = 'rear') {
     camera.position.set(...(view === 'side' ? [-.271,-.440,.246] : [-.466,-.025,.191]));
     orbit.target.set(-.042,0,.133);
   }
+  orbit.update();
+}
+
+function setTailCamera() {
+  const [x, y, h] = sim.data.qpos;
+  orbit.target.set(x - .07, y, h - .025);
+  camera.position.copy(orbit.target).add(new THREE.Vector3(-.14, -.45, .12));
+  orbit.update();
+}
+
+function setJawCamera() {
+  orbit.target.fromArray(sim.data.xpos, jawBody * 3);
+  camera.position.copy(orbit.target).add(new THREE.Vector3(.16, -.23, .08));
   orbit.update();
 }
 
@@ -88,6 +156,7 @@ function makeGeometry(id) {
 
 function buildRobot() {
   const model = sim.model;
+  jawBody = sim.mj.mj_name2id(model, sim.mj.mjtObj.mjOBJ_BODY.value, 'jaw_soft');
   for (let geom = 0; geom < model.ngeom; geom++) {
     if (model.geom_type[geom] !== sim.mj.mjtGeom.mjGEOM_MESH.value) continue;
     const collision = model.geom_group[geom] === 3;
@@ -105,7 +174,7 @@ function buildRobot() {
     mesh.visible = !collision;
     const body = model.geom_bodyid[geom];
     const joint = sim.joints.find(joint => joint.index === model.body_jntadr[body]);
-    mesh.userData = {geom, jointId:joint?.id, wheelSide:wheel?.[1], bodyJoint:model.body_jntadr[body]};
+    mesh.userData = {geom, meshName: name, jointId:joint?.id, wheelSide:wheel?.[1], bodyJoint:model.body_jntadr[body]};
     scene.add(mesh);
     (collision ? collisionMeshes : visualMeshes).push(mesh);
   }
@@ -116,6 +185,8 @@ function buildRobot() {
 }
 
 function clearRobot() {
+  if (appliedSkin !== 'plain') skinModule?.setShellSkin(visualMeshes, sim, 'plain');
+  appliedSkin = 'plain';
   for (const mesh of [...visualMeshes, ...collisionMeshes]) {
     scene.remove(mesh);
     mesh.material.dispose();
@@ -240,7 +311,10 @@ function buildJointControls() {
 function updateModeText() {
   const rollout = rolloutMode(mode);
   const replaying = mode === 'replay';
+  const dockingReplay = replaying && Boolean(replay.trial?.result.dock);
+  const inspecting = mode === 'hardware' || mode === 'mods';
   const hardware = mode === 'hardware';
+  $('mods-card').hidden = mode !== 'mods';
   const skates = mode === 'skates';
   const physics = mode === 'walk' || mode === 'physics';
   const tab = demoMode ? 'demo' : physics ? 'walk' : mode;
@@ -248,12 +322,23 @@ function updateModeText() {
   $('physics-controller-label').hidden = !physics || demoMode;
   if (physics) $('physics-controller').value = mode;
   $('demo-card').hidden = !demoMode;
-  $('joint-card').hidden = demoMode || replaying || hardware;
+  $('joint-card').hidden = demoMode || replaying || inspecting;
   $('qualification-card').hidden = !replaying;
   $('hardware-card').hidden = $('hardware-views').hidden = $('hardware-toolbar').hidden = !hardware;
-  $('sim-toolbar').hidden = $('sim-stats').hidden = hardware;
-  $('matrix-player').hidden = $('board-strip').hidden = hardware || skates;
-  $('mode-note').hidden = hardware;
+  $('sim-toolbar').hidden = $('sim-stats').hidden = inspecting;
+  $('matrix-player').hidden = $('board-strip').hidden = inspecting || skates || dockingReplay;
+  $('qualification-title').textContent = dockingReplay ? 'Docking replay' : 'Qualification replay';
+  const dockSelectors = $('dock-replay-selectors');
+  const selectorsDestination = dockingReplay ? dockSelectors : $('qualification-selectors');
+  for (const id of ['qualification-case-field', 'qualification-variant-field', 'qualification-alternate-label']) {
+    const field = $(id);
+    if (field.parentElement !== selectorsDestination) selectorsDestination.append(field);
+  }
+  dockSelectors.hidden = !dockingReplay;
+  $('dock-overhead').hidden = !dockingReplay;
+  $('dock-overhead').setAttribute('aria-pressed', String(dockOverhead));
+  if (!dockingReplay) $('dock-contact-overlay').hidden = true;
+  $('mode-note').hidden = inspecting;
   $('physics-card').hidden = !playground(mode) || demoMode;
   $('physics-title').textContent = skates ? 'Roller skates' : 'Physics playground';
   $('skate-tools').hidden = !skates || demoMode;
@@ -263,12 +348,12 @@ function updateModeText() {
   $('explode-wheels').textContent = wheelsExploded ? 'Assemble wheels' : 'Explode wheels';
   $('live-card').hidden = mode !== 'live';
   $('live-source').disabled = demoMode;
-  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode || replaying || hardware || skates;
+  $('walk-card').hidden = $('walk-hud').hidden = !rollout; $('pose-card').hidden = rollout || demoMode || replaying || inspecting || skates;
   $('play').hidden = $('reset').hidden = rollout || demoMode;
   $('collisions').parentElement.hidden = rollout;
   $('export').disabled = rollout;
-  collisionMeshes.forEach(mesh => { mesh.visible = !rollout && !hardware && $('collisions').checked; });
-  jointMarkers.forEach(({arrow}) => { arrow.visible = !hardware && $('axes').checked; });
+  collisionMeshes.forEach(mesh => { mesh.visible = !rollout && !inspecting && $('collisions').checked; });
+  jointMarkers.forEach(({arrow}) => { arrow.visible = !inspecting && $('axes').checked; });
   $('gait').classList.toggle('active', gait);
   $('play').disabled = (mode === 'pose' && !gait) || (replaying && (!replay.frame || replay.duration === 0));
   $('reset').disabled = replaying && !replay.frame;
@@ -277,25 +362,52 @@ function updateModeText() {
   $('nudge').disabled = wheelsExploded;
   $('clock-label').textContent = replaying ? 'REPLAY TIME' : gait ? 'PREVIEW TIME' : 'SIM TIME';
   $('reset').textContent = replaying ? 'Rewind' : playground(mode) ? 'Reset physics' : mode === 'live' ? 'Re-centre' : 'Reset pose';
-  $('scene-mode').parentElement.hidden = hardware;
-  $('scene-mode').textContent = skates ? 'PHYSICS / ROLLER SKATES' : replaying ? 'QUALIFICATION REPLAY' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').parentElement.hidden = inspecting;
+  const recordedDock = replay?.trial?.result.dock;
+  const outcome = recordedDock?.bar_entry?.dock_and_exit ? 'Exited forward'
+    : recordedDock?.pads_loaded ? 'Pads loaded, exit missed' : 'Missed pads';
+  const dockSceneLabel = recordedDock?.navigation ? navigationLabel(replay.frame, recordedDock.navigation)
+    : recordedDock?.qualification ? `${replay.selectedLabel} · #${recordedDock.qualification.id}`
+    : recordedDock?.bar_entry ? `${replay.selectedLabel} · ${outcome}`
+    : recordedDock?.lowering_test ? replay.selectedLabel : recordedDock?.chair ? 'CHAIR DOCK' : 'FLOOR DOCK';
+  $('scene-mode').textContent = skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? 'QUALIFICATION REPLAY' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : skates ? 'Roll forward gives the four passive wheels a push. Choose a surface or compare tow mounts in the skate controls.'
     : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
     : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
     : mode === 'live' ? 'Read-only telemetry. Target previews are commanded angles; missing measured joints remain unavailable.'
-    : replaying ? 'Recorded MuJoCo poses. Switch variants to compare at the same time. Gold accessory shapes mark ground contact.'
+    : dockingReplay && recordedDock.navigation ? `${recordedDock.navigation.outcome} · Teal shows the recorded path. Steering uses the simulated dock pose.`
+    : dockingReplay && recordedDock.qualification ? `${recordedDock.qualification.outcome} · ${recordedDock.qualification.cohort_clean}/100 clean exits on ${recordedDock.skates ? 'skates' : 'feet'}.`
+    : dockingReplay && replay.trial.result.dock.bar_entry ? 'Orange marks the trip bar. Loaded contacts turn gold.'
+    : dockingReplay ? (replay.trial.result.dock.contact_force_n
+      ? 'The chair supports the Duck on two fixed pads. The force readouts show mechanical loading. The blue line marks where lowering starts.'
+      : replay.trial.result.dock.chair
+      ? (typeof replay.trial.result.dock.approach_reached === 'boolean'
+        ? 'This trial starts outside the chair. The feet walk backwards and the skates start in a backward coast. Gold marks contact.'
+        : 'This trial starts just clear of the backrest. The Duck settles with torque off before rising. Gold marks contact.')
+      : 'The Duck settles with torque off. The shipped controller takes over after 1.2 s. Gold marks contact.')
+    : replaying ? 'Recorded MuJoCo poses. Switch variants to compare at the same time. Gold accessory shapes mark contact.'
     : gait ? 'A procedural joint cycle for checking articulation. It is a kinematic preview, without gravity or a walking policy.'
     : 'Adjust joint angles within the CAD model’s limits. Poses are local previews; they do not send motor commands.';
   updateRows();
 }
 
 function setMode(next) {
-  if (!['pose','physics','walk','explore','live','replay','hardware','skates'].includes(next)) return;
+  if (!['pose','physics','walk','explore','live','replay','hardware','mods','skates'].includes(next)) return;
   if (next === 'hardware' && !guardPreview) {
     guardPreview = new GuardPreview();
     scene.add(guardPreview.group);
+  }
+  const previousMode = mode;
+  if (previousMode === 'mods' && next !== 'mods') {
+    ++modRequest;
+    ++tailGeneration;
+    tailPlaying = false;
+    if (dino) dino.visible = false;
+    if (appliedSkin !== 'plain') skinModule?.setShellSkin(visualMeshes, sim, 'plain');
+    appliedSkin = 'plain';
+    for (const mesh of visualMeshes) mesh.visible = true;
   }
   const changedWalk = mode !== next && (rolloutMode(mode) || rolloutMode(next));
   const changedReplay = mode !== next && (mode === 'replay' || next === 'replay');
@@ -314,7 +426,8 @@ function setMode(next) {
     resetCamera();
   }
   if (guardPreview) guardPreview.group.visible = mode === 'hardware';
-  if (changedHardware || changedSkates) resetCamera();
+  if (modPreview) modPreview.visible = mode === 'mods';
+  if (changedHardware || changedSkates || next === 'mods' || previousMode === 'mods') resetCamera();
   sim.data.qvel.fill(0); sim.accumulator = 0;
   if (mode === 'live' && lastPacket && performance.now()-lastPacketAt<2500) liveResult = sim.applyTelemetry(lastPacket, $('live-source').value);
   updateModeText();
@@ -391,7 +504,19 @@ async function selectWorkspace(next) {
     demoMode = false;
     demo.stop();
   }
-  if (next === 'skates' && !skateSim) {
+  if (next === 'mods' && !modPreview) {
+    try {
+      modLoad ??= loadModPreview().then(group => { modPreview = group; scene.add(group); })
+        .finally(() => { modLoad = null; });
+      await modLoad;
+    } catch (error) {
+      if (request === workspaceRequest) showError(error);
+      return;
+    }
+    if (stopping || request !== workspaceRequest) return;
+  }
+  const useSkates = next === 'skates' || (next === 'mods' && $('mod-skates').checked);
+  if (useSkates && !skateSim) {
     $('loading-message').textContent = 'Loading the roller skate model…';
     $('loading').hidden = false;
     try {
@@ -405,13 +530,46 @@ async function selectWorkspace(next) {
     if (stopping || request !== workspaceRequest) return;
   }
   $('loading').hidden = true;
-  useSimulation(next);
+  useSimulation(useSkates ? 'skates' : next);
   if (next === 'demo') {
     demoMode = true;
     setMode('pose');
     updateDemoStatus('Starting the demo…', 'LOOP', true);
     void demo.start();
-  } else setMode(next);
+  } else {
+    setMode(next);
+    if (next === 'mods') {
+      await updateTailSelection();
+      if (request !== workspaceRequest || stopping) return;
+      updateMods();
+      await updateModCosmetics();
+    }
+    if (next === 'replay' && replay.trial) await showReplayTrial('case');
+  }
+}
+
+async function openDockReplay(variant, scenario = 'Skate turnaround trials') {
+  await selectWorkspace('replay');
+  const request = workspaceRequest;
+  const status = $('qualification-status');
+  status.textContent = 'Loading the dock trials…';
+  try {
+    const recordings = await Promise.all([
+      'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
+      'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',
+    ].map(async name => {
+      const response = await fetch(new URL(`./${name}-recording.json?v=10`, import.meta.url),
+        {signal:AbortSignal.timeout(10000)});
+      if (!response.ok) throw new Error('Dock trials could not be loaded.');
+      return response.json();
+    }));
+    if (request !== workspaceRequest) return;
+    replay.setRecording(mergeDockRecordings(recordings), {scenario, variant:variant ?? SKATE_TURN_LOOP[0], alternate:!variant});
+    running = true;
+    updateModeText();
+  } catch (error) {
+    if (request === workspaceRequest) status.textContent = error.message;
+  }
 }
 
 function animateGait(dt) {
@@ -465,49 +623,115 @@ function rolloutPacket() {
   return Boolean(sample?.arena) === (mode === 'explore') ? sample : null;
 }
 
-function updateReplayModules(modules = []) {
+function updateReplayModules(modules = [], dock) {
   for (const {mesh} of replayModules) {
     scene.remove(mesh);
     mesh.geometry.dispose();
     mesh.material.dispose();
   }
   replayModules = [];
+  if (dock?.contact_force_n && typeof dock.approach_reached === 'boolean' && Number.isFinite(dock.seat_trigger_m)) {
+    modules = [...modules, {name:'Lowering line', parent:'world',
+      center_m:[dock.seat_trigger_m,0,.0007], size_m:[.002,.14,.001]}];
+  }
+  if (dock?.navigation) {
+    const path = replay.trial.result.trace
+      .filter(f => ['turn_around','brake_turn','reverse_seek'].includes(f.recovery.phase))
+      .map(f => new THREE.Vector3(f.root[0], f.root[1], .0014));
+    const color = '#65ccb7';
+    const mesh = new THREE.Line(new THREE.BufferGeometry().setFromPoints(path), new THREE.LineBasicMaterial({color}));
+    scene.add(mesh);
+    replayModules.push({mesh, parent:0, name:'Recorded path', color});
+    const marks = Array.from({length:8}, (_, i) => ({name:'Lane centre', parent:'world',
+      center_m:[.105+i*.04,0,.0006], size_m:[.020,.002,.001]}));
+    modules = [...modules, ...marks];
+  }
   for (const module of modules) {
-    const parent = sim.mj.mj_name2id(sim.model, sim.mj.mjtObj.mjOBJ_BODY.value, module.parent);
+    const parent = module.parent === 'world' ? 0 : sim.mj.mj_name2id(sim.model, sim.mj.mjtObj.mjOBJ_BODY.value, module.parent);
     if (parent < 0) continue;
     let geometry;
     if (module.capsule_m) {
       const [radius, length] = module.capsule_m;
       geometry = new THREE.CapsuleGeometry(radius, length - 2 * radius, 5, 12);
       geometry.rotateX(Math.PI / 2);
-    } else geometry = new THREE.BoxGeometry(...module.size_m);
+    } else geometry = dockSurfaceGeometry(module);
     geometry.translate(...module.center_m);
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color:'#7295f4'}));
+    const color = module.name.endsWith(' contact') ? '#c99a5e'
+      : module.name === 'Trip bar' ? '#f17242' : ['Lane centre', 'Lowering line'].includes(module.name) ? '#6fd6ff' : module.name.endsWith('entry rail') ? '#4cb6a6' : '#7295f4';
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color}));
     mesh.matrixAutoUpdate = false;
     scene.add(mesh);
-    replayModules.push({mesh, parent, name:module.name});
+    replayModules.push({mesh, parent, name:module.name, color});
   }
+}
+
+function navigationLabel(frame, navigation) {
+  const phase = frame?.recovery?.phase;
+  if (phase === 'brake_turn') return 'Braking for reverse';
+  if (phase === 'turn_around' || phase === 'reverse_seek') {
+    const [, y, , w, qx, qy, qz] = frame.root;
+    const yaw = Math.atan2(2*(w*qz+qx*qy), 1-2*(qy*qy+qz*qz));
+    return phase === 'turn_around' ? `Turn around · ${Math.round(yaw*180/Math.PI)}°`
+      : `Seek backwards · ${Math.round(Math.abs(y)*1000)} mm off centre`;
+  }
+  return phase === 'approach_missed' ? navigation.outcome : replay.selectedLabel;
 }
 
 function applyReplayPose() {
   const packet = replay.frame;
-  if (!packet || packet === lastReplayPose) return;
+  if (!packet || packet === lastReplayPose || Boolean(replay.trial.result.dock?.skates) !== Boolean(sim.skates)) return;
   lastReplayPose = packet;
+  if (replay.trial.result.dock?.navigation) $('scene-mode').textContent = navigationLabel(packet, replay.trial.result.dock.navigation);
+  const contact = $('dock-contact-overlay');
+  const pushOff = Array.isArray(packet.push_off) ? packet.push_off.join(' · ') : '';
+  contact.hidden = !replay.trial.result.dock || !pushOff;
+  if (contact.textContent !== pushOff) contact.textContent = pushOff;
   const data = sim.data, q = data.qpos;
   const dx = packet.root[0] - q[0], dy = packet.root[1] - q[1];
   q.set(packet.root, 0);
   for (const joint of sim.joints) q[joint.address] = packet.joints_rad[joint.id];
+  for (const [index, address] of sim.wheelPositions.entries()) q[address] = packet.wheels_rad[index];
   sim.mj.mj_forward(sim.model, data);
-  for (const {mesh, parent, name} of replayModules) {
+  for (const {mesh, parent, name, color} of replayModules) {
     const a = data.xmat, b = data.xpos, m = parent * 9, p = parent * 3;
     mesh.matrix.set(a[m],a[m+1],a[m+2],b[p], a[m+3],a[m+4],a[m+5],b[p+1],
                     a[m+6],a[m+7],a[m+8],b[p+2], 0,0,0,1);
     mesh.matrixWorldNeedsUpdate = true;
     const contacts = packet.module_contacts;
-    mesh.material.color.set(Array.isArray(contacts) && contacts.includes(name) ? '#edc16f' : '#7295f4');
+    mesh.material.color.set(Array.isArray(contacts) && contacts.includes(name) ? '#edc16f' : color);
   }
-  orbit.target.x += dx; orbit.target.y += dy;
-  camera.position.x += dx; camera.position.y += dy;
+  if (typeof replay.trial.result.dock?.approach_reached !== 'boolean') {
+    orbit.target.x += dx; orbit.target.y += dy;
+    camera.position.x += dx; camera.position.y += dy;
+  }
+}
+
+async function showReplayTrial(action) {
+  if (mode !== 'replay') return;
+  const trial = replay.trial;
+  const skates = trial.result.dock?.skates;
+  if (action === 'seek' || (action === 'case' && !trial.result.dock)) running = false;
+  if (skates && !skateSim) {
+    try { await prepareSkates(); }
+    catch (error) {
+      if (mode === 'replay' && replay.trial === trial) showError(error);
+      return;
+    }
+    if (stopping || mode !== 'replay' || replay.trial !== trial) return;
+  }
+  const modelChanged = Boolean(skates) !== Boolean(sim.skates);
+  if (modelChanged) {
+    useSimulation(skates ? 'skates' : 'replay');
+    if (skates) sim.setSurface('flat');
+    sim.mode = 'replay';
+  }
+  if (action !== 'seek' || modelChanged) {
+    lastReplayPose = null;
+    updateReplayModules(trial.modules, trial.result.dock);
+  }
+  applyReplayPose();
+  if (action === 'case' || modelChanged) resetCamera();
+  updateModeText();
 }
 
 function buildSearchArena(walls) {
@@ -521,7 +745,174 @@ function buildSearchArena(walls) {
   }
 }
 
+async function updateTailSelection() {
+  const generation = ++tailGeneration;
+  if ($('mod-tail').checked && !tailPreview) {
+    $('mod-tail-play').disabled = true;
+    $('mod-tail-note').textContent = 'Loading the tail assembly…';
+    try {
+      tailLoad ??= import('./tail-preview.mjs?v=2').then(module => module.loadTailPreview())
+        .then(loaded => {
+          tailPreview = loaded;
+          loaded.group.visible = false;
+          modPreview.add(loaded.group);
+        }).catch(error => { tailLoad = null; throw error; });
+      await tailLoad;
+    } catch (error) {
+      if (generation === tailGeneration) {
+        $('mod-tail-note').textContent = error.message;
+        $('mod-mass').textContent = 'Tail geometry unavailable.';
+      }
+      return;
+    }
+  }
+  if (stopping || generation !== tailGeneration || mode !== 'mods') return;
+  syncTailPlayback();
+  updateMods();
+}
+
+function syncTailPlayback() {
+  const selected = mode === 'mods' && $('mod-tail').checked;
+  const matches = selected && !sim.skates && !$('mod-teeth').checked && !$('mod-tusks').checked;
+  $('mod-tail-play').disabled = !matches || !tailPreview?.hasTrace;
+  const play = !$('mod-tail-play').disabled && $('mod-tail-play').checked;
+  if (!matches) $('mod-tail-play').checked = false;
+  if (tailPlaying && !play) {
+    sim.reset('STAND');
+    tailPreview?.rest();
+    if (mode === 'mods') resetCamera();
+  }
+  if (!tailPlaying && play) tailClock = 0;
+  tailPlaying = play;
+  if (selected && tailPreview) $('mod-tail-note').textContent = matches
+    ? tailPreview.trialText : 'Static fit preview. The recorded trial uses stock feet and the stock head.';
+}
+
+function updateMods() {
+  const tail = $('mod-tail').checked;
+  const pack = $('mod-pack').checked;
+  if (modPreview) {
+    showModLayers(modPreview, pack, $('mod-trace').checked);
+    if (tail) {
+      modPreview.getObjectByName('rails').visible = true;
+      $('mod-mass').textContent = tailPreview?.massText || 'Loading tail mass estimate…';
+    } else showModMass(modPreview.userData.harness, pack);
+  }
+  $('mod-tail-controls').hidden = !tail;
+  $('mod-pack-id').hidden = !(tail || pack);
+  if (tailPreview) tailPreview.group.visible = tail;
+  for (const id of ['mod-bill', 'mod-trace-label']) $(id).hidden = !pack;
+  $('mod-routing').hidden = !pack || !$('mod-trace').checked;
+  updateModStatus();
+}
+
+async function updateModCosmetics({focus = false} = {}) {
+  const request = ++modRequest;
+  const teeth = $('mod-teeth').checked, tusks = $('mod-tusks').checked;
+  const pattern = $('mod-skin').value;
+  $('mod-skin-note').hidden = pattern === 'plain';
+  $('mod-tusk-camera').hidden = !tusks;
+  $('mod-jaw-mass').hidden = !teeth && !tusks;
+  $('mod-jaw-mass').textContent = 'Jaw mass estimate pending.';
+  updateModStatus();
+  try {
+    if (teeth || tusks) {
+      dinoLoad ??= import('./dino-preview.mjs?v=3').then(async module => {
+        const group = await module.loadDinoPreview();
+        dino = group;
+        dinoModule = module;
+        dino.visible = false;
+        scene.add(dino);
+      }).catch(error => { dinoLoad = null; throw error; });
+      await dinoLoad;
+    }
+    if (pattern !== 'plain') skinModule ??= await import('./skin-preview.mjs');
+    if (stopping || request !== modRequest || mode !== 'mods') return;
+    if (appliedSkin !== pattern) {
+      if (pattern !== 'plain' && !teeth && !tusks && !$('mod-pack').checked) setHardwareCamera('side');
+      skinModule?.setShellSkin(visualMeshes, sim, pattern);
+      appliedSkin = pattern;
+    }
+    if (dino) {
+      if (appliedJawSkin !== pattern) {
+        const panels = [];
+        dino.traverse(mesh => { if (mesh.userData.meshName === 'head_roll') panels.push(mesh); });
+        skinModule?.setShellSkin(panels, sim, pattern);
+        appliedJawSkin = pattern;
+      }
+      dino.visible = teeth || tusks;
+      if (dino.visible) {
+        updateJaw(performance.now() / 1000);
+        const mass = dino.userData.massByVariant?.[teeth && tusks ? 'combined' : teeth ? 'teeth' : 'tusks'];
+        if (mass && Number.isFinite(mass.nominal)) {
+          $('mod-jaw-mass').textContent = 'Jaw change · ' + mass.nominal.toFixed(2) +
+            ' g estimated (' + mass.low.toFixed(2) + '–' + mass.high.toFixed(2) + ' g).';
+        }
+        if (focus) setJawCamera();
+      }
+    }
+    for (const mesh of visualMeshes) {
+      if (mesh.userData.meshName === 'head_roll') mesh.visible = !dino?.visible || !dino.userData.replacesHeadRoll;
+    }
+  } catch (error) {
+    if (request === modRequest) showError(error);
+  }
+}
+
+function updateJaw(seconds) {
+  if (!dino?.visible || jawBody < 0) return;
+  const {xpos, xquat} = sim.data;
+  dino.position.fromArray(xpos, jawBody * 3);
+  const j = jawBody * 4;
+  dino.quaternion.set(xquat[j + 1], xquat[j + 2], xquat[j + 3], xquat[j]);
+  dinoModule.updateDinoPreview(dino, seconds, {teeth: $('mod-teeth').checked, tusks: $('mod-tusks').checked});
+}
+
+function showModMass(harness, pack) {
+  if (!pack) {
+    $('mod-mass').textContent = 'Stock V5 enclosure. Geometry preview only.';
+    return;
+  }
+  const parts = harness.parts;
+  const groups = [
+    ['Rails and cover', harness.printed.map(part => part.mass_g)],
+    ['Insulated leads', harness.leads.map(lead => lead.mass_g)],
+    ['Fixed contacts', parts.filter(part => part.id.startsWith('pad-')).map(part => part.mass_g)],
+    ['Connector halves', parts.filter(part => part.id.startsWith('disconnect-')).map(part => part.mass_g)],
+    ['Charge plug', parts.filter(part => part.id === 'plug-envelope').map(part => part.mass_g)],
+    ['Keyed isolator', parts.filter(part => part.id === 'keyed-isolator').map(part => part.mass_g)],
+    ['Tray and mount', parts.filter(part => part.kind === 'mount').map(part => part.mass_g)],
+    ['Strain relief', parts.filter(part => part.id.startsWith('relief-')).map(part => part.mass_g)],
+  ];
+  const total = harness.estimate.with_printed.mass_g;
+  $('mod-mass').textContent = 'Wired backpack · ' + total.nominal.toFixed(1) + ' g (' +
+    total.low.toFixed(1) + '–' + total.high.toFixed(1) + ' g). Robot-side parts only.';
+  const rows = groups.map(([label, masses]) => {
+    const nominal = masses.reduce((sum, mass) => sum + mass.nominal, 0);
+    const row = document.createElement('div');
+    const term = document.createElement('dt'), value = document.createElement('dd');
+    term.textContent = label;
+    value.textContent = nominal.toFixed(2) + ' g';
+    row.append(term, value);
+    return row;
+  });
+  $('mod-components').replaceChildren(...rows);
+}
+
+function updateModStatus() {
+  const pack = $('mod-pack').checked;
+  const packet = lastPacket && performance.now() - lastPacketAt < 2500 ? lastPacket : null;
+  const result = modPolicyStatus(pack, $('mod-skates').checked, packet, undefined, {
+    teeth: $('mod-teeth').checked, tusks: $('mod-tusks').checked, tail: $('mod-tail').checked,
+  });
+  const status = $('mod-status');
+  if (status.textContent !== result.text) status.textContent = result.text;
+  status.style.color = ['matched', 'transfer'].includes(result.state) ? 'var(--mint)' : 'var(--amber)';
+  $('mod-board').textContent = packet ? 'Board · ' + packet.mode + ' · ' + (packet.active_model || 'no active model') : 'Board telemetry offline';
+}
+
 function updateBoard() {
+  if (mode === 'mods') updateModStatus();
   const fresh = lastPacket && performance.now() - lastPacketAt < 2500;
   $('board-dot').style.background = fresh ? '#8edac8' : '#edc16f';
   $('board-state').textContent = fresh ? 'Connected' : 'Not connected';
@@ -571,6 +962,23 @@ async function pollBoard() {
 }
 
 function attachControls() {
+  for (const id of ['mod-pack','mod-tail']) {
+    $(id).addEventListener('change', async () => {
+      if ($(id).checked) $(id === 'mod-tail' ? 'mod-pack' : 'mod-tail').checked = false;
+      updateMods();
+      await updateTailSelection();
+      if (mode === 'mods' && id === 'mod-tail' && $('mod-tail').checked) setTailCamera();
+    });
+  }
+  $('mod-tail-play').addEventListener('change', syncTailPlayback);
+  $('mod-trace').addEventListener('change', updateMods);
+  for (const id of ['mod-teeth', 'mod-tusks', 'mod-skin']) {
+    $(id).addEventListener('change', () => {
+      syncTailPlayback();
+      void updateModCosmetics({focus: id !== 'mod-skin'});
+    });
+  }
+  $('mod-skates').addEventListener('change', () => void selectWorkspace('mods'));
   document.querySelectorAll('[data-mode]').forEach(button => { button.disabled=false; button.addEventListener('click', () => selectWorkspace(button.dataset.mode)); });
   $('demo-toggle').addEventListener('click', () => {
     if (demo.controller) demo.stop();
@@ -588,29 +996,33 @@ function attachControls() {
     updateModeText();
   });
   $('camera').addEventListener('click', resetCamera);
+  $('dock-overhead').addEventListener('click', () => {
+    dockOverhead = !dockOverhead;
+    resetCamera();
+    updateModeText();
+  });
   for (const button of document.querySelectorAll('[data-hardware-camera]')) {
     button.addEventListener('click', () => setHardwareCamera(button.dataset.hardwareCamera));
   }
   $('hardware-test-pattern').addEventListener('change', event => guardPreview.setTestPattern(event.target.checked));
-  const dockSpacing = $('dock-spacing');
-  dockSpacing.addEventListener('input', () => {
-    const distance = Number(dockSpacing.value);
-    guardPreview.setDockSpacing(distance);
-    $('dock-spacing-value').textContent = distance ? `${distance} mm back` : 'Parked position';
-  });
+  const dockDesign = $('dock-design');
+  dockDesign.replaceChildren(...DOCK_DESIGNS.map(name => new Option(name, name)));
+  dockDesign.value = 'Fixed pad chair';
+  dockDesign.addEventListener('change', () => guardPreview.setDockDesign(dockDesign.value));
+  $('dock-replay').addEventListener('click', () => void openDockReplay(dockDesign.value, 'Centred entry'));
   const assemblies = document.querySelectorAll('[data-assembly]');
   const hardwareNotes = {
     cutout: 'The faceplate shields the carrier. Its opening lines up with the carrier’s existing matrix cut-out.',
     translucent: 'The optional translucent window covers the display opening. Air can still pass around the open edges.',
     exploded: 'The shroud and blue carrier separate to expose the inner UNO Q, its matrix and the mated headers.',
-    dock: 'A removable receiver sits beside the matrix. The dock guides line up the two coils as the Duck backs in.',
+    dock: 'Compare flat trays and chairs. Play a trial to see how the Duck settles, rises and clears the dock.',
   };
   for (const button of assemblies) {
     button.addEventListener('click', () => {
       const assembly = button.dataset.assembly;
       guardPreview.show(assembly);
       $('dock-controls').hidden = assembly !== 'dock';
-      if (assembly === 'dock') guardPreview.setDockSpacing(Number(dockSpacing.value));
+      if (assembly === 'dock') guardPreview.setDockDesign(dockDesign.value);
       for (const option of assemblies) option.setAttribute('aria-pressed', String(option === button));
       $('hardware-note').textContent = hardwareNotes[assembly];
       const changedMountView = assemblyCamera(hardwareAssembly) !== assemblyCamera(assembly);
@@ -681,7 +1093,7 @@ function attachControls() {
   let down = null;
   renderer.domElement.addEventListener('pointerdown', event => { down = {x:event.clientX,y:event.clientY}; });
   renderer.domElement.addEventListener('pointerup', event => {
-    if (mode === 'hardware' || !down || Math.hypot(down.x-event.clientX,down.y-event.clientY)>5) return;
+    if (mode === 'hardware' || mode === 'mods' || !down || Math.hypot(down.x-event.clientX,down.y-event.clientY)>5) return;
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.set((event.clientX-rect.left)/rect.width*2-1, -(event.clientY-rect.top)/rect.height*2+1);
     raycaster.setFromCamera(pointer,camera);
@@ -699,10 +1111,24 @@ function frame(time) {
     if (running && mode === 'pose' && gait) animateGait(dt);
     if (rolloutMode(mode)) animateWalk(dt);
     if (mode === 'replay') {
-      if (running && !replay.advance(dt)) { running = false; updateModeText(); }
+      if (running && !replay.advance(dt, Boolean(replay.trial?.result.dock))) { running = false; updateModeText(); }
       applyReplayPose();
     }
     if (mode === 'hardware') guardPreview.followTrunk(sim.data.qpos);
+    if (mode === 'mods') {
+      if (tailPlaying) {
+        const oldX = sim.data.qpos[0], oldY = sim.data.qpos[1];
+        tailClock += dt;
+        tailPreview.play(sim, tailClock);
+        const dx = sim.data.qpos[0] - oldX, dy = sim.data.qpos[1] - oldY;
+        camera.position.x += dx; camera.position.y += dy;
+        orbit.target.x += dx; orbit.target.y += dy;
+      }
+      const q = sim.data.qpos;
+      modPreview.position.fromArray(q);
+      modPreview.quaternion.set(q[4], q[5], q[6], q[3]);
+      updateJaw(time / 1000);
+    }
     updateSkateScene();
     updateRobot(); orbit.update(); renderer.render(scene,camera);
     fpsFrames++;
@@ -758,17 +1184,7 @@ async function start() {
     camera.aspect=width/height; camera.updateProjectionMatrix(); renderer.setSize(width,height,false);
   }); resize.observe(viewport);
   sim = stockSim = await DuckSimulation.create();
-  replay = new QualificationReplay($('qualification-card'), sim.joints.map(joint => joint.id), action => {
-    if (mode !== 'replay') return;
-    if (action !== 'variant') running = false;
-    if (action !== 'seek') {
-      lastReplayPose = null;
-      updateReplayModules(replay.trial.modules);
-    }
-    applyReplayPose();
-    if (action === 'case') resetCamera();
-    updateModeText();
-  });
+  replay = new QualificationReplay($('qualification-card'), sim.joints.map(joint => joint.id), showReplayTrial);
   buildRobot(); buildJointControls(); attachControls(); updateModeText(); updateRobot();
   await renderer.compileAsync(scene,camera);
   $('loading').hidden=true;
@@ -787,12 +1203,31 @@ async function start() {
     });
     for (const marker of [towLine,towPoint]) { marker.geometry.dispose(); marker.material.dispose(); }
     guardPreview?.dispose();
+    for (const group of [modPreview,dino].filter(Boolean)) {
+      const geometries = new Set(), materials = new Set();
+      group.traverse(mesh => { if (mesh.geometry) geometries.add(mesh.geometry); if (mesh.material) materials.add(mesh.material); });
+      for (const item of [...geometries, ...materials]) item.dispose();
+    }
     stockSim.dispose(); skateSim?.dispose(); renderer.dispose();
   });
   const query = new URLSearchParams(location.search);
-  if (query.get('hardware') === '1') {
+  if (['mods', 'teeth', 'tusks', 'tail'].some(key => query.get(key) === '1') || query.has('skin')) {
+    $('mod-teeth').checked = query.get('teeth') === '1' && !$('mod-teeth').parentElement.hidden;
+    $('mod-tusks').checked = query.get('tusks') === '1' && !$('mod-tusks').parentElement.hidden;
+    const skin = query.get('skin');
+    if (['feather','orbit','chevron'].includes(skin)) $('mod-skin').value = skin;
+    $('mod-tail').checked = query.get('tail') === '1';
+    $('mod-tail-play').checked = $('mod-tail').checked && query.get('trial') === '1';
+    $('mod-pack').checked = !$('mod-tail').checked && (query.has('pack') ? query.get('pack') === '1'
+      : !($('mod-teeth').checked || $('mod-tusks').checked || skin));
+    $('mod-skates').checked = query.get('skates') === '1';
+    await selectWorkspace('mods');
+  } else if (query.get('dock') === '1') {
+    dockOverhead = query.get('view') === 'overhead' || (!query.has('view') && query.has('dock') &&
+      (!query.has('entry') || query.get('entry') === 'Skate turnaround trials'));
+    await openDockReplay(query.get('design') || undefined, query.get('entry') || undefined);
+  } else if (query.get('hardware') === '1') {
     await selectWorkspace('hardware');
-    if (query.get('dock') === '1') document.querySelector('[data-assembly="dock"]').click();
   }
   else if (query.get('skates') === '1') selectWorkspace('skates');
   else if (query.get('replay') === '1') selectWorkspace('replay');

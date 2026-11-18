@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Test the XGO Duck dock detector on synthetic camera views.">
+  <title>Dock vision · Duck Lab</title>
+  <link rel="stylesheet" href="sim/sim.css?v=15">
+  <link rel="stylesheet" href="sim/dock-vision.css?v=2">
+</head>
+<body>
+<main class="vision">
+  <header class="topbar">
+    <a class="wordmark" href="/">XGO<span>DUCK</span></a>
+    <nav aria-label="Main"><a href="simulate.html">Duck Lab</a><a href="dock-vision.html" aria-current="page">Dock vision</a></nav>
+  </header>
+  <section class="vision-stage" aria-label="Dock detector">
+    <div class="vision-bar">
+      <h1>Dock detector</h1>
+      <span>Synthetic camera</span>
+    </div>
+    <div class="vision-camera">
+      <div id="vision-image" hidden>
+        <canvas id="vision-pixels" role="img" aria-label="Synthetic camera frame"></canvas>
+        <svg id="vision-boxes" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect id="vision-target" class="target" hidden></rect>
+          <rect id="vision-prediction" class="prediction" hidden></rect>
+        </svg>
+      </div>
+      <p id="vision-load" role="status">Loading dock detector…</p>
+    </div>
+    <div class="vision-result" aria-live="polite">
+      <strong id="vision-result">Waiting for a frame</strong>
+      <span id="vision-score"></span>
+      <span id="vision-overlap"></span>
+    </div>
+  </section>
+  <section class="vision-controls" aria-label="Camera and overlays">
+    <label class="scene-select">Scene
+      <select id="vision-condition" disabled></select>
+    </label>
+    <div class="vision-angle">
+      <label for="vision-frame">Camera view</label>
+      <output for="vision-frame" id="vision-angle-value">—</output>
+      <input id="vision-frame" type="range" min="0" max="0" step="1" value="0" disabled>
+    </div>
+    <div class="vision-angle" id="vision-altitude" hidden>
+      <label for="vision-elevation">Elevation</label>
+      <output id="vision-elevation-value" for="vision-elevation">27°</output>
+      <input id="vision-elevation" type="range" min="3" max="88" step="1" value="27">
+    </div>
+    <div class="vision-playback">
+      <button id="vision-prev" type="button" aria-label="Previous camera view" disabled>‹</button>
+      <button id="vision-play" type="button" aria-pressed="false" disabled>Play views</button>
+      <button id="vision-next" type="button" aria-label="Next camera view" disabled>›</button>
+    </div>
+    <label id="vision-markers-label" class="vision-truth" hidden><input id="vision-markers" type="checkbox" checked> Printed markers</label>
+    <label class="scene-select">Verification
+      <select id="vision-verification">
+        <option value="raw">Detector only</option>
+        <option value="contrast" selected>Marker contrast</option>
+        <option value="pattern">Printed ID · native frame</option>
+        <option value="detail">Printed ID · camera detail when available</option>
+      </select>
+    </label>
+    <label class="vision-truth"><input id="vision-truth" type="checkbox"><span>Ground truth</span></label>
+  </section>
+  <footer><span id="vision-model">Inference runs on this device.</span><span id="vision-frame-info"></span></footer>
+</main>
+<script type="module" src="sim/dock-vision.mjs?v=4"></script>
+</body>
+</html>

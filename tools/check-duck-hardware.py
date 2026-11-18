@@ -67,9 +67,9 @@ def add_modules(spec, modules):
     spec.geom('floor').conaffinity |= 4
 
 
-def run_case(case, modules, policies, trace=None):
+def run_case(case, modules, policies, trace=None, *, simulation_factory=WalkSimulation):
     yaw = {'turn-left': 0.6, 'turn-right': -0.6}.get(case, 0)
-    sim = WalkSimulation(0 if yaw else 0.2, yaw,
+    sim = simulation_factory(0 if yaw else 0.2, yaw,
                          configure=(lambda spec: add_modules(spec, modules)) if modules else None,
                          **policies)
     d, r = sim.data, sim.root

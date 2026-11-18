@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {buildDockPreview} from './dock-preview.mjs';
+import {buildDockPreview} from './dock-preview.mjs?v=7';
 
 // Dimensions are in metres, in the trunk frame. The outward normal is -X,
 // up is +Z, and +Y is left when looking directly at the back of the Duck.
@@ -79,13 +79,16 @@ export class GuardPreview {
   constructor() {
     this.group = new THREE.Group();
     this.group.visible = false;
+    this.robot = new THREE.Group();
     this.shell = new THREE.Group();
     this.carrier = new THREE.Group();
-    const {receiver, dock} = buildDockPreview();
+    const {receiver, dock, setDesign} = buildDockPreview();
     this.receiver = receiver;
     this.dock = dock;
     this.shell.add(receiver);
-    this.group.add(this.shell, this.carrier, dock);
+    this.setDockDesign = setDesign;
+    this.robot.add(this.shell, this.carrier);
+    this.group.add(this.robot, dock);
 
     const matte = color => new THREE.MeshStandardMaterial({color, roughness:.56});
     const board = matte('#126b65'), carrier = matte('#254d9a'), rail = matte('#579eb5');
@@ -104,7 +107,7 @@ export class GuardPreview {
       parent.add(mesh);
       return mesh;
     }
-    const box = (material, size, position, parent = this.group) =>
+    const box = (material, size, position, parent = this.robot) =>
       add(new THREE.BoxGeometry(...size), material, parent, position);
 
     box(plastic, [.011,.052,.063], [-.044,0,BOARD_Z]);
@@ -153,7 +156,7 @@ export class GuardPreview {
         this.leds.setMatrixAt(col * 8 + row, pose);
       }
     }
-    this.group.add(this.leds);
+    this.robot.add(this.leds);
     this.setTestPattern(false);
 
     // A standoff faceplate, open between four mounting posts on every edge.
@@ -188,7 +191,7 @@ export class GuardPreview {
     this.guides = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(guides),
       new THREE.LineDashedMaterial({color:'#efaf51',dashSize:.003,gapSize:.002}));
     this.guides.computeLineDistances();
-    this.group.add(this.guides);
+    this.robot.add(this.guides);
     this.show('translucent');
   }
 
@@ -201,10 +204,6 @@ export class GuardPreview {
     this.guides.visible = assembly === 'exploded';
   }
 
-  setDockSpacing(millimetres) {
-    this.dock.position.x = -millimetres/1000;
-  }
-
   setTestPattern(allOn) {
     const lit = new THREE.Color('#6fc4ff'), dim = new THREE.Color('#224f85');
     let index = 0;
@@ -215,8 +214,8 @@ export class GuardPreview {
   }
 
   followTrunk(qpos) {
-    this.group.position.fromArray(qpos);
-    this.group.quaternion.set(qpos[4],qpos[5],qpos[6],qpos[3]);
+    this.robot.position.fromArray(qpos);
+    this.robot.quaternion.set(qpos[4],qpos[5],qpos[6],qpos[3]);
   }
 
   dispose() {

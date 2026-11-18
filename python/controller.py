@@ -1196,6 +1196,10 @@ class Controller:
                 raw_pos=list(self.raw_pos), encoder_center=SERVO_CENTER_POS,
                 cal_done=list(self.cal_done), cal_hold_pos=CAL_HOLD_POS, raw_mask=self.raw_mask)
             result['control_ready']=bool(fb and fb.imu_ok and now-self.rx_time<.15 and self.mode not in EXCLUSIVE_MODES)
+            result['loaded_policy_sha256'] = {
+                'walk': self.walk_policy.sha256, 'roller': self.roller_policy.sha256,
+                'getup': self.getup_policy.sha256,
+            }
             result['servo_scan_version'] = 2
             pending = self.action_preparation
             result['action_preparation'] = dict(active=bool(pending),

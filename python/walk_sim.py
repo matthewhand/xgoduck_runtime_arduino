@@ -19,6 +19,8 @@ PUSH_SPEEDS = {'poke': 0.12, 'nudge': 0.30, 'bash': 0.80}
 RECOVERY_TILT_DEG = 15
 RECOVERY_HOLD_S = 0.5
 MODEL = Path(__file__).resolve().parent.parent / 'assets/sim/model/scene_walk.xml'
+ROLLER_MODEL = MODEL.parent / 'roller/browser_scene.xml'
+WHEEL_NAMES = ('passive_LF_wheel', 'passive_LR_wheel', 'passive_RF_wheel', 'passive_RR_wheel')
 JOINT_IDS = (10, 11, 12, 13, 14, 30, 31, 32, 33, 20, 21, 22, 23, 24)
 JOINT_NAMES = (
     'left_hip_yaw', 'left_hip_roll', 'left_hip_pitch', 'left_knee', 'left_ankle',
@@ -47,8 +49,8 @@ def load_sim_policy(np, obs, file):
     return policy, home, scale, {policy.in_name: obs}
 
 
-def load_recovery_scene(mj, configure=None):
-    spec = mj.MjSpec.from_file(str(MODEL))
+def load_recovery_scene(mj, configure=None, *, skates=False):
+    spec = mj.MjSpec.from_file(str(ROLLER_MODEL if skates else MODEL))
     # The walking scene has foot contacts only. Enable one existing mesh per
     # link so the Duck can brace against the floor with its body and head.
     colliders = {}
@@ -67,14 +69,14 @@ def load_recovery_scene(mj, configure=None):
 
 class WalkSimulation:
     def __init__(self, vx, yaw, arena=None, *, configure=None,
-                 walk_file='xgoduck_walk.onnx', getup_file='xgoduck_getup.onnx'):
+                 walk_file='xgoduck_walk.onnx', getup_file='xgoduck_getup.onnx', skates=False):
         import mujoco as mj
         import numpy as np
         self.mj, self.np = mj, np
         self.mission = SearchMission(mj, np, MODEL, arena) if arena else None
-        if self.mission and configure is not None:
+        if self.mission and (configure is not None or skates):
             raise ValueError('Hardware variants require the walking and recovery scene')
-        self.model = model = self.mission.model if self.mission else load_recovery_scene(mj, configure)
+        self.model = model = self.mission.model if self.mission else load_recovery_scene(mj, configure, skates=skates)
         model.opt.timestep = STEP_S
         self.data = data = mj.MjData(model)
         self.obs = np.zeros((1, 61), dtype=np.float32)
@@ -92,13 +94,15 @@ class WalkSimulation:
         self.root_dof = int(root_joint.dofadr[0])
         gyro = int(model.sensor('imu_ang_vel').adr[0])
         self.gyro = slice(gyro, gyro + 3)
-        mj.mj_resetDataKeyframe(model, data, model.key('STAND').id)
+        mj.mj_resetDataKeyframe(model, data, model.key('home' if skates else 'STAND').id)
         walk_home = self.walk[1]
         data.qpos[self.qpos] = walk_home
         data.ctrl[self.actuators] = walk_home
         mj.mj_forward(model, data)
         self.path_m = 0.0
-        self.feet = {model.geom(f'{side}_foot_collision').id: side for side in ('left', 'right')}
+        self.feet = ({model.geom(f'{side}_{end}_tire_collision').id: side
+                      for side in ('left', 'right') for end in ('front', 'rear')} if skates
+                     else {model.geom(f'{side}_foot_collision').id: side for side in ('left', 'right')})
         self.floor = model.geom('floor').id
         self.last_contact = set()
         self.footfalls = dict(left=0, right=0)
@@ -116,7 +120,7 @@ class WalkSimulation:
         self.push = dict(kind=kind, time_s=round(self.data.time, 3), peak_tilt_deg=0.0, recovery_s=None)
         self.settled_since = None
 
-    def tick(self):
+    def tick(self, *, observe_contacts=None):
         d, obs = self.data, self.obs[0]
         # Refresh body frame and gyro at the integrated pose before observing it.
         self.mj.mj_forward(self.model, d)
@@ -170,6 +174,8 @@ class WalkSimulation:
             for foot in contacts - self.last_contact:
                 self.footfalls[foot] += 1
             self.last_contact = contacts
+            if observe_contacts is not None:
+                observe_contacts(self, contacts)
         self.path_m += float(self.np.linalg.norm(d.qpos[self.root:self.root + 2] - old_xy))
         if not self.np.isfinite(d.qpos).all():
             raise ValueError('Walking simulation emitted a non-finite pose')

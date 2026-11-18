@@ -45,6 +45,13 @@
 #qualification-status{overflow-wrap:anywhere}
 #qualification-events button{padding:5px 7px;flex:0 1 auto}
 .qualification-position{margin-bottom:12px}
+.dock-replay-selectors{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:5px 14px 8px;border-bottom:1px solid var(--line)}
+.dock-replay-selectors .range-label{margin:0 0 4px}
+.dock-replay-selectors select{padding:6px}
+.qualification-alternate{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer}
+.dock-contact-overlay{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);max-width:92%;width:max-content;padding:5px 8px;border-radius:5px;background:#0b1820de;color:var(--amber);font-size:10px;pointer-events:none}
+.dock-overhead{position:absolute;z-index:1;right:12px;top:10px;font-size:11px;padding:6px 8px}
+.dock-overhead[aria-pressed=true]{background:#284039;border-color:#597d73;color:#bbf4dc}
 .qualification-contact{grid-column:1/-1}
 .qualification-summary{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
 .qualification-summary th,.qualification-summary td{border-top:1px solid var(--line);padding:7px 3px;overflow-wrap:anywhere;text-align:left}
