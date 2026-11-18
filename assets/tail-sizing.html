@@ -18,11 +18,12 @@
 </head>
 <body><main class="study">
   <nav><a href="simulate.html?mods=1&amp;tail=1&amp;trial=1">← Duck Lab Mods</a><h1>Tail sizing</h1></nav>
-  <label>Replay <select id="scene"><option value="walk">Walk and lean forward</option><option value="right">Right-side get-up</option></select></label>
-  <figure><img id="replay" width="796" height="298" src="sim/tail-size-walk.webp" alt="Recorded MuJoCo comparison of the bare Duck and the 132 mm single-hinge tail">
-    <figcaption id="caption">Both Ducks receive the same walking command. At 2 seconds the neck begins a 25° forward lean.</figcaption>
+  <label>Replay <select id="scene"><option value="draped">Curved tail · deep forward lean</option><option value="draped-walk">Curved tail · longer stride</option><option value="walk">Original tail · lean test</option><option value="right">Original tail · right-side get-up</option></select></label>
+  <figure><img id="replay" width="796" height="298" src="sim/tail-size-draped.webp" alt="Previous and curved-tail Duck postures walking side by side">
+    <figcaption id="caption">The 167 mm tail curves down from its mount. Its tip reaches 148 mm behind the root as the trunk leans 13° forward. The neck reaches 44° forward and the bill stays within 2° of level on average.</figcaption>
   </figure>
-  <h2>20-second trials</h2>
+  <p>Left and right speed commands are 0.20 and 0.45 m/s in the curved-tail comparisons. The right-hand controller also uses an adjusted walking pitch reference. None of the three curved sizes recovered from the right-side fall. <a href="sim/tail-posture-results.json">Curved-tail trials</a></p>
+  <h2>Original straight-tail trials</h2>
   <div class="choices"><label>Passive pitch hinges <select id="hinges"><option value="0">0 · rigid</option><option selected>1</option><option>2</option><option>3</option></select></label></div>
   <table><thead><tr><th>Tail</th><th>Pack mass</th><th>Moment offset</th><th>Walk</th><th>Right get-up</th></tr></thead><tbody id="results"></tbody></table>
   <p id="note" role="status"></p>
@@ -33,12 +34,17 @@
 </main>
 <script type="module">
   const byId = id => document.getElementById(id);
+  const captions = {
+    draped: byId('caption').textContent,
+    'draped-walk': 'With less lean, the same 167 mm tail walked 2.92 m in 20 seconds. The trunk leaned 8° forward, the neck reached 38° forward and the bill pointed 6° above horizontal on average.',
+    walk: 'Both Ducks receive the same walking command. At 2 seconds the neck begins a 25° forward lean.',
+    right: 'Both Ducks start on their right side. The bare Duck resumes walking at 2.86 seconds. The original tail-equipped Duck stays down.'
+  };
   byId('scene').addEventListener('change', event => {
-    const walk = event.target.value === 'walk';
-    byId('replay').src = walk ? 'sim/tail-size-walk.webp' : 'sim/tail-size-right.webp';
-    byId('caption').textContent = walk
-      ? 'Both Ducks receive the same walking command. At 2 seconds the neck begins a 25° forward lean.'
-      : 'Both Ducks start on their right side. The bare Duck resumes walking at 2.86 seconds. The tail-equipped Duck stays down.';
+    const scene=event.target.value;
+    byId('replay').src='sim/tail-size-'+scene+'.webp';
+    byId('replay').alt=event.target.selectedOptions[0].textContent+' — two MuJoCo recordings';
+    byId('caption').textContent=captions[scene];
   });
   try {
     const response = await fetch('sim/tail-size-results.json');
