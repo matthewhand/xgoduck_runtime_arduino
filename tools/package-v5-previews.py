@@ -21,7 +21,19 @@ def bundle(name,root,patterns):
             archive.write(path,path.relative_to(root))
 
 
+def refresh_guard_and_teeth():
+    guard=HARDWARE/'v5-slide-on-backpack'/'rounded-guard'
+    teeth=HARDWARE/'v5-dino-beak'/'coprint'
+    for name in ['guard-recovery.webp','guard-front-left.webp','guard-roulade.webp']:
+        shutil.copyfile(guard/'media'/name,ASSETS/name)
+    shutil.copyfile(guard/'before-after.png',ASSETS/'guard-cad.png')
+    shutil.copyfile(teeth/'figures/coprint-teeth.png',ASSETS/'coprint-teeth.png')
+    bundle('rounded-guard-kit.zip',guard,['README.md','rounded-protective-cover.stl','fit.json','trials.json','release-angles.json','launch-times.json','before-after.png'])
+    bundle('coprint-teeth-kit.zip',teeth,['README.md','print/*.3mf','fit.json','figures/*.png'])
+
+
 def main():
+    refresh_guard_and_teeth()
     copies={
         FACE/'off-and-on.png':'magnetic-face.png', FACE/'chin-hatch.png':'beard-hatch.png',
         FACE/'magnetic-section.png':'mask-magnetic-section.png', TEETH/'figures/screw-teeth.png':'screw-teeth.png',

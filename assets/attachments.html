@@ -19,11 +19,65 @@
 <body><main class="gallery">
   <header><h1>Attachment studies</h1><nav aria-label="Duck Lab"><a href="simulate.html?mods=1">Duck Lab Mods</a><a href="tail-sizing.html">Recovery replay</a></nav></header>
   <div class="choices" id="choices" role="group" aria-label="Choose an attachment"></div>
+  <label id="replay-controls" hidden>Replay <select id="replay"></select></label>
   <figure><img id="drawing" alt=""><figcaption id="notes" role="status"></figcaption></figure>
   <div class="links" id="links"></div>
 </main>
 <script type="module">
   const studies = [
+  {
+    "id": "coprint",
+    "label": "Co-printed teeth",
+    "image": "coprint-teeth.png",
+    "alt": "Embedded TPU teeth and smooth stock jaws side by side, with a section through a keyed tooth root",
+    "note": "Four flexible teeth per cheek on each rigid jaw. Each root has its own buried crossbar. For a smooth finish, swap the jaw shells. Start with the one-tooth coupon to check material assignment and retention.",
+    "links": [
+      [
+        "Two-material 3MFs and U1 print guide",
+        "coprint-teeth-kit.zip"
+      ],
+      [
+        "Optional magnetic chin parts",
+        "magnetic-face-kit.zip"
+      ]
+    ]
+  },
+  {
+    "id": "guard",
+    "label": "Rounded guard trials",
+    "image": "guard-recovery.webp",
+    "alt": "Matched original and rounded everyday guard runs using the stock get-up policy",
+    "note": "The rounded guard stood from its back in 3.18 s and its right side in 3.42 s. Both covers retained the board shield. The original guard stayed down after these two starts. The clock jumps to the 20 s result at the end of each get-up replay.",
+    "links": [
+      [
+        "Print guard and view test data",
+        "rounded-guard-kit.zip"
+      ],
+      [
+        "Compare guard shapes",
+        "guard-cad.png"
+      ]
+    ],
+    "replays": [
+      {
+        "id": "recovery",
+        "label": "Back and right get-ups",
+        "image": "guard-recovery.webp"
+      },
+      {
+        "id": "front-left",
+        "label": "Front and left get-ups",
+        "image": "guard-front-left.webp",
+        "note": "Both guards recovered from the front and left. The rounded guard resumed walking in 3.10 s from the front and 2.56 s from the left."
+      },
+      {
+        "id": "rolls",
+        "label": "Four forward-roll launches",
+        "image": "guard-roulade.webp",
+        "note": "Both guards completed all four forward rolls at the original launch times. The rounded guard missed one of seven additional launch times. These flat-floor runs use the shipped roll and walk policies."
+      }
+    ]
+  },
   {
     "id": "claws",
     "label": "T. rex arms",
@@ -176,9 +230,18 @@
   const links = document.getElementById('links');
   const buttons = new Map();
   function select(study, updateAddress) {
-    drawing.src = 'sim/' + study.image;
-    drawing.alt = study.alt;
-    document.getElementById('notes').textContent = study.note;
+    const replay = document.getElementById('replay');
+    const options = study.replays || [];
+    document.getElementById('replay-controls').hidden = options.length === 0;
+    const pick = options.find(option => option.id === url.searchParams.get('replay')) || options[0];
+    replay.replaceChildren(...options.map(option => new Option(option.label, option.id, false, option === pick)));
+    replay.onchange = () => {
+      url.searchParams.set('replay', replay.value);
+      select(study, true);
+    };
+    drawing.src = 'sim/' + (pick?.image || study.image);
+    drawing.alt = pick ? study.label + ' · ' + pick.label : study.alt;
+    document.getElementById('notes').textContent = pick?.note || study.note;
     for (const [id, button] of buttons) button.setAttribute('aria-pressed', String(id === study.id));
     links.replaceChildren(...(study.links || []).map(([label, file]) => {
       const link = document.createElement('a');
@@ -188,6 +251,7 @@
     }));
     if (updateAddress) {
       url.searchParams.set('view', study.id);
+      if (!options.length) url.searchParams.delete('replay');
       history.replaceState(null, '', url);
     }
   }
