@@ -42,6 +42,7 @@ def refresh_combined_guard():
 
 def main():
     refresh_grove_shoulder()
+    refresh_duckling()
     refresh_guard_and_teeth()
     refresh_combined_guard()
     copies={
@@ -66,6 +67,12 @@ def refresh_grove_shoulder():
     shoulder = HARDWARE / 'v5-slide-on-backpack' / 'grove-shoulder'
     shutil.copyfile(shoulder / 'grove-shoulder.png', ASSETS / 'grove-shoulder.png')
     bundle('grove-shoulder-kit.zip', shoulder, ['README.md', 'grove-shoulder.png', 'grove-shoulder-cassette.stl'])
+
+
+def refresh_duckling():
+    shoulder = HARDWARE / 'v5-slide-on-backpack' / 'grove-shoulder'
+    shutil.copyfile(shoulder / 'duckling-pocket.png', ASSETS / 'duckling-pocket.png')
+    bundle('duckling-pocket-kit.zip', shoulder, ['DUCKLING.md', 'duckling-pocket.stl', 'duckling-pocket.png', 'duckling-colours/*.stl'])
 
 
 if __name__=='__main__':main()
