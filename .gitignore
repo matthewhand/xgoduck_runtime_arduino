@@ -37,3 +37,7 @@ test_*.py
 .pytest_cache/
 .coverage*
 htmlcov/
+!assets/sim/mouth-tools-fit.zip
+!assets/sim/mask-beard-fit.zip
+!assets/sim/screw-cheek-teeth.zip
+!assets/sim/stack-deck-fit.zip

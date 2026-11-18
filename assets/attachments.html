@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Attachments · Duck Lab</title>
+  <link rel="stylesheet" href="sim/sim.css?v=15">
+  <style>
+    .gallery{max-width:1050px;margin:auto;padding:1rem;color:var(--text)}
+    .gallery header,.gallery nav,.gallery .choices{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    .gallery header{justify-content:space-between;margin-bottom:.6rem}
+    .gallery h1{margin:0;font-size:clamp(1.2rem,3.5vw,1.6rem)}
+    .gallery nav{gap:1rem}.gallery a{color:var(--mint)}
+    .gallery button[aria-pressed="true"]{color:#0b2825;background:var(--mint);border-color:var(--mint)}
+    .gallery figure{margin:.65rem 0}.gallery img{display:block;width:100%;height:auto;max-height:68vh;object-fit:contain;background:#10191d;border-radius:8px}
+    .gallery figcaption{line-height:1.5;margin-top:.5rem;max-width:88ch}
+    .gallery .links{display:flex;gap:1rem;flex-wrap:wrap;margin:.5rem 0;color:var(--muted)}
+  </style>
+</head>
+<body><main class="gallery">
+  <header><h1>Attachment studies</h1><nav aria-label="Duck Lab"><a href="simulate.html?mods=1">Duck Lab Mods</a><a href="tail-sizing.html">Recovery replay</a></nav></header>
+  <div class="choices" id="choices" role="group" aria-label="Choose an attachment"></div>
+  <figure><img id="drawing" alt=""><figcaption id="notes" role="status"></figcaption></figure>
+  <div class="links" id="links"></div>
+</main>
+<script type="module">
+  const studies = [
+  {
+    "id": "mouth",
+    "label": "Mouth tools",
+    "image": "mouth-tools.png",
+    "alt": "Pointer, paired fork tips and offset horn shown in the V5 beak and on their shared paddle",
+    "note": "The stock beak holds one keyed paddle. Fit the single pointer, two tips 23 mm apart, or the offset horn before pickup. The CAD grasp and pickup path cleared the stock jaws and stand. Grip force and key actuation still need measurement.",
+    "links": [
+      [
+        "Print files and assembly notes",
+        "mouth-tools-fit.zip"
+      ],
+      [
+        "Predicted camera views",
+        "mouth-camera-aim.png"
+      ]
+    ]
+  },
+  {
+    "id": "pickup",
+    "label": "Pickup stand",
+    "image": "mouth-pickup-stand.png",
+    "alt": "Pickup stand presenting the mouth tool at jaw height, with approach and lift diagram",
+    "note": "The ears on the paddle sit in the stand while the jaws close on the handle. The checked path lifts 20 mm before retreating. Release the tool before an empty-mouth stock roll. An autonomous pickup policy has yet to be tested.",
+    "links": [
+      [
+        "Print stand and paddle",
+        "mouth-tools-fit.zip"
+      ]
+    ]
+  },
+  {
+    "id": "fan",
+    "label": "Folding shoulder fan",
+    "image": "folding-shoulder-feeler.png",
+    "alt": "Three folding rounded lobes on the right-side shoulder boom, its removed cartridge and the camera view of its center pad",
+    "note": "A removable, hand-opened shoulder fan carries three rounded lobes and a center stylus. Its sensor and actuator are concepts. The fitted boom failed the simulated get-up trials. Center the head before withdrawing the cartridge.",
+    "links": [
+      [
+        "Geometry and recovery trials",
+        "folding-shoulder-results.json"
+      ]
+    ]
+  },
+  {
+    "id": "stack",
+    "label": "Stackable deck",
+    "image": "stack-deck.png",
+    "alt": "Backpack deck with one and two cartridges installed, shown next to the loose retention pins",
+    "note": "The upper deck shares the yoke's two M3 axes. Slide a cartridge forward onto its stop and insert the lateral pin. The second cartridge adds 6.2 mm of stack height. CAD checked both seated cartridges, their insertion paths and pin engagement. Payload mass and roll clearance need a new test for each build.",
+    "links": [
+      [
+        "Deck, cartridges and fit data",
+        "stack-deck-fit.zip"
+      ]
+    ]
+  },
+  {
+    "id": "teeth",
+    "label": "Side-only teeth",
+    "image": "screw-teeth.png",
+    "alt": "Four independent rows attached to upper and lower jaws, with recessed screws and nut section",
+    "note": "Fit any of four independent cheek strips. Each carries four rounded teeth, two recessed M2 screws and two print-in hex nuts on its replacement jaw. The closest gap during the 0–30° CAD sweep was 0.70 mm. The screw hardware stayed at least 1.60 mm from the original rigid wall. The printed fit and get-up motion still need testing.",
+    "links": [
+      [
+        "Print files, assembly and fit data",
+        "screw-cheek-teeth.zip"
+      ]
+    ]
+  },
+  {
+    "id": "face",
+    "label": "Mask and beard",
+    "image": "mask-and-beard.png",
+    "alt": "V5 mask and beard mounted to their corresponding rigid face and jaw replacement parts",
+    "note": "Four recessed screws hold the mask to the replacement face. Two underside screws hold the beard to the moving jaw. With its hosts and six M2 fastener pairs, the assembly adds an estimated 9.45 g. The stock policy walked and recovered from all four 90° falls on a flat simulated floor. The mask touched the floor in every recovery. Print strength still needs testing.",
+    "links": [
+      [
+        "Print files, assembly and fit data",
+        "mask-beard-fit.zip"
+      ],
+      [
+        "Fastener section",
+        "mask-beard-fasteners.png"
+      ]
+    ]
+  }
+];
+  const url = new URL(location.href);
+  const drawing = document.getElementById('drawing');
+  const choices = document.getElementById('choices');
+  const links = document.getElementById('links');
+  const buttons = new Map();
+  function select(study, updateAddress) {
+    drawing.src = 'sim/' + study.image;
+    drawing.alt = study.alt;
+    document.getElementById('notes').textContent = study.note;
+    for (const [id, button] of buttons) button.setAttribute('aria-pressed', String(id === study.id));
+    links.replaceChildren(...(study.links || []).map(([label, file]) => {
+      const link = document.createElement('a');
+      link.textContent = label;
+      link.href = 'sim/' + file;
+      return link;
+    }));
+    if (updateAddress) {
+      url.searchParams.set('view', study.id);
+      history.replaceState(null, '', url);
+    }
+  }
+  for (const study of studies) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = study.label;
+    button.addEventListener('click', () => select(study, true));
+    buttons.set(study.id, button);
+    choices.append(button);
+  }
+  select(studies.find(study => study.id === url.searchParams.get('view')) || studies[0], false);
+</script>
+</body></html>
