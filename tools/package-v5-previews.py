@@ -32,8 +32,17 @@ def refresh_guard_and_teeth():
     bundle('coprint-teeth-kit.zip',teeth,['README.md','print/*.3mf','fit.json','figures/*.png'])
 
 
+def refresh_combined_guard():
+    combined = HARDWARE / 'v5-slide-on-backpack' / 'rounded-guard' / 'combined'
+    shutil.copyfile(combined / 'media' / 'teeth-guard.webp', ASSETS / 'teeth-guard.webp')
+    shutil.copyfile(combined / 'qualification-results.json', ASSETS / 'teeth-guard-results.json')
+    shutil.copyfile(combined / 'neighbors.json', ASSETS / 'teeth-guard-neighbors.json')
+    bundle('teeth-guard-kit.zip', combined, ['rounded-protective-cover.stl', 'fit.json'])
+
+
 def main():
     refresh_guard_and_teeth()
+    refresh_combined_guard()
     copies={
         FACE/'off-and-on.png':'magnetic-face.png', FACE/'chin-hatch.png':'beard-hatch.png',
         FACE/'magnetic-section.png':'mask-magnetic-section.png', TEETH/'figures/screw-teeth.png':'screw-teeth.png',
