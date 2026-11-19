@@ -1,7 +1,7 @@
 import {detectDock} from './dock-inference.mjs';
 import {hasMarkerContrast} from './dock-marker.mjs';
 import {detailCrop, markerLuminance, readDockPattern} from './dock-pattern.mjs?v=2';
-import {locateDock} from './dock-localization.mjs';
+import {inspectDock, recoverOccludedDock} from './dock-localization.mjs?v=2';
 
 export function intersectionOverUnion(a, b) {
   const area = ([l,t,r,bottom]) => Math.max(0,r-l)*Math.max(0,bottom-t);
@@ -49,12 +49,16 @@ export function compareDockFrame(model, reference, native, detail, fitted) {
   const validBox = bbox[0]<bbox[2] && bbox[1]<bbox[3];
   const mlp = tag && validBox ? {bbox:normalize(bbox),ids:[tag]} : null;
   const mlpMs = performance.now() - began;
-  const fit = locateDock(markerLuminance(detail.data),w,h,reference);
-  const cad = fit && fit.bbox[0]<fit.bbox[2] && fit.bbox[1]<fit.bbox[3]
-    ? {...fit,bbox:normalize(fit.bbox)} : null;
+  const gray = markerLuminance(detail.data);
+  const {standard:fit,reason:cadReason} = inspectDock(gray,w,h,reference);
+  const cad = fit ? {...fit,bbox:normalize(fit.bbox)} : null;
+  const cadMs = performance.now()-began-mlpMs;
+  const cadFirst = preferCadDock(mlp,cad);
+  const retry = cadFirst ? null : recoverOccludedDock(gray,w,h,reference);
+  const recovered = cadFirst ?? (retry ? {...retry,bbox:normalize(retry.bbox),source:'cad'} : null);
   return {
-    mlp, cad, fallback:fallbackDock(mlp,cad), cadFirst:preferCadDock(mlp,cad),
-    mlpMs, cadMs:performance.now()-began-mlpMs,
+    mlp, cad, fallback:fallbackDock(mlp,cad), cadFirst, recovered,
+    mlpMs, cadMs, cadReason,
     mlpScore:raw.score, mlpThreshold:model.threshold, mlpProposal:validBox ? normalize(bbox) : null,
     mlpStage:!raw.detected ? 'below threshold' : !contrast ? 'weak contrast' : !mlp ? 'no printed ID' : 'accepted',
   };

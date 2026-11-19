@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {modPolicyStatus, TRAINED_LAYOUTS} from '../assets/sim/mod-policy.mjs';
-import {markerCodebook, readDockPattern} from '../assets/sim/dock-pattern.mjs';
+import {locateOccludedTiles, locatePrintedTiles, markerCodebook, readDockPattern} from '../assets/sim/dock-pattern.mjs';
 import {CAPTURE_FORMAT, GroveCamera, parseRecording} from '../assets/sim/grove-capture.mjs';
 import {differs, fallbackDock, frameOutcome, preferCadDock} from '../assets/sim/dock-footage.mjs';
 import {DuckSimulation, parsePose, attitudeFromGravity} from '../assets/sim/sim-core.mjs';
@@ -67,6 +67,17 @@ for (const {name,bitmap} of panels) {
 }
 assert.equal(readFixture(['0000000','0111110','0100010','0100010','0100010','0111110','0000000']),null);
 console.log('PASS: all five printed marker IDs in four rotations and an unknown payload');
+const partialSize = 70;
+const partial = Uint8Array.from({length:partialSize**2}, (_,i) => {
+  const x = i%partialSize, y = Math.floor(i/partialSize);
+  if (y<10 && x<50) return 48;
+  return panels[0].bitmap[Math.floor(y/10)][Math.floor(x/10)] === '1' ? 25 : 215;
+});
+assert.deepEqual(locatePrintedTiles(partial,partialSize,partialSize,codes),[]);
+assert.deepEqual(locateOccludedTiles(partial,partialSize,partialSize,codes).map(marker => marker.name),[panels[0].name]);
+// Obscuring the payload still prevents verification.
+for (let y=20; y<50; y++) partial.fill(120,y*partialSize+20,y*partialSize+50);
+assert.deepEqual(locateOccludedTiles(partial,partialSize,partialSize,codes),[]);
 
 const jpeg = '/9j/2Q=='; // Minimal framing fixture. Image decoding is checked in the browser.
 function fakeGrove(code = 0) {
@@ -129,6 +140,23 @@ for (const seed of [712100,762400]) {
   assert.equal(sweep.marked.cad_first-sweep.marked.fallback, orderFrames.filter(frame => frame.sweep===seed).length);
   assert.equal(sweep.decoy.cad_first,0);
 }
+const occlusionReplay = JSON.parse(await read('dock-occlusion-replay.json'));
+const occlusionFrames = parseRecording(occlusionReplay);
+assert.equal(occlusionFrames.length,23);
+assert.equal(occlusionReplay.decisions.length,occlusionFrames.length);
+assert.equal(new Set(occlusionFrames.map(frame => frame.seed)).size,23);
+let recoveredClips = 0;
+for (const [i,frame] of occlusionFrames.entries()) {
+  const {cadFirst,recovered} = occlusionReplay.decisions[i];
+  assert.notEqual(frameOutcome(frame,cadFirst),'hit');
+  if (frameOutcome(frame,recovered) === 'hit') {
+    assert.equal(cadFirst,null);
+    assert.equal(recovered.recovery,'occluded marker scan');
+    recoveredClips++;
+  }
+}
+assert.equal(recoveredClips,3);
+assert.equal(occlusionReplay.decisions.filter(frame => frame.diagnosis==='all markers obscured').length,2);
 assert.throws(() => parseRecording({...clip,frames:[clip.frames[0],clip.frames[0]]}), /timing/);
 console.log('PASS: Grove sample transport, recording validation and comparison outcomes');
 const lock = JSON.parse(await read('vendor-lock.json'));

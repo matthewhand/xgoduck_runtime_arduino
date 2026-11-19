@@ -23,6 +23,7 @@
         <button id="example">Load synthetic example</button>
         <a href="?example=mlp-misses&amp;loop=1">Loop MLP misses</a>
         <a href="?example=cad-first&amp;loop=1">Loop wrong boxes</a>
+        <a href="?example=occlusion&amp;loop=1">Loop occlusion misses</a>
         <button id="save" disabled>Save recording</button>
       </div>
       <p id="camera-status" role="status">Open a recording, video, or stills to compare the detectors.</p>
@@ -51,6 +52,7 @@
         <div><dt class="cad">CAD marker fit</dt><dd id="cad-frame">—</dd></div>
         <div><dt>MLP with CAD fallback</dt><dd id="fallback-frame">—</dd></div>
         <div><dt>CAD with MLP fallback</dt><dd id="cad-first-frame">—</dd></div>
+        <div id="recovery-summary"><dt>With occlusion recovery</dt><dd id="recovery-frame">—</dd></div>
       </dl>
       <div class="camera-annotations">
         <label>Ground truth
@@ -80,12 +82,12 @@
       <label class="camera-proposal"><input id="proposal" type="checkbox"> Show rejected MLP box</label>
       <p id="review-status" role="status">—</p>
       <table aria-label="Results on labelled frames">
-        <thead><tr><th scope="col">Labelled frames</th><th scope="col">MLP + ID</th><th scope="col">CAD fit</th><th scope="col">MLP first</th><th scope="col">CAD first</th></tr></thead>
+        <thead><tr><th scope="col">Labelled frames</th><th scope="col">MLP + ID</th><th scope="col">CAD fit</th><th scope="col">MLP first</th><th scope="col">CAD first</th><th scope="col" id="recovery-column">Recovery</th></tr></thead>
         <tbody id="totals"></tbody>
       </table>
     </section>
   </div>
 </main>
-<script type="module" src="sim/camera-replay.mjs?v=4"></script>
+<script type="module" src="sim/camera-replay.mjs?v=5"></script>
 </body>
 </html>

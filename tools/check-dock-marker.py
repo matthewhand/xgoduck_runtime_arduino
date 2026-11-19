@@ -24,7 +24,7 @@ import {fallbackDock, preferCadDock} from './assets/sim/dock-footage.mjs';
 const scale = Number(process.argv[1]);
 const layout = JSON.parse(readFileSync('assets/sim/dock-vision-layout.json'));
 const codes = markerCodebook(layout.panels);
-import {dockReference, locateDock} from './assets/sim/dock-localization.mjs';
+import {dockReference, inspectDock, recoverOccludedDock} from './assets/sim/dock-localization.mjs';
 const reference = dockReference(layout);
 const model = JSON.parse(readFileSync('assets/sim/dock-detector.json'));
 for await (const line of createInterface({input: process.stdin})) {
@@ -34,8 +34,13 @@ for await (const line of createInterface({input: process.stdin})) {
     continue;
   }
   if (line.startsWith('locate ')) {
-    const mono = Buffer.from(line.slice(7),'base64');
-    const fit = locateDock(mono,model.width*scale,model.height*scale,reference);
+    const inspected = inspectDock(Buffer.from(line.slice(7),'base64'),model.width*scale,model.height*scale,reference);
+    if (inspected.standard) inspected.standard.bbox = inspected.standard.bbox.map(v=>v/scale);
+    console.log(JSON.stringify(inspected));
+    continue;
+  }
+  if (line.startsWith('recover ')) {
+    const fit = recoverOccludedDock(Buffer.from(line.slice(8),'base64'),model.width*scale,model.height*scale,reference);
     if (fit) fit.bbox = fit.bbox.map(v=>v/scale);
     console.log(JSON.stringify(fit));
     continue;
@@ -78,20 +83,24 @@ def exchange(runtime, line):
     return json.loads(runtime.stdout.readline())
 
 
-def replay_frame(seed, sweep, view, bbox, decisions, mlp_result, replay):
+def replay_frame(seed, sweep, view, bbox, decisions, mlp_result, replay, *, diagnosis=None):
     def normalized(box):
         return [v / (72 if i % 2 else 96) for i, v in enumerate(box)]
 
     results = {method: dict(detection, bbox=normalized(detection['bbox'])) if detection else None
                for method, detection in decisions.items()}
-    results.update(mlpScore=mlp_result['score'], mlpThreshold=mlp_result['threshold'], mlpStage='accepted')
+    mlp_stage = ('accepted' if decisions['mlp'] else 'below threshold' if not mlp_result['detected']
+                 else 'weak contrast' if not mlp_result['marked'] else 'no printed ID')
+    results.update(mlpScore=mlp_result['score'], mlpThreshold=mlp_result['threshold'], mlpStage=mlp_stage)
+    if diagnosis:
+        results['diagnosis'] = diagnosis
     image = BytesIO()
     Image.fromarray(view).save(image, format='JPEG', quality=89)
     replay.append((dict(t=len(replay)*2600, truth='present', box=normalized(bbox), seed=seed,
                         sweep=sweep, jpeg=base64.b64encode(image.getvalue()).decode('ascii')), results))
 
 
-def qualify(base_seed, export_loop, scale, order_replay=None):
+def qualify(base_seed, export_loop, scale, order_replay=None, occlusion_replay=None):
     rng = np.random.default_rng(base_seed - 7)
     survivors, examples, misses = [], [], []
     counts = defaultdict(Counter)
@@ -116,7 +125,9 @@ def qualify(base_seed, export_loop, scale, order_replay=None):
                     detail, _, meta = render_scene(seed, azimuth, **scene, sensor_scale=scale)
                     c = detail.astype(np.uint16)
                     mono = ((c[:,:,0]+2*c[:,:,1]+c[:,:,2])//4).astype(np.uint8)
-                    fit = exchange(runtime, 'locate ' + base64.b64encode(mono).decode('ascii'))
+                    encoded = base64.b64encode(mono).decode('ascii')
+                    inspected = exchange(runtime, 'locate ' + encoded)
+                    fit = inspected['standard']
                     fit_hit = fit is not None and (target is None or overlap(fit['bbox'],target) >= .5)
                     counts[case]['fit'] += int(fit_hit)
                     if result['marked'] and (not tag or example or survivor):
@@ -144,6 +155,24 @@ def qualify(base_seed, export_loop, scale, order_replay=None):
                     cad_first_hit = cad_first is not None and (target is None or overlap(cad_first['bbox'],target) >= .5)
                     counts[case]['cad_first'] += int(cad_first_hit)
                     counts[case]['mlp_backup'] += int(cad_first_hit and cad_first['source'] == 'mlp')
+                    recovered = cad_first
+                    if not cad_first:
+                        recovered = exchange(runtime, 'recover ' + encoded)
+                    recovered_hit = recovered is not None and (target is None or overlap(recovered['bbox'],target) >= .5)
+                    counts[case]['recovery'] += int(recovered_hit)
+                    if case == 'occluded' and not cad_first_hit:
+                        diagnosis = inspected['reason'] or ('wrong CAD box' if fit else 'wrong MLP box')
+                        counts[case][diagnosis] += 1
+                        if occlusion_replay is not None:
+                            marker_absent = not any(meta['marker_pixels'])
+                            if marker_absent:
+                                counts[case]['no visible marker pixels'] += 1
+                            print(f"Occlusion {seed}: {diagnosis}, visible panels={meta['visible_marker_count']}, "
+                                  f"marker pixels={meta['marker_pixels']}, recovery={recovered_hit}", flush=True)
+                            replay_frame(seed, base_seed, mono, target, {
+                                'mlp': decisions['mlp'], 'cad': fit, 'fallback': fallback,
+                                'cadFirst': cad_first, 'recovered': recovered,
+                            }, result, occlusion_replay, diagnosis='all markers obscured' if marker_absent else diagnosis)
                     if order_replay is not None and case == 'marked' and tag and not matches:
                         replay_frame(seed, base_seed, mono, target, {
                             'mlp': decisions['mlp'], 'cad': fit, 'fallback': fallback, 'cadFirst': cad_first,
@@ -204,11 +233,13 @@ def qualify(base_seed, export_loop, scale, order_replay=None):
 
 def summarize(seed, scale, results):
     print(f'Sweep {seed}, {scale}x sensor detail')
-    print('Case       Frames   Raw   Contrast   Pattern   With detail  Invisible ID   CAD fit  MLP first  CAD first  MLP backup')
+    print('Case       Frames   Raw   Contrast   Pattern   With detail  Invisible ID   CAD fit  MLP first  CAD first  MLP backup  Recovery')
     for name, row in results.items():
         print(f"{name:10} {row['frames']:6d} {row['detected']:5d} {row['marked']:8d} {row['tag']:8d} "
               f"{row['detail']:13d} {row['invisible_id']:13d} {row['fit']:9d} {row['fallback']:10d} "
-              f"{row['cad_first']:10d} {row['mlp_backup']:11d}")
+              f"{row['cad_first']:10d} {row['mlp_backup']:11d} {row['recovery']:9d}")
+    print('Occlusion misses by CAD stage:', {reason:results['occluded'][reason]
+          for reason in ('no decoded marker','pose rejected','wrong CAD box','wrong MLP box')})
     print('Marked docks gained / lost:', results['marked']['gained'], results['marked']['lost'])
     print('Visible cases count correct localizations (IoU >= 0.5). Absent cases count false alarms.')
     if results['marked']['marked'] < .90 * results['marked']['detected']:
@@ -223,6 +254,11 @@ def summarize(seed, scale, results):
     if seed in (712100, 762400) and scale == 8:
         if results['marked']['cad_first'] != 48 or any(results[name]['cad_first'] for name in ('decoy', 'empty', 'covered')):
             raise SystemExit('CAD-first regression on a fully marked dock or absent target')
+    if seed in (712100, 762400, 913100) and scale == 8:
+        if results['occluded']['recovery'] < {712100:39,762400:37,913100:42}[seed]:
+            raise SystemExit('The occlusion recovery missed a previously recovered case')
+        if results['marked']['recovery'] != 48 or any(results[name]['recovery'] for name in ('decoy', 'empty', 'covered', 'hidden')):
+            raise SystemExit('Recovery regression on a fully marked dock or on a scene without usable markers')
 
 
 if __name__ == '__main__':
@@ -231,18 +267,21 @@ if __name__ == '__main__':
     parser.add_argument('--also-seed', type=int, action='append', default=[])
     parser.add_argument('--export-loop', action='store_true')
     parser.add_argument('--export-order-loop', type=Path)
+    parser.add_argument('--export-occlusion-loop', type=Path)
     parser.add_argument('--sensor-scale', type=int, choices=(4,8), default=8)
     args = parser.parse_args()
     order_replay = [] if args.export_order_loop else None
+    occlusion_replay = [] if args.export_occlusion_loop else None
     sweeps = {}
     for seed in [args.seed,*args.also_seed]:
-        results = qualify(seed, args.export_loop and seed == args.seed, args.sensor_scale, order_replay)
+        results = qualify(seed, args.export_loop and seed == args.seed, args.sensor_scale, order_replay, occlusion_replay)
         summarize(seed, args.sensor_scale, results)
         sweeps[seed] = results
-    if args.export_order_loop:
-        args.export_order_loop.write_text(json.dumps({
-            'format': 'duck-lab-camera-v1', 'source': 'Synthetic sweep replay',
-            'frames': [frame for frame, _ in order_replay],
-            'decisions': [decision for _, decision in order_replay],
-            'sweeps': sweeps,
-        },separators=(',',':'))+'\n', encoding='utf8')
+    for path, replay in [(args.export_order_loop,order_replay),(args.export_occlusion_loop,occlusion_replay)]:
+        if path:
+            path.write_text(json.dumps({
+                'format': 'duck-lab-camera-v1', 'source': 'Synthetic sweep replay',
+                'frames': [frame for frame, _ in replay],
+                'decisions': [decision for _, decision in replay],
+                'sweeps': sweeps,
+            },separators=(',',':'))+'\n', encoding='utf8')

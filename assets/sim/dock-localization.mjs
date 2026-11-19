@@ -1,5 +1,5 @@
 import {dockFaces} from './dock-vision-camera.mjs';
-import {locatePrintedTiles, markerCodebook} from './dock-pattern.mjs?v=2';
+import {locateOccludedTiles, locatePrintedTiles, markerCodebook} from './dock-pattern.mjs?v=3';
 
 const radians = degrees => degrees*Math.PI/180;
 const dot = (a,b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
@@ -60,9 +60,7 @@ function fitView(reference,markers,width,azimuth,elevation,distance) {
   }};
 }
 
-export function locateDock(gray,width,height,reference) {
-  const markers=locatePrintedTiles(gray,width,height,reference.codes);
-  if (!markers.length) return null;
+function fitDock(markers,width,height,reference) {
   let best=null;
   const consider=(az,el,dist)=>{
     if (dist<.12 || el < -15 || el > 90) return;
@@ -83,5 +81,24 @@ export function locateDock(gray,width,height,reference) {
   const points=reference.vertices.map(best.pixel), xs=points.map(p=>p[0]), ys=points.map(p=>p[1]);
   const bbox=[Math.max(0,Math.min(...xs)),Math.max(0,Math.min(...ys)),
     Math.min(width,Math.max(...xs)),Math.min(height,Math.max(...ys))];
+  if (bbox[0]>=bbox[2] || bbox[1]>=bbox[3]) return null;
   return {bbox,ids:markers.map(m=>m.name),rms:best.rms};
+}
+
+export function inspectDock(gray,width,height,reference) {
+  const markers=locatePrintedTiles(gray,width,height,reference.codes);
+  const standard=markers.length ? fitDock(markers,width,height,reference) : null;
+  const reason=standard ? null : markers.length ? 'pose rejected' : 'no decoded marker';
+  return {standard,reason,ids:markers.map(m=>m.name)};
+}
+
+export function locateDock(gray,width,height,reference) {
+  return inspectDock(gray,width,height,reference).standard;
+}
+
+export function recoverOccludedDock(gray,width,height,reference) {
+  const markers=locateOccludedTiles(gray,width,height,reference.codes);
+  if (!markers.length) return null;
+  const fit=fitDock(markers,width,height,reference);
+  return fit ? {...fit, recovery:'occluded marker scan'} : null;
 }

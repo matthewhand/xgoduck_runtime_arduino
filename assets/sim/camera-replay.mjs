@@ -1,6 +1,6 @@
 import {GroveCamera, CAPTURE_FORMAT, FRAME_LIMIT, MAX_FRAMES, jpegBytes, parseRecording} from './grove-capture.mjs';
 import {dockReference} from './dock-localization.mjs';
-import {compareDockFrame, differs, frameOutcome, intersectionOverUnion} from './dock-footage.mjs?v=3';
+import {compareDockFrame, differs, frameOutcome, intersectionOverUnion} from './dock-footage.mjs?v=4';
 
 const $ = id => document.getElementById(id);
 const canvas = $('frame'), view = canvas.getContext('2d');
@@ -12,17 +12,20 @@ const native = nativeCanvas.getContext('2d', {willReadFrequently:true});
 const pause = ms => new Promise(resolve => setTimeout(resolve,ms));
 const serialReady = window.isSecureContext && Boolean(navigator.serial);
 const methods = ['mlp','cad'];
-const scoredMethods = [...methods,'fallback','cadFirst'];
+const scoredMethods = [...methods,'fallback','cadFirst','recovered'];
 const colours = {mlp:'#57e1ce',cad:'#c4a9ff',truth:'#ffcc69'};
 let camera, working = false, recording = false, stopAfterFrame = false;
 let frames = [], results = [], source = '', index = 0, timer = null, drawing = false, drag;
-let models, picture, renderRequest = 0, orderReplay = false;
+let models, picture, renderRequest = 0, comparison = null;
 
-function setOrderReplay(active) {
-  orderReplay = active;
+function setComparison(preset) {
+  comparison = preset;
+  const active = Boolean(preset);
   $('frame-holder').classList.toggle('order-mode',active);
   $('before-caption').hidden = $('after-panel').hidden = !active;
+  if (active) afterCanvas.setAttribute('aria-label',preset.afterLabel+' on the same camera frame');
   $('proposal').disabled = active;
+  $('recovery-summary').hidden = $('recovery-column').hidden = preset?.afterKey === 'cadFirst';
 }
 
 async function json(name) {
@@ -91,8 +94,8 @@ function updateControls() {
   $('record').textContent = recording ? 'Stop capture' : 'Record up to 20 s';
   for (const id of ['open','example','save','export']) $(id).disabled =
     working || recording || (id === 'save' && !frames.length) || (id === 'export' && !results.some(Boolean));
-  $('truth').disabled = $('box').disabled = orderReplay || !frame || working || recording;
-  $('clear-box').disabled = orderReplay || !frame?.box || working || recording;
+  $('truth').disabled = $('box').disabled = Boolean(comparison) || !frame || working || recording;
+  $('clear-box').disabled = Boolean(comparison) || !frame?.box || working || recording;
   $('filter').disabled = !frames.length || working || recording;
 }
 
@@ -107,9 +110,10 @@ function updateReview() {
   $('review-status').textContent = frames.length
     ? `${available} of ${frames.length} frames in this view · ${frames.filter(f=>f.truth==='unknown').length} unlabelled` : '—';
   const rows = ['hit','miss','wrong box','false alarm','clear'];
+  const keys = $('recovery-column').hidden ? scoredMethods.slice(0,-1) : scoredMethods;
   $('totals').replaceChildren(...rows.map(outcome => {
     const tr = document.createElement('tr');
-    const counts = scoredMethods.map(key => results.reduce((sum,result,i) =>
+    const counts = keys.map(key => results.reduce((sum,result,i) =>
       sum + Number(Boolean(result) && frameOutcome(frames[i],result[key]) === outcome),0));
     for (const [i,value] of [outcome,...counts].entries()) {
       const cell = document.createElement(i===0 ? 'th' : 'td');
@@ -135,16 +139,17 @@ function repaint() {
   if (!picture) return;
   view.drawImage(picture,0,0,canvas.width,canvas.height);
   const result = results[index];
-  if (orderReplay) {
+  if (comparison) {
     afterView.drawImage(picture,0,0,afterCanvas.width,afterCanvas.height);
-    boxOutline(result?.fallback?.bbox,colours.mlp);
-    boxOutline(result?.cadFirst?.bbox,colours.cad,false,afterView);
+    boxOutline(result?.[comparison.beforeKey]?.bbox,colours.mlp);
+    boxOutline(result?.[comparison.afterKey]?.bbox,colours.cad,false,afterView);
     boxOutline(frames[index].box,colours.truth,true);
     boxOutline(frames[index].box,colours.truth,true,afterView);
     return;
   }
   if ($('proposal').checked && !result?.mlp) boxOutline(result?.mlpProposal,colours.mlp,true);
   for (const key of methods) boxOutline(result?.[key]?.bbox,colours[key]);
+  if (result?.recovered?.recovery) boxOutline(result.recovered.bbox,colours.cad);
   boxOutline(frames[index].box,colours.truth,true);
   if (drag) boxOutline(dragBox(drag.start,drag.end),colours.truth,true);
 }
@@ -159,7 +164,7 @@ async function show(i) {
     (Number.isInteger(frame.seed) ? ` · Scene ${frame.seed}` : '');
   for (const key of methods) {
     const fit = result?.[key];
-    const diagnosis = key === 'mlp' ? result?.mlpStage : 'no marker fit';
+    const diagnosis = key === 'mlp' ? result?.mlpStage : (result?.cadReason || result?.diagnosis || 'no marker fit');
     const outcome = frameOutcome(frame,fit);
     $(key+'-frame').textContent = result
       ? [outcome==='unlabelled' ? null : outcome, fit?.ids.join(', ') || diagnosis,
@@ -180,15 +185,22 @@ async function show(i) {
         chosen ? (chosen.source === 'cad' ? 'CAD accepted' : 'MLP backup accepted') : 'No detection']
         .filter(Boolean).join(' · ')
     : 'Waiting for analysis';
-  if (orderReplay) {
-    const beforeIoU = accepted ? intersectionOverUnion(frame.box,accepted.bbox).toFixed(2) : '—';
-    const afterIoU = chosen ? intersectionOverUnion(frame.box,chosen.bbox).toFixed(2) : '—';
-    $('before-caption').textContent = `Before · MLP first · IoU ${beforeIoU}`;
-    $('after-caption').textContent = `After · CAD first · IoU ${afterIoU}`;
+  const recovered = result?.recovered;
+  $('recovery-frame').textContent = result
+    ? [frame.truth === 'unknown' ? null : frameOutcome(frame,recovered),
+        recovered?.recovery ? `Second scan · ${recovered.ids.join(', ')}` :
+          recovered ? 'Original decision kept' : 'No detection'].filter(Boolean).join(' · ')
+    : 'Waiting for analysis';
+  if (comparison) {
+    for (const side of ['before','after']) {
+      const box = result?.[comparison[side+'Key']]?.bbox;
+      const overlap = box ? `IoU ${intersectionOverUnion(frame.box,box).toFixed(2)}` : 'No detection';
+      $(side+'-caption').textContent = `${comparison[side+'Label']} · ${overlap}`;
+    }
   }
   $('frame-holder').hidden = $('transport').hidden = false;
-  $('frame-caption').textContent = orderReplay
-    ? 'Dashed amber shows the labelled dock. A box needs at least 0.50 overlap (IoU) to count.'
+  $('frame-caption').textContent = comparison
+    ? [comparison.afterKey === 'recovered' && result?.diagnosis, 'Dashed amber marks the labelled dock. IoU ≥ 0.50 counts as a hit.'].filter(Boolean).join(' · ')
     : result && differs(result.mlp,result.cad)
       ? 'The detectors disagree on this frame.' : 'Draw a dock box to score localization at 50% overlap.';
   updateControls();
@@ -199,7 +211,7 @@ async function show(i) {
     picture?.close();
     picture = bitmap;
     [canvas.width,canvas.height] = limitSize(bitmap.width,bitmap.height);
-    if (orderReplay) [afterCanvas.width,afterCanvas.height] = [canvas.width,canvas.height];
+    if (comparison) [afterCanvas.width,afterCanvas.height] = [canvas.width,canvas.height];
     canvas.style.maxWidth = `${65*canvas.width/canvas.height}vh`;
     repaint();
   } catch {
@@ -236,7 +248,7 @@ function playNext() {
 
 async function analyze(nextFrames, nextSource) {
   stopPlayback();
-  setOrderReplay(false);
+  setComparison(null);
   frames = nextFrames;
   results = [];
   source = nextSource;
@@ -345,8 +357,8 @@ async function example() {
   } finally { atlas.close(); }
 }
 
-async function orderingExample() {
-  const replay = await json('dock-order-replay.json');
+async function comparisonExample(preset) {
+  const replay = await json(preset.file);
   const clips = parseRecording(replay);
   if (!Array.isArray(replay.decisions) || clips.length !== replay.decisions.length
       || !clips.every(frame => frame.box)) {
@@ -354,12 +366,12 @@ async function orderingExample() {
   }
   stopPlayback();
   setDrawing(false);
-  setOrderReplay(true);
+  setComparison(preset);
   frames = clips;
   results = replay.decisions;
   source = replay.source;
   $('filter').value = 'all';
-  $('camera-status').textContent = `${source} · ${clips.length} wrong boxes from both sweeps`;
+  $('camera-status').textContent = `${source} · ${clips.length} ${preset.label} from both sweeps`;
   await show(0);
 }
 
@@ -429,7 +441,7 @@ function download(name, content, type) {
 }
 
 function exportResults() {
-  const csv = ['frame,time_ms,truth,mlp_outcome,mlp_stage,mlp_score,mlp_ids,mlp_bbox,cad_outcome,cad_ids,cad_bbox,cad_residual_px,mlp_ms,cad_ms,fallback_outcome,fallback_source,synthetic_seed,cad_first_outcome,cad_first_source'];
+  const csv = ['frame,time_ms,truth,mlp_outcome,mlp_stage,mlp_score,mlp_ids,mlp_bbox,cad_outcome,cad_ids,cad_bbox,cad_residual_px,mlp_ms,cad_ms,fallback_outcome,fallback_source,synthetic_seed,cad_first_outcome,cad_first_source,recovery_outcome,recovery_ids,cad_diagnosis'];
   for (const [i,frame] of frames.entries()) {
     const result = results[i];
     if (!result) continue;
@@ -437,7 +449,8 @@ function exportResults() {
       result.mlpScore,result.mlp?.ids.join('|'),result.mlp?.bbox.join('|'),frameOutcome(frame,result.cad),
       result.cad?.ids.join('|'),result.cad?.bbox.join('|'),result.cad?.rms,result.mlpMs,result.cadMs,
       frameOutcome(frame,result.fallback),result.fallback?.source,Number.isInteger(frame.seed) ? frame.seed : '',
-      frameOutcome(frame,result.cadFirst),result.cadFirst?.source].join(','));
+      frameOutcome(frame,result.cadFirst),result.cadFirst?.source,
+      frameOutcome(frame,result.recovered),result.recovered?.ids.join('|'),result.diagnosis ?? result.cadReason].join(','));
   }
   download('duck-lab-camera-results.csv',csv.join('\n'),'text/csv');
 }
@@ -544,5 +557,13 @@ if (query.get('example') === 'mlp-misses') {
     autoplay();
   });
 } else if (query.get('example') === 'cad-first') {
-  void busy(orderingExample).then(loaded => { if (loaded) autoplay(); });
+  void busy(() => comparisonExample({
+    file:'dock-order-replay.json', label:'wrong boxes', beforeKey:'fallback', afterKey:'cadFirst',
+    beforeLabel:'Before · MLP first', afterLabel:'After · CAD first',
+  })).then(loaded => { if (loaded) autoplay(); });
+} else if (query.get('example') === 'occlusion') {
+  void busy(() => comparisonExample({
+    file:'dock-occlusion-replay.json', label:'partly obscured misses', beforeKey:'cadFirst', afterKey:'recovered',
+    beforeLabel:'Before · CAD first', afterLabel:'After · recovery scan',
+  })).then(loaded => { if (loaded) autoplay(); });
 }

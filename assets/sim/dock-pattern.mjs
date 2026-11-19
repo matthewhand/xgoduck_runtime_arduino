@@ -48,7 +48,7 @@ export function markerCodebook(panels) {
   return codes;
 }
 
-function sampleCode(quad, gray, width, height, codes) {
+function sampleCode(quad, gray, width, height, codes, quietBorderOutliers) {
   const [a,b,c,d] = quad;
   // Homography from the unit square to the outer edge of the 5 × 5 ink region.
   const bx=b[0]-c[0], by=b[1]-c[1], dx=d[0]-c[0], dy=d[1]-c[1];
@@ -71,8 +71,9 @@ function sampleCode(quad, gray, width, height, codes) {
   }
   perimeter.sort((a,b)=>a-b);
   ring.sort((a,b)=>a-b);
-  // At least 22/24 quiet-border and 15/16 ink-ring samples must separate.
-  if (perimeter[2]-ring[14]<45) return null;
+  // Keep all nine payload bits and at least 15/16 ring samples. A separate
+  // recovery pass can tolerate a few extra covered white-border cells.
+  if (perimeter[quietBorderOutliers]-ring[14]<45) return null;
   const cut=(perimeter[12]+ring[8])/2;
   let bits='';
   for (let y=2; y<=4; y++) for (let x=2; x<=4; x++) {
@@ -83,11 +84,11 @@ function sampleCode(quad, gray, width, height, codes) {
   return codes.get(bits) ?? null;
 }
 
-function scanPatterns(gray, width, height, box, codes, firstOnly) {
+function scanPatterns(gray, width, height, box, codes, firstOnly, thresholds, quietBorderOutliers) {
   const left=Math.max(0,Math.floor(box[0])), right=Math.min(width,Math.ceil(box[2]));
   const top=Math.max(0,Math.floor(box[1])), bottom=Math.min(height,Math.ceil(box[3]));
   const found = new Map();
-  for (const threshold of [58, 85, 108]) {
+  for (const threshold of thresholds) {
     const visited=new Uint8Array(gray.length);
     for (let y=top; y<bottom; y++) for (let x=left; x<right; x++) {
       const start=y*width+x;
@@ -112,7 +113,7 @@ function scanPatterns(gray, width, height, box, codes, firstOnly) {
       if (queue.length<16 || points.length<4) continue;
       const quad=ringCorners(points);
       if (quad.length!==4) continue;
-      const code=sampleCode(quad,gray,width,height,codes);
+      const code=sampleCode(quad,gray,width,height,codes,quietBorderOutliers);
       if (!code) continue;
       const corners=quad.map((_,i) => quad[(i+code.rotation)%4]);
       const area=(cross(quad[0],quad[1],quad[2])+cross(quad[0],quad[2],quad[3]))/2;
@@ -131,9 +132,13 @@ export function markerLuminance(rgba) {
 }
 
 export function readDockPattern(rgba, width, height, box, codes) {
-  return scanPatterns(markerLuminance(rgba),width,height,box,codes,true)[0]?.name ?? null;
+  return scanPatterns(markerLuminance(rgba),width,height,box,codes,true,[58,85,108],2)[0]?.name ?? null;
 }
 
 export function locatePrintedTiles(gray, width, height, codes) {
-  return scanPatterns(gray,width,height,[0,0,width,height],codes,false);
+  return scanPatterns(gray,width,height,[0,0,width,height],codes,false,[58,85,108],2);
+}
+
+export function locateOccludedTiles(gray, width, height, codes) {
+  return scanPatterns(gray,width,height,[0,0,width,height],codes,false,[23,30,38,48,58,72,85,108],7);
 }
