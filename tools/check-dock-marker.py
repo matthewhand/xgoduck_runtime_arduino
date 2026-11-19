@@ -3,6 +3,7 @@ import argparse
 import base64
 from collections import Counter, defaultdict
 import json
+from io import BytesIO
 from pathlib import Path
 import subprocess
 
@@ -19,7 +20,7 @@ import {readFileSync} from 'node:fs';
 import {detectDock} from './assets/sim/dock-inference.mjs';
 import {hasMarkerContrast} from './assets/sim/dock-marker.mjs';
 import {markerCodebook, readDockPattern, detailCrop} from './assets/sim/dock-pattern.mjs';
-import {fallbackDock} from './assets/sim/dock-footage.mjs';
+import {fallbackDock, preferCadDock} from './assets/sim/dock-footage.mjs';
 const scale = Number(process.argv[1]);
 const layout = JSON.parse(readFileSync('assets/sim/dock-vision-layout.json'));
 const codes = markerCodebook(layout.panels);
@@ -29,7 +30,7 @@ const model = JSON.parse(readFileSync('assets/sim/dock-detector.json'));
 for await (const line of createInterface({input: process.stdin})) {
   if (line.startsWith('fallback ')) {
     const {mlp,cad} = JSON.parse(line.slice(9));
-    console.log(JSON.stringify(fallbackDock(mlp,cad)));
+    console.log(JSON.stringify({mlp,cad,mlpFirst:fallbackDock(mlp,cad),cadFirst:preferCadDock(mlp,cad)}));
     continue;
   }
   if (line.startsWith('locate ')) {
@@ -50,7 +51,8 @@ for await (const line of createInterface({input: process.stdin})) {
   const {bbox, score, detected} = detectDock(model, pixels);
   const marked = detected && hasMarkerContrast(pixels, model.width, model.height, bbox);
   const tag = marked && readDockPattern(pixels, model.width, model.height, bbox, codes);
-  console.log(JSON.stringify({bbox, score, detected, marked, tag, crop:detailCrop(bbox,model.width*scale,model.height*scale,scale)}));
+  console.log(JSON.stringify({bbox, score, threshold:model.threshold, detected, marked, tag,
+    crop:detailCrop(bbox,model.width*scale,model.height*scale,scale)}));
 }
 """
 
@@ -76,7 +78,20 @@ def exchange(runtime, line):
     return json.loads(runtime.stdout.readline())
 
 
-def qualify(base_seed, export_loop, scale):
+def replay_frame(seed, sweep, view, bbox, decisions, mlp_result, replay):
+    def normalized(box):
+        return [v / (72 if i % 2 else 96) for i, v in enumerate(box)]
+
+    results = {method: dict(detection, bbox=normalized(detection['bbox'])) if detection else None
+               for method, detection in decisions.items()}
+    results.update(mlpScore=mlp_result['score'], mlpThreshold=mlp_result['threshold'], mlpStage='accepted')
+    image = BytesIO()
+    Image.fromarray(view).save(image, format='JPEG', quality=89)
+    replay.append((dict(t=len(replay)*2600, truth='present', box=normalized(bbox), seed=seed,
+                        sweep=sweep, jpeg=base64.b64encode(image.getvalue()).decode('ascii')), results))
+
+
+def qualify(base_seed, export_loop, scale, order_replay=None):
     rng = np.random.default_rng(base_seed - 7)
     survivors, examples, misses = [], [], []
     counts = defaultdict(Counter)
@@ -118,12 +133,21 @@ def qualify(base_seed, export_loop, scale):
                             # The decoder uses integer luminance. Store that channel losslessly for playback.
                             (examples if example else survivors).append((rgb, mono, record))
                     baseline_hit = bool(tag) and matches
-                    fallback = exchange(runtime, 'fallback ' + json.dumps({
+                    decisions = exchange(runtime, 'fallback ' + json.dumps({
                         'mlp': {'bbox': result['bbox'], 'ids': [tag]} if tag else None,
                         'cad': fit,
                     }))
+                    fallback = decisions['mlpFirst']
                     fallback_hit = fallback is not None and (target is None or overlap(fallback['bbox'],target) >= .5)
                     counts[case]['fallback'] += int(fallback_hit)
+                    cad_first = decisions['cadFirst']
+                    cad_first_hit = cad_first is not None and (target is None or overlap(cad_first['bbox'],target) >= .5)
+                    counts[case]['cad_first'] += int(cad_first_hit)
+                    counts[case]['mlp_backup'] += int(cad_first_hit and cad_first['source'] == 'mlp')
+                    if order_replay is not None and case == 'marked' and tag and not matches:
+                        replay_frame(seed, base_seed, mono, target, {
+                            'mlp': decisions['mlp'], 'cad': fit, 'fallback': fallback, 'cadFirst': cad_first,
+                        }, result, order_replay)
                     if case == 'marked':
                         counts[case]['gained'] += int(fit_hit and not baseline_hit)
                         counts[case]['lost'] += int(baseline_hit and not fit_hit)
@@ -178,24 +202,47 @@ def qualify(base_seed, export_loop, scale):
     return counts
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--seed', type=int, default=712100)
-    parser.add_argument('--export-loop', action='store_true')
-    parser.add_argument('--sensor-scale', type=int, choices=(4,8), default=8)
-    args = parser.parse_args()
-    results = qualify(args.seed, args.export_loop, args.sensor_scale)
-    print(f'Case       Frames   Raw   Contrast   Pattern   With {args.sensor_scale}x sensor   Invisible ID   CAD fit  Fallback')
+def summarize(seed, scale, results):
+    print(f'Sweep {seed}, {scale}x sensor detail')
+    print('Case       Frames   Raw   Contrast   Pattern   With detail  Invisible ID   CAD fit  MLP first  CAD first  MLP backup')
     for name, row in results.items():
-        print(f"{name:10} {row['frames']:6d} {row['detected']:5d} {row['marked']:8d} {row['tag']:8d} {row['detail']:16d} {row['invisible_id']:14d} {row['fit']:9d} {row['fallback']:9d}")
+        print(f"{name:10} {row['frames']:6d} {row['detected']:5d} {row['marked']:8d} {row['tag']:8d} "
+              f"{row['detail']:13d} {row['invisible_id']:13d} {row['fit']:9d} {row['fallback']:10d} "
+              f"{row['cad_first']:10d} {row['mlp_backup']:11d}")
     print('Marked docks gained / lost:', results['marked']['gained'], results['marked']['lost'])
     print('Visible cases count correct localizations (IoU >= 0.5). Absent cases count false alarms.')
     if results['marked']['marked'] < .90 * results['marked']['detected']:
         raise SystemExit('Too many marked dock localizations lost')
     if results['decoy']['marked'] >= results['decoy']['detected']:
         raise SystemExit('Look-alike false alarms did not improve')
-    if args.seed == 712100 and args.sensor_scale == 8:
+    if seed == 712100 and scale == 8:
         if results['decoy']['detail'] or results['marked']['detail'] < 40:
             raise SystemExit('Printed-ID regression on the original eight look-alikes or 40 marked docks')
         if results['marked']['fallback'] < 42 or any(results[name]['fallback'] for name in ('decoy', 'empty', 'covered')):
             raise SystemExit('Fallback regression on marked docks or absent targets')
+    if seed in (712100, 762400) and scale == 8:
+        if results['marked']['cad_first'] != 48 or any(results[name]['cad_first'] for name in ('decoy', 'empty', 'covered')):
+            raise SystemExit('CAD-first regression on a fully marked dock or absent target')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--seed', type=int, default=712100)
+    parser.add_argument('--also-seed', type=int, action='append', default=[])
+    parser.add_argument('--export-loop', action='store_true')
+    parser.add_argument('--export-order-loop', type=Path)
+    parser.add_argument('--sensor-scale', type=int, choices=(4,8), default=8)
+    args = parser.parse_args()
+    order_replay = [] if args.export_order_loop else None
+    sweeps = {}
+    for seed in [args.seed,*args.also_seed]:
+        results = qualify(seed, args.export_loop and seed == args.seed, args.sensor_scale, order_replay)
+        summarize(seed, args.sensor_scale, results)
+        sweeps[seed] = results
+    if args.export_order_loop:
+        args.export_order_loop.write_text(json.dumps({
+            'format': 'duck-lab-camera-v1', 'source': 'Synthetic sweep replay',
+            'frames': [frame for frame, _ in order_replay],
+            'decisions': [decision for _, decision in order_replay],
+            'sweeps': sweeps,
+        },separators=(',',':'))+'\n', encoding='utf8')

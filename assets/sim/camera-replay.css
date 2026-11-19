@@ -8,7 +8,10 @@
 .camera-proposal { display: block; margin-top: 10px; }
 .camera-lab p, .camera-lab label { font-size: 13px; color: var(--muted); line-height: 1.45; }
 #frame-holder { background: #080f16; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; }
-#frame { display: block; width: 100%; height: auto; margin: auto; }
+#frame, #after-frame { display: block; width: 100%; height: auto; margin: auto; }
+#frame-holder.order-mode { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px; }
+#frame-holder.order-mode[hidden] { display: none; }
+.camera-lab .comparison-caption { margin: 0; padding: 8px; color: var(--text); background: var(--panel); font-weight: 600; }
 #frame-holder.drawing, #frame-holder.drawing canvas { cursor: crosshair; touch-action: none; }
 .camera-transport { align-items: center; padding-block: 8px; }
 .camera-transport[hidden] { display: none; }

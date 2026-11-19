@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Camera replay · Duck Lab</title>
   <link rel="stylesheet" href="sim/sim.css?v=15">
-  <link rel="stylesheet" href="sim/camera-replay.css?v=2">
+  <link rel="stylesheet" href="sim/camera-replay.css?v=3">
 </head>
 <body>
 <main class="camera-lab">
@@ -22,11 +22,19 @@
         <input id="file" type="file" accept=".json,image/jpeg,image/png,video/*" multiple hidden>
         <button id="example">Load synthetic example</button>
         <a href="?example=mlp-misses&amp;loop=1">Loop MLP misses</a>
+        <a href="?example=cad-first&amp;loop=1">Loop wrong boxes</a>
         <button id="save" disabled>Save recording</button>
       </div>
       <p id="camera-status" role="status">Open a recording, video, or stills to compare the detectors.</p>
       <div id="frame-holder" hidden>
-        <canvas id="frame" aria-label="Selected camera frame with detector and annotation boxes"></canvas>
+        <div>
+          <p class="comparison-caption" id="before-caption" hidden></p>
+          <canvas id="frame" aria-label="Selected camera frame with detector and annotation boxes"></canvas>
+        </div>
+        <div id="after-panel" hidden>
+          <p class="comparison-caption" id="after-caption"></p>
+          <canvas id="after-frame" aria-label="CAD-first decision on the same camera frame"></canvas>
+        </div>
       </div>
       <div class="camera-transport" id="transport" hidden>
         <button id="previous" aria-label="Previous frame">‹</button>
@@ -42,6 +50,7 @@
         <div><dt class="mlp">MLP + printed ID</dt><dd id="mlp-frame">—</dd></div>
         <div><dt class="cad">CAD marker fit</dt><dd id="cad-frame">—</dd></div>
         <div><dt>MLP with CAD fallback</dt><dd id="fallback-frame">—</dd></div>
+        <div><dt>CAD with MLP fallback</dt><dd id="cad-first-frame">—</dd></div>
       </dl>
       <div class="camera-annotations">
         <label>Ground truth
@@ -71,12 +80,12 @@
       <label class="camera-proposal"><input id="proposal" type="checkbox"> Show rejected MLP box</label>
       <p id="review-status" role="status">—</p>
       <table aria-label="Results on labelled frames">
-        <thead><tr><th scope="col">Labelled frames</th><th scope="col">MLP + ID</th><th scope="col">CAD fit</th><th scope="col">Fallback</th></tr></thead>
+        <thead><tr><th scope="col">Labelled frames</th><th scope="col">MLP + ID</th><th scope="col">CAD fit</th><th scope="col">MLP first</th><th scope="col">CAD first</th></tr></thead>
         <tbody id="totals"></tbody>
       </table>
     </section>
   </div>
 </main>
-<script type="module" src="sim/camera-replay.mjs?v=3"></script>
+<script type="module" src="sim/camera-replay.mjs?v=4"></script>
 </body>
 </html>

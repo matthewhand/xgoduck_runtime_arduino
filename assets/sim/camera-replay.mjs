@@ -1,9 +1,10 @@
 import {GroveCamera, CAPTURE_FORMAT, FRAME_LIMIT, MAX_FRAMES, jpegBytes, parseRecording} from './grove-capture.mjs';
 import {dockReference} from './dock-localization.mjs';
-import {compareDockFrame, differs, frameOutcome} from './dock-footage.mjs?v=2';
+import {compareDockFrame, differs, frameOutcome, intersectionOverUnion} from './dock-footage.mjs?v=3';
 
 const $ = id => document.getElementById(id);
 const canvas = $('frame'), view = canvas.getContext('2d');
+const afterCanvas = $('after-frame'), afterView = afterCanvas.getContext('2d');
 const scratch = document.createElement('canvas');
 const detail = scratch.getContext('2d', {willReadFrequently:true});
 const nativeCanvas = document.createElement('canvas');
@@ -11,11 +12,18 @@ const native = nativeCanvas.getContext('2d', {willReadFrequently:true});
 const pause = ms => new Promise(resolve => setTimeout(resolve,ms));
 const serialReady = window.isSecureContext && Boolean(navigator.serial);
 const methods = ['mlp','cad'];
-const scoredMethods = [...methods,'fallback'];
+const scoredMethods = [...methods,'fallback','cadFirst'];
 const colours = {mlp:'#57e1ce',cad:'#c4a9ff',truth:'#ffcc69'};
 let camera, working = false, recording = false, stopAfterFrame = false;
 let frames = [], results = [], source = '', index = 0, timer = null, drawing = false, drag;
-let models, picture, renderRequest = 0;
+let models, picture, renderRequest = 0, orderReplay = false;
+
+function setOrderReplay(active) {
+  orderReplay = active;
+  $('frame-holder').classList.toggle('order-mode',active);
+  $('before-caption').hidden = $('after-panel').hidden = !active;
+  $('proposal').disabled = active;
+}
 
 async function json(name) {
   const response = await fetch(new URL(name,import.meta.url),{signal:AbortSignal.timeout(10000)});
@@ -83,8 +91,8 @@ function updateControls() {
   $('record').textContent = recording ? 'Stop capture' : 'Record up to 20 s';
   for (const id of ['open','example','save','export']) $(id).disabled =
     working || recording || (id === 'save' && !frames.length) || (id === 'export' && !results.some(Boolean));
-  $('truth').disabled = $('box').disabled = !frame || working || recording;
-  $('clear-box').disabled = !frame?.box || working || recording;
+  $('truth').disabled = $('box').disabled = orderReplay || !frame || working || recording;
+  $('clear-box').disabled = orderReplay || !frame?.box || working || recording;
   $('filter').disabled = !frames.length || working || recording;
 }
 
@@ -113,19 +121,28 @@ function updateReview() {
   }));
 }
 
-function boxOutline(box, colour, dashed = false) {
+function boxOutline(box, colour, dashed = false, context = view) {
   if (!box) return;
   const [l,t,r,b] = box;
-  view.strokeStyle = colour;
-  view.lineWidth = Math.max(2,canvas.width/260);
-  view.setLineDash(dashed ? [6,4] : []);
-  view.strokeRect(l*canvas.width,t*canvas.height,(r-l)*canvas.width,(b-t)*canvas.height);
+  const {width,height} = context.canvas;
+  context.strokeStyle = colour;
+  context.lineWidth = Math.max(2,width/260);
+  context.setLineDash(dashed ? [6,4] : []);
+  context.strokeRect(l*width,t*height,(r-l)*width,(b-t)*height);
 }
 
 function repaint() {
   if (!picture) return;
   view.drawImage(picture,0,0,canvas.width,canvas.height);
   const result = results[index];
+  if (orderReplay) {
+    afterView.drawImage(picture,0,0,afterCanvas.width,afterCanvas.height);
+    boxOutline(result?.fallback?.bbox,colours.mlp);
+    boxOutline(result?.cadFirst?.bbox,colours.cad,false,afterView);
+    boxOutline(frames[index].box,colours.truth,true);
+    boxOutline(frames[index].box,colours.truth,true,afterView);
+    return;
+  }
   if ($('proposal').checked && !result?.mlp) boxOutline(result?.mlpProposal,colours.mlp,true);
   for (const key of methods) boxOutline(result?.[key]?.bbox,colours[key]);
   boxOutline(frames[index].box,colours.truth,true);
@@ -147,7 +164,7 @@ async function show(i) {
     $(key+'-frame').textContent = result
       ? [outcome==='unlabelled' ? null : outcome, fit?.ids.join(', ') || diagnosis,
           key==='mlp' ? `score ${result.mlpScore.toFixed(5)} · threshold ${result.mlpThreshold.toFixed(5)}` : fit && `residual ${fit.rms.toFixed(1)} px`,
-          `${result[key+'Ms'].toFixed(1)} ms`].filter(Boolean).join(' · ') : 'Waiting for analysis';
+          Number.isFinite(result[key+'Ms']) ? `${result[key+'Ms'].toFixed(1)} ms` : null].filter(Boolean).join(' · ') : 'Waiting for analysis';
   }
   const accepted = result?.fallback;
   const outcome = frameOutcome(frame,accepted);
@@ -156,9 +173,24 @@ async function show(i) {
         accepted ? (accepted.source === 'cad' ? 'CAD recovered the detection' : 'MLP accepted') : 'No detection']
         .filter(Boolean).join(' · ')
     : 'Waiting for analysis';
+  const chosen = result?.cadFirst;
+  const afterOutcome = frameOutcome(frame,chosen);
+  $('cad-first-frame').textContent = result
+    ? [afterOutcome === 'unlabelled' ? null : afterOutcome,
+        chosen ? (chosen.source === 'cad' ? 'CAD accepted' : 'MLP backup accepted') : 'No detection']
+        .filter(Boolean).join(' · ')
+    : 'Waiting for analysis';
+  if (orderReplay) {
+    const beforeIoU = accepted ? intersectionOverUnion(frame.box,accepted.bbox).toFixed(2) : '—';
+    const afterIoU = chosen ? intersectionOverUnion(frame.box,chosen.bbox).toFixed(2) : '—';
+    $('before-caption').textContent = `Before · MLP first · IoU ${beforeIoU}`;
+    $('after-caption').textContent = `After · CAD first · IoU ${afterIoU}`;
+  }
   $('frame-holder').hidden = $('transport').hidden = false;
-  $('frame-caption').textContent = result && differs(result.mlp,result.cad)
-    ? 'The detectors disagree on this frame.' : 'Draw a dock box to score localization at 50% overlap.';
+  $('frame-caption').textContent = orderReplay
+    ? 'Dashed amber shows the labelled dock. A box needs at least 0.50 overlap (IoU) to count.'
+    : result && differs(result.mlp,result.cad)
+      ? 'The detectors disagree on this frame.' : 'Draw a dock box to score localization at 50% overlap.';
   updateControls();
   updateReview();
   try {
@@ -167,6 +199,7 @@ async function show(i) {
     picture?.close();
     picture = bitmap;
     [canvas.width,canvas.height] = limitSize(bitmap.width,bitmap.height);
+    if (orderReplay) [afterCanvas.width,afterCanvas.height] = [canvas.width,canvas.height];
     canvas.style.maxWidth = `${65*canvas.width/canvas.height}vh`;
     repaint();
   } catch {
@@ -203,6 +236,7 @@ function playNext() {
 
 async function analyze(nextFrames, nextSource) {
   stopPlayback();
+  setOrderReplay(false);
   frames = nextFrames;
   results = [];
   source = nextSource;
@@ -311,6 +345,24 @@ async function example() {
   } finally { atlas.close(); }
 }
 
+async function orderingExample() {
+  const replay = await json('dock-order-replay.json');
+  const clips = parseRecording(replay);
+  if (!Array.isArray(replay.decisions) || clips.length !== replay.decisions.length
+      || !clips.every(frame => frame.box)) {
+    throw new Error('The synthetic decision replay is incomplete.');
+  }
+  stopPlayback();
+  setDrawing(false);
+  setOrderReplay(true);
+  frames = clips;
+  results = replay.decisions;
+  source = replay.source;
+  $('filter').value = 'all';
+  $('camera-status').textContent = `${source} · ${clips.length} wrong boxes from both sweeps`;
+  await show(0);
+}
+
 async function busy(task) {
   if (working || recording) return;
   working = true;
@@ -377,14 +429,15 @@ function download(name, content, type) {
 }
 
 function exportResults() {
-  const csv = ['frame,time_ms,truth,mlp_outcome,mlp_stage,mlp_score,mlp_ids,mlp_bbox,cad_outcome,cad_ids,cad_bbox,cad_residual_px,mlp_ms,cad_ms,fallback_outcome,fallback_source,synthetic_seed'];
+  const csv = ['frame,time_ms,truth,mlp_outcome,mlp_stage,mlp_score,mlp_ids,mlp_bbox,cad_outcome,cad_ids,cad_bbox,cad_residual_px,mlp_ms,cad_ms,fallback_outcome,fallback_source,synthetic_seed,cad_first_outcome,cad_first_source'];
   for (const [i,frame] of frames.entries()) {
     const result = results[i];
     if (!result) continue;
     csv.push([i+1,frame.t.toFixed(2),frame.truth,frameOutcome(frame,result.mlp),result.mlpStage,
       result.mlpScore,result.mlp?.ids.join('|'),result.mlp?.bbox.join('|'),frameOutcome(frame,result.cad),
       result.cad?.ids.join('|'),result.cad?.bbox.join('|'),result.cad?.rms,result.mlpMs,result.cadMs,
-      frameOutcome(frame,result.fallback),result.fallback?.source,Number.isInteger(frame.seed) ? frame.seed : ''].join(','));
+      frameOutcome(frame,result.fallback),result.fallback?.source,Number.isInteger(frame.seed) ? frame.seed : '',
+      frameOutcome(frame,result.cadFirst),result.cadFirst?.source].join(','));
   }
   download('duck-lab-camera-results.csv',csv.join('\n'),'text/csv');
 }
@@ -473,6 +526,13 @@ if (!serialReady) $('camera-status').textContent =
 updateControls();
 
 const query = new URLSearchParams(location.search);
+function autoplay() {
+  if (reviewedFrames().length > 1 && (query.get('loop') === '1' || !matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    $('play').textContent = 'Pause';
+    playNext();
+  }
+}
+
 if (query.get('example') === 'mlp-misses') {
   void busy(example).then(async loaded => {
     if (!loaded) return;
@@ -481,9 +541,8 @@ if (query.get('example') === 'mlp-misses') {
     const misses = reviewedFrames();
     if (misses.length) await show(misses[0]);
     else updateReview();
-    if (misses.length > 1 && (query.get('loop') === '1' || !matchMedia('(prefers-reduced-motion: reduce)').matches)) {
-      $('play').textContent = 'Pause';
-      playNext();
-    }
+    autoplay();
   });
+} else if (query.get('example') === 'cad-first') {
+  void busy(orderingExample).then(loaded => { if (loaded) autoplay(); });
 }
