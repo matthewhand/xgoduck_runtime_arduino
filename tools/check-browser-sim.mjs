@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {modPolicyStatus, TRAINED_LAYOUTS} from '../assets/sim/mod-policy.mjs';
 import {markerCodebook, readDockPattern} from '../assets/sim/dock-pattern.mjs';
 import {DuckSimulation, parsePose, attitudeFromGravity} from '../assets/sim/sim-core.mjs';
-import {QualificationReplay, SKATE_TURN_LOOP, TURN_SEEK_LOOP, CLEAR_LANE_LOOP, LOWERING_PAIR, RELEASE_PAIR, TRIP_PAIR, mergeDockRecordings, parseQualificationReport} from '../assets/sim/qualification-replay.mjs';
+import {QualificationReplay, SKATE_TURN_LOOP, TURN_SEEK_LOOP, CLEAR_LANE_LOOP, LOWERING_PAIR, RELEASE_PAIR, TRIP_PAIR, mergeDockRecordings, loadDockCase, parseQualificationReport} from '../assets/sim/qualification-replay.mjs';
 
 const base = new URL('../assets/sim/',import.meta.url);
 const read = path => readFile(new URL(path,base));
@@ -87,12 +87,36 @@ try {
   }
   console.log('PASS: real MJCF compiles; 14 distinct motor/joint mappings and valid CAD mesh indices');
 
-  const dockReport = mergeDockRecordings(await Promise.all([
+  const dockSources = [
     'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
     'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',
-  ]
-    .map(async name => JSON.parse(await read(`${name}-recording.json`)))));
+  ];
+  const recordings = await Promise.all(dockSources.map(async name => JSON.parse(await read(`${name}-recording.json`))));
+  const dockReport = mergeDockRecordings(recordings);
   const dockCases = parseQualificationReport(dockReport, sim.joints.map(joint => joint.id));
+  const expectedIndex = Object.fromEntries([...dockCases.keys()].map(scenario => [scenario,
+    dockSources.filter((_, i) =>
+      Object.values(recordings[i]).some(variants => Object.hasOwn(variants, scenario)))]));
+  if (process.argv.includes('--write-dock-index')) {
+    const entries = Object.entries(expectedIndex).map(([name, sources]) =>
+      `  ${JSON.stringify(name)}: ${JSON.stringify(sources)}`);
+    await writeFile(new URL('dock-recording-index.json', base), `{\n${entries.join(',\n')}\n}\n`);
+  }
+  const dockIndex = JSON.parse(await read('dock-recording-index.json'));
+  assert.deepEqual(Object.keys(dockIndex), [...dockCases.keys()]);
+  assert.deepEqual(dockIndex, expectedIndex, 'Regenerate the index with --write-dock-index.');
+  for (const [scenario, cases] of dockCases) {
+    const requested = [];
+    const selected = await loadDockCase(dockIndex, scenario, source => {
+      requested.push(source);
+      return recordings[dockSources.indexOf(source)];
+    });
+    assert.deepEqual(requested, expectedIndex[scenario]);
+    assert.deepEqual(Object.keys(selected), [...cases.keys()]);
+    for (const name of cases.keys()) assert.equal(selected[name][scenario], dockReport[name][scenario]);
+  }
+  assert.deepEqual(dockIndex['Skate turnaround trials'], ['turn-seek']);
+  console.log(`PASS: ${dockCases.size} docking cases load the same recordings on demand`);
   const centred = dockCases.get('Centred entry');
   const footPad = centred.get('Rails + foot pad');
   assert(footPad.result.passed && footPad.events.has('Foot on pad') && footPad.events.has('Walk again'));

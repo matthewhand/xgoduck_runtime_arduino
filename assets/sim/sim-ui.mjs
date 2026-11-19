@@ -3,7 +3,7 @@ import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs?v=4';
 import {WalkPanel} from './walk-ui.mjs?v=6';
 import {DemoCircuit} from './demo-ui.mjs?v=2';
-import {QualificationReplay, SKATE_TURN_LOOP, mergeDockRecordings} from './qualification-replay.mjs?v=18';
+import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase} from './qualification-replay.mjs?v=19';
 import {GuardPreview} from './guard-preview.mjs?v=10';
 import {DOCK_DESIGNS, dockSurfaceGeometry} from './dock-preview.mjs?v=7';
 import {SKATE_SURFACES} from './skate-terrain.mjs';
@@ -548,27 +548,32 @@ async function selectWorkspace(next) {
   }
 }
 
+let dockIndex;
+async function readDockJson(path) {
+  const response = await fetch(new URL(path, import.meta.url), {signal:AbortSignal.timeout(10000)});
+  if (!response.ok) throw new Error(`Dock replay download failed (HTTP ${response.status}).`);
+  return response.json();
+}
+
 async function openDockReplay(variant, scenario = 'Skate turnaround trials') {
   await selectWorkspace('replay');
+  if (mode !== 'replay' || stopping) return;
   const request = workspaceRequest;
+  const fileRequest = replay.fileRequest;
   const status = $('qualification-status');
   status.textContent = 'Loading the dock trials…';
   try {
-    const recordings = await Promise.all([
-      'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
-      'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',
-    ].map(async name => {
-      const response = await fetch(new URL(`./${name}-recording.json?v=10`, import.meta.url),
-        {signal:AbortSignal.timeout(10000)});
-      if (!response.ok) throw new Error('Dock trials could not be loaded.');
-      return response.json();
-    }));
-    if (request !== workspaceRequest) return;
-    replay.setRecording(mergeDockRecordings(recordings), {scenario, variant:variant ?? SKATE_TURN_LOOP[0], alternate:!variant});
+    dockIndex ??= await readDockJson('./dock-recording-index.json?v=1');
+    if (!Object.hasOwn(dockIndex, scenario)) scenario = Object.keys(dockIndex)[0];
+    const dockLoader = name => loadDockCase(dockIndex, name,
+      source => readDockJson(`./${source}-recording.json?v=10`));
+    const report = await dockLoader(scenario);
+    if (stopping || request !== workspaceRequest || fileRequest !== replay.fileRequest) return;
+    replay.setRecording(report, {scenario, variant:variant ?? SKATE_TURN_LOOP[0], alternate:!variant, dockIndex, dockLoader});
     running = true;
     updateModeText();
   } catch (error) {
-    if (request === workspaceRequest) status.textContent = error.message;
+    if (request === workspaceRequest && fileRequest === replay.fileRequest) status.textContent = error.message;
   }
 }
 

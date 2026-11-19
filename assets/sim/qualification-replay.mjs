@@ -32,6 +32,16 @@ export function mergeDockRecordings(recordings) {
   return report;
 }
 
+export async function loadDockCase(index, scenario, readRecording) {
+  const sources = Object.hasOwn(index, scenario) ? index[scenario] : null;
+  if (!sources?.length) throw new Error('Unknown docking trial.');
+  const recordings = await Promise.all(sources.map(readRecording));
+  const report = mergeDockRecordings(recordings);
+  return Object.fromEntries(Object.entries(report)
+    .filter(([, trials]) => Object.hasOwn(trials, scenario))
+    .map(([variant, trials]) => [variant, {[scenario]: trials[scenario]}]));
+}
+
 function validRamp(module) {
   if (module.ramp_deg === undefined) return true;
   const angle = Math.abs(module.ramp_deg);
@@ -138,9 +148,7 @@ export class QualificationReplay {
       event.target.value = '';
       if (file) void this.load(file);
     });
-    this.get('case').addEventListener('change', event => {
-      this.selectCase(event.target.value, this.trial?.result.dock ? this.selected : undefined);
-    });
+    this.get('case').addEventListener('change', event => { void this.chooseCase(event.target.value); });
     this.get('variant').addEventListener('change', event => {
       this.get('alternate').checked = false;
       this.select(event.target.value, 'manual');
@@ -170,19 +178,44 @@ export class QualificationReplay {
   get frame() { return this.trial && replayFrameAt(this.trial.result.trace, this.time); }
   get alternating() { return !this.get('alternate-label').hidden && this.get('alternate').checked; }
 
-  setRecording(report, {scenario, variant, filename, alternate = false} = {}) {
+  setRecording(report, {scenario, variant, filename, alternate = false, dockIndex, dockLoader} = {}) {
     const cases = parseQualificationReport(report, this.jointIds);
+    this.caseRequest = {};
+    this.dockLoader = dockLoader;
     this.cases = cases;
-    this.get('case').replaceChildren(...[...cases.keys()].map(key => new Option(label(key), key)));
-    this.get('case-field').hidden = cases.size < 2;
+    const options = dockIndex ? Object.keys(dockIndex) : [...cases.keys()];
+    this.get('case').replaceChildren(...options.map(key => new Option(label(key), key)));
+    this.get('case-field').hidden = options.length < 2;
     this.get('controls').hidden = false;
     this.get('status').textContent = filename ? `Loaded ${filename}` : '';
     this.get('alternate').checked = alternate;
     this.selectCase(cases.has(scenario) ? scenario : cases.keys().next().value, variant);
   }
 
+  async chooseCase(next) {
+    const request = this.caseRequest = {};
+    const status = this.get('status');
+    const preferred = this.trial?.result.dock ? this.selected : undefined;
+    try {
+      if (this.dockLoader && !this.cases.has(next)) {
+        status.textContent = 'Loading the selected dock trial…';
+        const report = await this.dockLoader(next);
+        if (request !== this.caseRequest) return;
+        const parsed = parseQualificationReport(report, this.jointIds);
+        this.cases.set(next, parsed.get(next));
+      }
+      if (this.dockLoader) status.textContent = '';
+      this.selectCase(next, preferred);
+    } catch (error) {
+      if (request !== this.caseRequest) return;
+      this.get('case').value = this.case;
+      status.textContent = error.message;
+    }
+  }
+
   async load(file, {scenario, variant} = {}) {
     const request = ++this.fileRequest;
+    this.caseRequest = {};
     const message = this.get('status');
     try {
       if (file.size > MAX_REPORT_BYTES) throw new Error('Choose a report smaller than 20 MB.');

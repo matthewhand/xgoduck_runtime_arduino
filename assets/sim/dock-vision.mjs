@@ -21,11 +21,12 @@ const display = element('pixels');
 const context = display.getContext('2d', {willReadFrequently: true});
 const query = new URLSearchParams(location.search);
 let model, views, sprite, faces, codes, groups, frames, frame, prediction;
-let replay, replaySprite, detailSprite;
+let replay, detailSprite, detailLoad, detailError;
+const sprites = new Map();
 const sensor = document.createElement('canvas');
 const sensorContext = sensor.getContext('2d', {willReadFrequently:true});
-const isOrbit = () => element('condition').value === 'orbit';
-let index = 0, timer = null;
+const isOrbit = () => activeScene === 'orbit';
+let index = 0, timer = null, sceneRequest = 0, activeScene;
 
 async function json(file) {
   const response = await fetch(new URL(file, import.meta.url));
@@ -34,12 +35,16 @@ async function json(file) {
 }
 
 function loadSprite(file) {
-  return new Promise((resolve, reject) => {
+  if (!sprites.has(file)) sprites.set(file, new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Could not load the camera views'));
+    image.onerror = () => reject(new Error('Could not load the camera views.'));
     image.src = new URL(file, import.meta.url).href;
-  });
+  }).catch(error => {
+    sprites.delete(file);
+    throw error;
+  }));
+  return sprites.get(file);
 }
 
 function overlap(a, b) {
@@ -66,10 +71,22 @@ function drawOverlay() {
   const requireContrast = method !== 'raw';
   let tag = prediction.tag;
   let resolution = '96 × 72';
+  let detailMessage = '';
   if (method === 'detail' && !tag && prediction.markerContrast && hasDetail()) {
-    if (prediction.detailTag === undefined) prediction.detailTag = readDetail();
-    tag = prediction.detailTag;
-    resolution = `${model.width*replay.scale} × ${model.height*replay.scale}`;
+    if (isOrbit() || detailSprite) {
+      if (prediction.detailTag === undefined) prediction.detailTag = readDetail();
+      tag = prediction.detailTag;
+      resolution = `${model.width*replay.scale} × ${model.height*replay.scale}`;
+    } else if (detailError) {
+      detailMessage = 'Camera detail unavailable. No printed ID read at native resolution.';
+    } else {
+      detailMessage = 'Loading camera detail…';
+      detailLoad ??= loadSprite(replay.detail).then(image => { detailSprite = image; })
+        .catch(() => { detailError = true; }).finally(() => {
+          detailLoad = null;
+          drawOverlay();
+        });
+    }
   }
   const detected = prediction.detected && (!requireContrast || prediction.markerContrast) && (!wantsPattern || Boolean(tag));
   showBox('prediction', detected ? prediction.bbox : null);
@@ -78,12 +95,12 @@ function drawOverlay() {
   if (detected) outcome = wantsPattern ? `Dock detected · ${tag} marker · ${resolution}` : 'Dock detected';
   else if (prediction.detected) outcome = !prediction.markerContrast
     ? 'Candidate rejected · weak marker contrast' : `No printed ID read · ${resolution}`;
-  element('result').textContent = outcome;
+  element('result').textContent = detailMessage || outcome;
   element('score').textContent = `Score ${prediction.score.toFixed(6)} · threshold ${model.threshold.toFixed(6)}`;
   let comparison = '';
   if (showTruth) {
     if (frame.bbox && detected) comparison = `Box overlap (IoU) ${overlap(frame.bbox, prediction.bbox).toFixed(2)}`;
-    else if (frame.bbox) comparison = 'Visible dock missed';
+    else if (frame.bbox && !detailLoad) comparison = 'Visible dock missed';
     else if (detected) comparison = 'False detection';
     else comparison = 'No visible target';
   }
@@ -132,7 +149,7 @@ function drawFrame() {
     const columns = recorded ? replay.columns : views.columns;
     const column = frame.tile % columns;
     const row = Math.floor(frame.tile / columns);
-    context.drawImage(recorded ? replaySprite : sprite, column * width, row * height, width, height, 0, 0, width, height);
+    context.drawImage(sprite, column * width, row * height, width, height, 0, 0, width, height);
     pixels=context.getImageData(0,0,width,height);
     const sample = frame.negative_kind === 'decoy' ? ' · Look-alike object' : '';
     element('frame-info').textContent = `Held-out view ${index + 1} of ${frames.length}${sample}${recorded ? ' · Seed ' + frame.seed : ''}`;
@@ -163,6 +180,7 @@ function setPlaying(playing) {
 
 function chooseScene(value, angle) {
   setPlaying(false);
+  activeScene = value;
   element('condition').value = value;
   const live=value==='orbit';
   frames = groups.get(value) || [];
@@ -179,6 +197,29 @@ function chooseScene(value, angle) {
   drawFrame();
 }
 
+async function showScene(value, angle = frame?.azimuth ?? 35) {
+  const request = ++sceneRequest;
+  setPlaying(false);
+  for (const id of ['frame', 'play', 'prev', 'next']) element(id).disabled = true;
+  element('load').hidden = false;
+  element('load').textContent = 'Loading camera views…';
+  try {
+    const recorded = value === 'survivors' || value === 'pattern-examples';
+    const image = value === 'orbit' ? null : await loadSprite(recorded ? replay.sprite : views.sprite+'?v=2');
+    if (request !== sceneRequest) return false;
+    sprite = image;
+    chooseScene(value, angle);
+    element('load').hidden = true;
+    return true;
+  } catch (error) {
+    if (request !== sceneRequest) return false;
+    if (!frame) throw error;
+    element('load').textContent = error.message;
+    chooseScene(activeScene, frame.azimuth);
+    return false;
+  }
+}
+
 async function start() {
   let layout;
   [model, views, layout, replay] = await Promise.all([json('dock-detector.json'), json('dock-vision-views.json?v=2'), json('dock-vision-layout.json'),json('dock-survivors.json')]);
@@ -187,7 +228,6 @@ async function start() {
   if (model.width !== views.width || model.height !== views.height || !views.frames.length) {
     throw new Error('The detector and camera view dimensions do not match');
   }
-  [sprite, replaySprite, detailSprite] = await Promise.all([loadSprite(views.sprite+'?v=2'), loadSprite(replay.sprite), loadSprite(replay.detail)]);
   display.width = views.width;
   display.height = views.height;
   element('boxes').setAttribute('viewBox', `0 0 ${views.width} ${views.height}`);
@@ -211,20 +251,23 @@ async function start() {
     if (groups.has(condition)) heldOut.append(new Option(conditionNames[condition], condition));
   }
   if (query.get('scene') === 'negative') heldOut.append(new Option('Dock absent', 'negative'));
-  for (const id of controls) element(id).disabled = false;
   const scene = groups.has(query.get('scene')) ? query.get('scene') : 'orbit';
   element('verification').value = ['survivors','pattern-examples'].includes(scene) ? 'detail' : 'contrast';
-  chooseScene(scene, query.has('angle') ? Number(query.get('angle')) || 0 : 35);
   element('truth').checked = query.get('truth') === '1';
-  drawOverlay();
+  const angle = query.has('angle') ? Number(query.get('angle')) : 35;
+  await showScene(scene, Number.isFinite(angle) ? angle : 35);
+  element('condition').disabled = false;
   element('load').hidden = true;
   element('image').hidden = false;
   element('model').textContent = `${views.width} × ${views.height} input · Inference runs on this device.`;
   if (query.get('loop') === '1' || (!matchMedia('(prefers-reduced-motion: reduce)').matches && !query.has('angle'))) setPlaying(true);
 
   element('truth').addEventListener('change', drawOverlay);
-  element('verification').addEventListener('change', drawOverlay);
-  element('condition').addEventListener('change', event => chooseScene(event.target.value, frame.azimuth));
+  element('verification').addEventListener('change', () => {
+    detailError = false;
+    drawOverlay();
+  });
+  element('condition').addEventListener('change', event => { void showScene(event.target.value); });
   element('frame').addEventListener('input', event => {
     setPlaying(false);
     index = Number(event.target.value);
