@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Camera replay · Duck Lab</title>
   <link rel="stylesheet" href="sim/sim.css?v=15">
-  <link rel="stylesheet" href="sim/camera-replay.css?v=1">
+  <link rel="stylesheet" href="sim/camera-replay.css?v=2">
 </head>
 <body>
 <main class="camera-lab">
@@ -21,6 +21,7 @@
         <button id="open">Open footage</button>
         <input id="file" type="file" accept=".json,image/jpeg,image/png,video/*" multiple hidden>
         <button id="example">Load synthetic example</button>
+        <a href="?example=mlp-misses&amp;loop=1">Loop MLP misses</a>
         <button id="save" disabled>Save recording</button>
       </div>
       <p id="camera-status" role="status">Open a recording, video, or stills to compare the detectors.</p>
@@ -40,6 +41,7 @@
       <dl class="frame-results">
         <div><dt class="mlp">MLP + printed ID</dt><dd id="mlp-frame">—</dd></div>
         <div><dt class="cad">CAD marker fit</dt><dd id="cad-frame">—</dd></div>
+        <div><dt>MLP with CAD fallback</dt><dd id="fallback-frame">—</dd></div>
       </dl>
       <div class="camera-annotations">
         <label>Ground truth
@@ -58,6 +60,7 @@
           <select id="filter" disabled>
             <option value="all">All frames</option>
             <option value="difference">Detector disagreements</option>
+            <option value="mlp-miss">MLP misses</option>
             <option value="miss">Misses and wrong boxes</option>
             <option value="false alarm">False alarms</option>
             <option value="unlabelled">Unlabelled frames</option>
@@ -65,14 +68,15 @@
         </label>
         <button id="export" disabled>Save results CSV</button>
       </div>
+      <label class="camera-proposal"><input id="proposal" type="checkbox"> Show rejected MLP box</label>
       <p id="review-status" role="status">—</p>
       <table aria-label="Results on labelled frames">
-        <thead><tr><th scope="col">Labelled frames</th><th scope="col">MLP + ID</th><th scope="col">CAD fit</th></tr></thead>
+        <thead><tr><th scope="col">Labelled frames</th><th scope="col">MLP + ID</th><th scope="col">CAD fit</th><th scope="col">Fallback</th></tr></thead>
         <tbody id="totals"></tbody>
       </table>
     </section>
   </div>
 </main>
-<script type="module" src="sim/camera-replay.mjs?v=1"></script>
+<script type="module" src="sim/camera-replay.mjs?v=3"></script>
 </body>
 </html>

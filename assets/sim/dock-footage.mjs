@@ -21,6 +21,11 @@ export function differs(a, b) {
   return Boolean(a) !== Boolean(b) || Boolean(a && b && intersectionOverUnion(a.bbox,b.bbox) < .5);
 }
 
+export function fallbackDock(mlp, cad) {
+  if (mlp) return {...mlp, source:'mlp'};
+  return cad ? {...cad, source:'cad'} : null;
+}
+
 export function compareDockFrame(model, reference, native, detail, fitted) {
   const w = detail.width, h = detail.height;
   const normalize = box => box.map((value,i) => value/(i%2 ? h : w));
@@ -43,8 +48,8 @@ export function compareDockFrame(model, reference, native, detail, fitted) {
   const cad = fit && fit.bbox[0]<fit.bbox[2] && fit.bbox[1]<fit.bbox[3]
     ? {...fit,bbox:normalize(fit.bbox)} : null;
   return {
-    mlp, cad, mlpMs, cadMs:performance.now()-began-mlpMs,
-    mlpScore:raw.score,
+    mlp, cad, fallback:fallbackDock(mlp,cad), mlpMs, cadMs:performance.now()-began-mlpMs,
+    mlpScore:raw.score, mlpThreshold:model.threshold, mlpProposal:validBox ? normalize(bbox) : null,
     mlpStage:!raw.detected ? 'below threshold' : !contrast ? 'weak contrast' : !mlp ? 'no printed ID' : 'accepted',
   };
 }

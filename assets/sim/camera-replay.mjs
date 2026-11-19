@@ -1,6 +1,6 @@
 import {GroveCamera, CAPTURE_FORMAT, FRAME_LIMIT, MAX_FRAMES, jpegBytes, parseRecording} from './grove-capture.mjs';
 import {dockReference} from './dock-localization.mjs';
-import {compareDockFrame, differs, frameOutcome} from './dock-footage.mjs';
+import {compareDockFrame, differs, frameOutcome} from './dock-footage.mjs?v=2';
 
 const $ = id => document.getElementById(id);
 const canvas = $('frame'), view = canvas.getContext('2d');
@@ -11,6 +11,7 @@ const native = nativeCanvas.getContext('2d', {willReadFrequently:true});
 const pause = ms => new Promise(resolve => setTimeout(resolve,ms));
 const serialReady = window.isSecureContext && Boolean(navigator.serial);
 const methods = ['mlp','cad'];
+const scoredMethods = [...methods,'fallback'];
 const colours = {mlp:'#57e1ce',cad:'#c4a9ff',truth:'#ffcc69'};
 let camera, working = false, recording = false, stopAfterFrame = false;
 let frames = [], results = [], source = '', index = 0, timer = null, drawing = false, drag;
@@ -68,6 +69,7 @@ function reviewedFrames() {
     const outcomes = result ? methods.map(key => frameOutcome(frame,result[key])) : [];
     const show = filter === 'all' || (filter === 'unlabelled' && frame.truth === 'unknown') ||
       (filter === 'difference' && result && differs(result.mlp,result.cad)) ||
+      (filter === 'mlp-miss' && (outcomes[0] === 'miss' || outcomes[0] === 'wrong box')) ||
       outcomes.includes(filter) || (filter === 'miss' && outcomes.includes('wrong box'));
     return show ? [i] : [];
   });
@@ -99,7 +101,7 @@ function updateReview() {
   const rows = ['hit','miss','wrong box','false alarm','clear'];
   $('totals').replaceChildren(...rows.map(outcome => {
     const tr = document.createElement('tr');
-    const counts = methods.map(key => results.reduce((sum,result,i) =>
+    const counts = scoredMethods.map(key => results.reduce((sum,result,i) =>
       sum + Number(Boolean(result) && frameOutcome(frames[i],result[key]) === outcome),0));
     for (const [i,value] of [outcome,...counts].entries()) {
       const cell = document.createElement(i===0 ? 'th' : 'td');
@@ -124,6 +126,7 @@ function repaint() {
   if (!picture) return;
   view.drawImage(picture,0,0,canvas.width,canvas.height);
   const result = results[index];
+  if ($('proposal').checked && !result?.mlp) boxOutline(result?.mlpProposal,colours.mlp,true);
   for (const key of methods) boxOutline(result?.[key]?.bbox,colours[key]);
   boxOutline(frames[index].box,colours.truth,true);
   if (drag) boxOutline(dragBox(drag.start,drag.end),colours.truth,true);
@@ -135,16 +138,24 @@ async function show(i) {
   const frame = frames[i], result = results[i];
   const request = ++renderRequest;
   $('truth').value = frame.truth;
-  $('time').textContent = `#${i+1} · ${(frame.t/1000).toFixed(2)} s`;
+  $('time').textContent = `#${i+1} · ${(frame.t/1000).toFixed(2)} s` +
+    (Number.isInteger(frame.seed) ? ` · Scene ${frame.seed}` : '');
   for (const key of methods) {
     const fit = result?.[key];
     const diagnosis = key === 'mlp' ? result?.mlpStage : 'no marker fit';
     const outcome = frameOutcome(frame,fit);
     $(key+'-frame').textContent = result
       ? [outcome==='unlabelled' ? null : outcome, fit?.ids.join(', ') || diagnosis,
-          key==='mlp' ? `score ${result.mlpScore.toFixed(4)}` : fit && `residual ${fit.rms.toFixed(1)} px`,
+          key==='mlp' ? `score ${result.mlpScore.toFixed(5)} · threshold ${result.mlpThreshold.toFixed(5)}` : fit && `residual ${fit.rms.toFixed(1)} px`,
           `${result[key+'Ms'].toFixed(1)} ms`].filter(Boolean).join(' · ') : 'Waiting for analysis';
   }
+  const accepted = result?.fallback;
+  const outcome = frameOutcome(frame,accepted);
+  $('fallback-frame').textContent = result
+    ? [outcome === 'unlabelled' ? null : outcome,
+        accepted ? (accepted.source === 'cad' ? 'CAD recovered the detection' : 'MLP accepted') : 'No detection']
+        .filter(Boolean).join(' · ')
+    : 'Waiting for analysis';
   $('frame-holder').hidden = $('transport').hidden = false;
   $('frame-caption').textContent = result && differs(result.mlp,result.cad)
     ? 'The detectors disagree on this frame.' : 'Draw a dock box to score localization at 50% overlap.';
@@ -181,6 +192,7 @@ function navigate(delta) {
 
 function playNext() {
   const indices = reviewedFrames(), at = indices.indexOf(index);
+  if (indices.length < 2) return stopPlayback();
   const next = indices[(at+1)%indices.length];
   const delay = next > index ? frames[next].t-frames[index].t : 750;
   timer = setTimeout(async () => {
@@ -291,7 +303,7 @@ async function example() {
     const examples = replay.frames.map((frame,i) => {
       const jpeg = asJpeg(atlas,w,h,(frame.tile%replay.columns)*w,Math.floor(frame.tile/replay.columns)*h);
       const truth = frame.bbox ? 'present' : 'absent';
-      const labelled = {t:i*1000,truth,jpeg};
+      const labelled = {t:i*1000,truth,jpeg,seed:frame.seed};
       if (frame.bbox) labelled.box = frame.bbox.map((v,j) => v/(j%2 ? replay.height : replay.width));
       return labelled;
     });
@@ -303,8 +315,8 @@ async function busy(task) {
   if (working || recording) return;
   working = true;
   updateControls();
-  try { await task(); }
-  catch (error) { $('camera-status').textContent = error.message; }
+  try { await task(); return true; }
+  catch (error) { $('camera-status').textContent = error.message; return false; }
   finally { working = false; updateControls(); updateReview(); }
 }
 
@@ -365,13 +377,14 @@ function download(name, content, type) {
 }
 
 function exportResults() {
-  const csv = ['frame,time_ms,truth,mlp_outcome,mlp_stage,mlp_score,mlp_ids,mlp_bbox,cad_outcome,cad_ids,cad_bbox,cad_residual_px,mlp_ms,cad_ms'];
+  const csv = ['frame,time_ms,truth,mlp_outcome,mlp_stage,mlp_score,mlp_ids,mlp_bbox,cad_outcome,cad_ids,cad_bbox,cad_residual_px,mlp_ms,cad_ms,fallback_outcome,fallback_source,synthetic_seed'];
   for (const [i,frame] of frames.entries()) {
     const result = results[i];
     if (!result) continue;
     csv.push([i+1,frame.t.toFixed(2),frame.truth,frameOutcome(frame,result.mlp),result.mlpStage,
       result.mlpScore,result.mlp?.ids.join('|'),result.mlp?.bbox.join('|'),frameOutcome(frame,result.cad),
-      result.cad?.ids.join('|'),result.cad?.bbox.join('|'),result.cad?.rms,result.mlpMs,result.cadMs].join(','));
+      result.cad?.ids.join('|'),result.cad?.bbox.join('|'),result.cad?.rms,result.mlpMs,result.cadMs,
+      frameOutcome(frame,result.fallback),result.fallback?.source,Number.isInteger(frame.seed) ? frame.seed : ''].join(','));
   }
   download('duck-lab-camera-results.csv',csv.join('\n'),'text/csv');
 }
@@ -406,6 +419,7 @@ $('save').onclick = () => download('duck-lab-camera.json',JSON.stringify({
   format:CAPTURE_FORMAT,source,frames,
 }),'application/json');
 $('export').onclick = exportResults;
+$('proposal').onchange = repaint;
 $('previous').onclick = () => { stopPlayback(); void navigate(-1); };
 $('next').onclick = () => { stopPlayback(); void navigate(1); };
 $('play').onclick = () => {
@@ -457,3 +471,19 @@ window.addEventListener('pagehide', () => {
 if (!serialReady) $('camera-status').textContent =
   'Open footage here, or use Duck Lab on localhost or HTTPS in Chrome or Edge to capture over USB.';
 updateControls();
+
+const query = new URLSearchParams(location.search);
+if (query.get('example') === 'mlp-misses') {
+  void busy(example).then(async loaded => {
+    if (!loaded) return;
+    $('filter').value = 'mlp-miss';
+    $('proposal').checked = true;
+    const misses = reviewedFrames();
+    if (misses.length) await show(misses[0]);
+    else updateReview();
+    if (misses.length > 1 && (query.get('loop') === '1' || !matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      $('play').textContent = 'Pause';
+      playNext();
+    }
+  });
+}

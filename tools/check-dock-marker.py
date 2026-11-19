@@ -19,6 +19,7 @@ import {readFileSync} from 'node:fs';
 import {detectDock} from './assets/sim/dock-inference.mjs';
 import {hasMarkerContrast} from './assets/sim/dock-marker.mjs';
 import {markerCodebook, readDockPattern, detailCrop} from './assets/sim/dock-pattern.mjs';
+import {fallbackDock} from './assets/sim/dock-footage.mjs';
 const scale = Number(process.argv[1]);
 const layout = JSON.parse(readFileSync('assets/sim/dock-vision-layout.json'));
 const codes = markerCodebook(layout.panels);
@@ -26,6 +27,11 @@ import {dockReference, locateDock} from './assets/sim/dock-localization.mjs';
 const reference = dockReference(layout);
 const model = JSON.parse(readFileSync('assets/sim/dock-detector.json'));
 for await (const line of createInterface({input: process.stdin})) {
+  if (line.startsWith('fallback ')) {
+    const {mlp,cad} = JSON.parse(line.slice(9));
+    console.log(JSON.stringify(fallbackDock(mlp,cad)));
+    continue;
+  }
   if (line.startsWith('locate ')) {
     const mono = Buffer.from(line.slice(7),'base64');
     const fit = locateDock(mono,model.width*scale,model.height*scale,reference);
@@ -112,9 +118,22 @@ def qualify(base_seed, export_loop, scale):
                             # The decoder uses integer luminance. Store that channel losslessly for playback.
                             (examples if example else survivors).append((rgb, mono, record))
                     baseline_hit = bool(tag) and matches
+                    fallback = exchange(runtime, 'fallback ' + json.dumps({
+                        'mlp': {'bbox': result['bbox'], 'ids': [tag]} if tag else None,
+                        'cad': fit,
+                    }))
+                    fallback_hit = fallback is not None and (target is None or overlap(fallback['bbox'],target) >= .5)
+                    counts[case]['fallback'] += int(fallback_hit)
                     if case == 'marked':
                         counts[case]['gained'] += int(fit_hit and not baseline_hit)
                         counts[case]['lost'] += int(baseline_hit and not fit_hit)
+                        if not baseline_hit:
+                            reason = ('below score threshold' if not result['detected']
+                                      else 'weak marker contrast' if not result['marked']
+                                      else 'no printed ID' if not tag else 'wrong box')
+                            counts[case][reason] += 1
+                            print(f"Native miss {seed}: {reason}; score={result['score']:.5f}; "
+                                  f"fallback={fallback['source'] if fallback else 'none'}", flush=True)
                         if export_loop and not baseline_hit:
                             record = dict(seed=seed, azimuth=azimuth, elevation=elevation, bbox=target,
                                           condition='marked-misses')
@@ -166,9 +185,9 @@ if __name__ == '__main__':
     parser.add_argument('--sensor-scale', type=int, choices=(4,8), default=8)
     args = parser.parse_args()
     results = qualify(args.seed, args.export_loop, args.sensor_scale)
-    print(f'Case       Frames   Raw   Contrast   Pattern   With {args.sensor_scale}x sensor   Invisible ID   CAD fit')
+    print(f'Case       Frames   Raw   Contrast   Pattern   With {args.sensor_scale}x sensor   Invisible ID   CAD fit  Fallback')
     for name, row in results.items():
-        print(f"{name:10} {row['frames']:6d} {row['detected']:5d} {row['marked']:8d} {row['tag']:8d} {row['detail']:16d} {row['invisible_id']:14d} {row['fit']:9d}")
+        print(f"{name:10} {row['frames']:6d} {row['detected']:5d} {row['marked']:8d} {row['tag']:8d} {row['detail']:16d} {row['invisible_id']:14d} {row['fit']:9d} {row['fallback']:9d}")
     print('Marked docks gained / lost:', results['marked']['gained'], results['marked']['lost'])
     print('Visible cases count correct localizations (IoU >= 0.5). Absent cases count false alarms.')
     if results['marked']['marked'] < .90 * results['marked']['detected']:
@@ -178,3 +197,5 @@ if __name__ == '__main__':
     if args.seed == 712100 and args.sensor_scale == 8:
         if results['decoy']['detail'] or results['marked']['detail'] < 40:
             raise SystemExit('Printed-ID regression on the original eight look-alikes or 40 marked docks')
+        if results['marked']['fallback'] < 42 or any(results[name]['fallback'] for name in ('decoy', 'empty', 'covered')):
+            raise SystemExit('Fallback regression on marked docks or absent targets')

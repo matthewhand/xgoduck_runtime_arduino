@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {modPolicyStatus, TRAINED_LAYOUTS} from '../assets/sim/mod-policy.mjs';
 import {markerCodebook, readDockPattern} from '../assets/sim/dock-pattern.mjs';
 import {CAPTURE_FORMAT, GroveCamera, parseRecording} from '../assets/sim/grove-capture.mjs';
-import {differs, frameOutcome} from '../assets/sim/dock-footage.mjs';
+import {differs, fallbackDock, frameOutcome} from '../assets/sim/dock-footage.mjs';
 import {DuckSimulation, parsePose, attitudeFromGravity} from '../assets/sim/sim-core.mjs';
 import {QualificationReplay, SKATE_TURN_LOOP, TURN_SEEK_LOOP, CLEAR_LANE_LOOP, LOWERING_PAIR, RELEASE_PAIR, TRIP_PAIR, mergeDockRecordings, loadDockCase, parseQualificationReport} from '../assets/sim/qualification-replay.mjs';
 
@@ -105,6 +105,9 @@ assert.equal(frameOutcome(clip.frames[1],match),'false alarm');
 assert.equal(frameOutcome(clip.frames[1],null),'clear');
 assert.equal(frameOutcome({truth:'unknown'},match),'unlabelled');
 assert(differs(match,other) && differs(match,null) && !differs(match,match));
+assert.deepEqual(fallbackDock(match,other),{...match,source:'mlp'});
+assert.deepEqual(fallbackDock(null,other),{...other,source:'cad'});
+assert.equal(fallbackDock(null,null),null);
 assert.throws(() => parseRecording({...clip,frames:[clip.frames[0],clip.frames[0]]}), /timing/);
 console.log('PASS: Grove sample transport, recording validation and comparison outcomes');
 const lock = JSON.parse(await read('vendor-lock.json'));
