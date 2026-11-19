@@ -252,3 +252,11 @@ forward is restored. The loaded 3D scene kept rendering during the interruption.
 References: [Three.js WebGPURenderer](https://threejs.org/docs/pages/WebGPURenderer.html),
 [MuJoCo JavaScript bindings](https://github.com/google-deepmind/mujoco/tree/3.12.0/wasm),
 [Luwu XGO Duck model](https://github.com/LuwuDynamics/xgoduck_rl/tree/fa621fc77ad9a05d69da13270e86118bdd3603fe/src/mjlab_microduck/robot/xgoduck).
+
+## Grove camera comparison
+
+Open [Camera replay](../assets/camera-replay.html) in Duck Lab. In desktop Chrome or Edge on HTTPS or localhost, connect the Grove Vision AI V2 to that computer by USB data cable. Choose **Connect Grove**, select the camera's serial port, then choose **Record up to 20 s**. Capture uses the camera's existing SSCMA firmware and stops after 60 frames or at the time limit. Frames are timestamped on receipt. [Seeed SSCMA sensor sampling protocol](https://github.com/Seeed-Studio/SSCMA-Micro/blob/main/docs/protocol/at-protocol-en_US.md#sample-data-from-current-sensor)
+
+You can also open a Duck Lab JSON recording, up to 60 JPEG or PNG stills, or one browser-decodable video. Video analysis samples up to 60 frames from the clip. Footage and labels stay in the browser unless you save the recording or export the results.
+
+Both detectors run on each selected frame. The MLP sees an aspect-preserving 96 × 72 view and verifies the printed ID using camera detail if needed. The CAD fit scans for known markers and projects a dock box using the print geometry. Both use frame detail capped at 768 px on the long edge. In the comparison view, label visible docks and absent docks. Add a box to count a detection as correctly localized when its intersection-over-union is at least 0.50. The totals exclude unlabelled frames. The review filter can jump through disagreements, misses, incorrect boxes and false alarms. **Load synthetic example** exercises the comparison using the lab's generated imagery.
