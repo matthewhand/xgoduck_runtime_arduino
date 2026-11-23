@@ -91,6 +91,7 @@ class Controller:
             model.action_scale = 0.8
             model.set_action_alphas(leg=0.0, head=0.0)
         self.recovery = Recovery(period_s=CONTROL_PERIOD)
+        self.physical_recovery_events = collections.deque(maxlen=32)
         self.heading = HeadingHold()
         self.policy_needs_reset = True
         self.pick_active = False
@@ -1009,6 +1010,8 @@ class Controller:
             if mode in ('shadow', 'policy') and not rolling:
                 changed = self.recovery.update(filt['grav'] if filt else [0,0,0],
                                                now, valid)
+                if changed and mode == 'policy' and fb.enabled and not self.roller_mode:
+                    self.physical_recovery_events.append((now, generation, self.recovery.phase))
                 self.policy_needs_reset |= changed
                 if changed and self.recovery.phase != 'walk':
                     self._cancel_actions_locked()
@@ -1188,6 +1191,23 @@ class Controller:
                 self.bridge.notify('duck_servo', encode_servo(SERVO_EXIT, 10))
             self.seq += 1
             self.bridge.notify('duck_command', encode_command(self.seq, 0, DISARM, self.policy.default_deg))
+
+    def trial_snapshot(self):
+        """Read physical trial telemetry without issuing commands or refreshing a watchdog."""
+        with self.lock:
+            now = time.monotonic()
+            fb, filt = self.feedback, self.filtered
+            age = now - self.rx_time
+            ready = bool(fb and age < .15 and fb.imu_ok and fb.mask == ALL_MASK and filt
+                         and filt['imu_fusion_ready']
+                         and age + elapsed_us(fb.sample_us, fb.imu_us)/1e6 <= IMU_STALE_S)
+            stock = not (self.roller_mode or self.pick_active or self._roulade_on(now) or self.kick_until
+                         or self.sitstand_phase != 'idle' or self.action_preparation or self._imu_job['active'])
+            return dict(now=now, mode=self.mode, enabled=bool(fb and fb.enabled), ready=ready, stock=stock,
+                        generation=self.generation, arm_pending=self.arm_pending, loop_missed=self.loop_missed,
+                        phase=self.recovery.phase, command=list(self.twist),
+                        events=tuple(self.physical_recovery_events),
+                        policies_sha256={'walk':self.walk_policy.sha256, 'getup':self.getup_policy.sha256})
 
     def status(self):
         now = time.monotonic()

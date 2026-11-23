@@ -10,6 +10,13 @@
   <div class="buttons"><button data-mode="shadow">Inference only</button><button data-mode="hold">Default pose</button><button data-mode="policy">Walk / get up</button><button id="pick">Pick</button><button id="roulade">Roulade</button><button id="sitstand" disabled>Sit</button><button id="left_kick" disabled>Left kick</button><button id="right_kick" disabled>Right kick</button><label class="mode-toggle"><input id="roller-mode" type="checkbox" role="switch">Skating mode <span id="roller-state">Off</span></label></div>
   <p class="hint">Default pose holds a standing pose. Walk / get up walks and recovers after a fall. Choose Pick, Roulade, Sit/Stand or a kick to perform that action. Enable Skating mode for skating. Inference only previews motion; Torque off releases the motors.</p>
 </section>
+<section id="physical-trial">
+  <h2>Physical walk and get-up capture</h2>
+  <div class="buttons"><button id="physical-start" disabled>Start capture</button><button id="physical-stop" disabled>Save capture</button><button id="physical-export" disabled>Export physical trial</button></div>
+  <p id="physical-state" role="status">Checking servo and IMU feedback…</p>
+  <p id="physical-action-result" class="hint" role="status"></p><p id="physical-export-result" class="hint" role="status"></p>
+  <p class="hint">Start with torque off, then use Walk / get up above. Use Torque off to release the motors. The recorder saves when the stock policy ends, when you select Save capture, or after 60 seconds.</p>
+</section>
 <section>
   <h2>Motion</h2>
   <p id="roller-warning" class="warn" role="note" hidden>Let the roll motors cool down between longer skating sessions.</p>
@@ -47,4 +54,4 @@
     </figure>
   </div>
 </section>
-</main><script src="app.js?v=20261107-load"></script></html>
+</main><script src="app.js?v=20261107-load"></script><script type="module" src="sim/physical-trial.mjs?v=1"></script></html>

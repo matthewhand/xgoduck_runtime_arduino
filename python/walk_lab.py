@@ -41,6 +41,21 @@ def read_record(path):
         return {}
 
 
+def save_report(path, report):
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        staged = path.with_suffix('.tmp')
+        staged.write_text(json.dumps(report, allow_nan=False), encoding='utf-8')
+        staged.replace(path)
+    except (OSError, ValueError):
+        pass  # The report remains available in memory if the disk write fails.
+
+
+def load_peaks(samples):
+    return {key: max((row[key] for row in samples if row[key] is not None), default=None)
+            for key in ('cpu_percent', 'busiest_core_percent', 'gpu_percent')}
+
+
 class WalkLab:
     def __init__(self, board_missed, board_load):
         self.board_missed = board_missed
@@ -151,17 +166,10 @@ class WalkLab:
                                                         'inference_ms', 'slot_p95_ms')},
                 'sim_missed_slots': self.latest.get('missed'),
                 'board_missed_slots': self.latest['missed_at_end'] - missed_at_start,
-                'load_peaks': {key: max((row[key] for row in loads if row[key] is not None), default=None)
-                               for key in ('cpu_percent', 'busiest_core_percent', 'gpu_percent')},
+                'load_peaks': load_peaks(loads),
                 'load_samples': loads, 'pushes': list(pushes.values()), 'recoveries': list(recoveries.values()),
             }
-            try:
-                REPORT.parent.mkdir(parents=True, exist_ok=True)
-                staged = REPORT.with_suffix('.tmp')
-                staged.write_text(json.dumps(self.latest_report, allow_nan=False), encoding='utf-8')
-                staged.replace(REPORT)
-            except (OSError, ValueError):
-                pass  # The report remains available in memory if the disk write fails.
+            save_report(REPORT, self.latest_report)
 
     def push(self, run_id, kind):
         if type(run_id) is not int or not isinstance(kind, str) or kind not in PUSH_SPEEDS:

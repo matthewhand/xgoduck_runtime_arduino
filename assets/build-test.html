@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Build &amp; Test · Duck Lab</title>
   <link rel="stylesheet" href="sim/sim.css?v=16">
-  <link rel="stylesheet" href="sim/lab-entry.css?v=2">
+  <link rel="stylesheet" href="sim/lab-entry.css?v=3">
 </head>
 <body>
 <main class="lab-entry">
@@ -51,6 +51,22 @@
         <div class="entry-actions trial-download"><button type="button" id="build-export" disabled>Export last trial</button><span id="build-export-result" role="status"></span></div>
         <p id="build-trial-state">Run a live simulation to record load, missed slots and recovery.</p>
       </section>
+      <section class="card" aria-labelledby="physical-title">
+        <h2 id="physical-title">Physical trial</h2>
+        <div class="entry-actions trial-download"><a class="entry-action" href="/#physical-trial">Open capture controls</a><button type="button" id="build-physical-export" disabled>Export physical trial</button></div>
+        <p id="build-physical-state" role="status">Checking servo and IMU feedback…</p>
+        <p id="build-physical-export-result" role="status" class="muted"></p>
+        <table class="trial-comparison" id="trial-comparison" hidden aria-label="Latest stock simulation and physical trial">
+          <thead><tr><th scope="col">Metric</th><th scope="col">Sim</th><th scope="col">Physical</th></tr></thead>
+          <tbody>
+            <tr data-metric="duration"><th scope="row">Trial duration</th><td>—</td><td>—</td></tr>
+            <tr data-metric="cpu"><th scope="row">Peak CPU</th><td>—</td><td>—</td></tr>
+            <tr data-metric="gpu"><th scope="row">Peak GPU</th><td>—</td><td>—</td></tr>
+            <tr data-metric="missed"><th scope="row">Missed Linux slots</th><td>—</td><td>—</td></tr>
+            <tr data-metric="recovery"><th scope="row">First fall to walk</th><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </section>
       <section class="card" aria-labelledby="board-title">
         <h2 id="board-title">Board tools</h2>
         <div class="entry-actions board-tools"><a class="entry-action" href="/#board-telemetry">Control and telemetry</a><a class="entry-action" href="/calibrate.html">Calibration</a><a class="entry-action" href="/servo.html">Servo setup</a><a class="entry-action" id="wifi-reboot" hidden>Wi-Fi reboot</a></div>
@@ -73,5 +89,5 @@
   </div>
   <footer><a href="experimental.html">Experimental</a></footer>
 </main>
-<script type="module" src="sim/build-test.mjs?v=3"></script>
+<script type="module" src="sim/build-test.mjs?v=4"></script>
 </body></html>

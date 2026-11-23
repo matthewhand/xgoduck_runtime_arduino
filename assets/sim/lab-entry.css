@@ -22,6 +22,9 @@
 .build-checklist input { flex: none; margin: 0; accent-color: var(--mint); }
 .trial-download { margin-top: 12px; }
 #build-trial-state, #checklist-board, #checklist-storage { font-size: .83rem; }
+.trial-comparison { width: 100%; font-size: .83rem; border-collapse: collapse; }
+.trial-comparison th, .trial-comparison td { padding: 6px 4px; border-top: 1px solid var(--line); text-align: right; }
+.trial-comparison th:first-child { text-align: left; }
 .lab-entry .matrix-player { margin: 0; }
 .lab-entry .matrix-player p, .lab-entry #wifi-reboot-note { font-size: .82rem; }
 .lab-entry footer a { font-size: .86rem; }

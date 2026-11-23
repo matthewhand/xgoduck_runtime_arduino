@@ -10,6 +10,7 @@ from arduino.app_bricks.web_ui import WebUI
 from controller import Controller
 from gpu_telemetry import CPU_DISABLED, GpuTelemetry
 from matrix_scenes import CATALOG_ID, ENCORE_FROM, MARQUEE_FROM, SCENE_NAMES
+from physical_trial import PhysicalTrial
 from walk_lab import WalkLab, walk_command
 
 # Bound GIL handoff latency between the 100 Hz receiver, policy and WebUI.
@@ -18,7 +19,7 @@ controller = Controller(Bridge)
 gpu = GpuTelemetry(Bridge)
 
 
-def simulation_load():
+def board_load():
     sample = gpu.latest
     cpu = sample.get('cpu', CPU_DISABLED)
     return {'cpu_percent': cpu.get('load_percent') if cpu['available'] else None,
@@ -26,7 +27,9 @@ def simulation_load():
             'gpu_percent': sample.get('load_percent') if sample['available'] else None}
 
 
-walk_lab = WalkLab(lambda: controller.loop_missed, simulation_load)
+walk_lab = WalkLab(lambda: controller.loop_missed, board_load)
+physical_trial = PhysicalTrial(controller.trial_snapshot, board_load)
+lab_start_lock = threading.Lock()
 try:
     ui = WebUI(port=9527, cors_origins='')
 except TypeError as exc:
@@ -153,6 +156,12 @@ def status():
     return dict(controller.status(), gpu=sample, cpu=cpu, health=health)
 
 def walk_start(body: dict):
+    with lab_start_lock:
+        if physical_trial.status()['recording']:
+            raise HTTPException(409, 'Finish the physical capture before starting a simulation.')
+        return start_walk_trial(body)
+
+def start_walk_trial(body):
     try:
         vx, yaw, arena = walk_command(body)
     except ValueError as exc:
@@ -176,6 +185,24 @@ def walk_push(body: dict):
         return walk_lab.push(body.get('run_id'), body.get('kind'))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+def physical_start(_body: dict = None):
+    with lab_start_lock:
+        if walk_lab.status()['state'] in ('loading', 'running', 'stopping'):
+            raise HTTPException(409, 'Finish the simulation before recording the physical Duck.')
+        try:
+            return physical_trial.start()
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+def physical_stop(body: dict):
+    key = body.get('run_key')
+    if not isinstance(key, str) or not key:
+        raise HTTPException(400, 'Choose the active physical capture.')
+    try:
+        return physical_trial.stop(key)
     except RuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -228,6 +255,10 @@ ui.expose_api('POST', '/api/lab/walk/start', walk_start)
 ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)
 ui.expose_api('POST', '/api/lab/walk/push', walk_push)
 ui.expose_api('GET', '/api/lab/walk/report', walk_lab.report)
+ui.expose_api('GET', '/api/lab/physical', physical_trial.status)
+ui.expose_api('POST', '/api/lab/physical/start', physical_start)
+ui.expose_api('POST', '/api/lab/physical/stop', physical_stop)
+ui.expose_api('GET', '/api/lab/physical/report', physical_trial.report)
 ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key not in ('cpu', 'health')})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)
@@ -256,6 +287,7 @@ gpu.start()
 try:
     App.run()
 finally:
+    physical_trial.close()
     walk_lab.stop()
     controller.stop()
     gpu.stop()

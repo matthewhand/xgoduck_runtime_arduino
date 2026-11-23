@@ -14,7 +14,8 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 REPO = Path(__file__).resolve().parents[1]
 APP = Path.home() / 'ArduinoApps/xgo-duck'
-ROOT_ASSETS = ('index.html', 'calibrate.html', 'calibrate.js', 'servo.html', 'servo.js')
+ROOT_ASSETS = ('index.html', 'calibrate.html', 'calibrate.js', 'servo.html', 'servo.js',
+               'sim/physical-trial.mjs', 'sim/trial-report.mjs')
 LAB_ASSETS = (
     'sim/sim.css', 'sim/lab-entry.css', 'sim/matrix-ui.mjs', 'sim/build-test.mjs', 'sim/trial-report.mjs',
     'sim/stock-replay.json', 'sim/v5-receiver-rail-fit-u1.3mf',
@@ -24,13 +25,14 @@ LAB_ASSETS = (
 COMPANION_PAGES = ('attachments.html', 'camera-replay.html', 'dock-vision.html', 'tail-sizing.html')
 ALIASES = ('simulate.html', 'build-test.html', 'experimental.html', *COMPANION_PAGES)
 BACKEND = ('python/main.py', 'python/controller.py', 'python/walk_lab.py')
+MANAGED_BACKEND = ('python/physical_trial.py',)
 EXPERIMENT_BASE = (*COMPANION_PAGES, 'sim/qualification-replay.mjs',
                    'sim/vendor/three/three.webgpu.js', 'sim/vendor/mujoco/mujoco.wasm')
 STAMP = 'assets/experiments/build-test-release.json'
 LEGACY_POND = 'assets/pond-demo-legacy.html'
 LEGACY_POND_HTML = '81cc490dffd34e5e07bef67a0fbb42dab31e7c89196c569cf527ae689b82812a'
 LEGACY_POND_MODULE = '51742f55993dbd2072b9fe95b7f35a3a795bef571f730f75a0e262d320013705'
-FILES = (*BACKEND, *(f'assets/{name}' for name in ROOT_ASSETS),
+FILES = (*BACKEND, *MANAGED_BACKEND, *(f'assets/{name}' for name in ROOT_ASSETS),
          *(f'assets/experiments/{name}' for name in LAB_ASSETS),
          *(f'assets/{name}' for name in ALIASES))
 
@@ -69,7 +71,7 @@ location.replace((pond ? '/pond-demo-legacy.html' : {destination!r}) + location.
 def package(destination, ref, base):
     release = revision(ref)
     base = revision(base or f'{release}^')
-    files = {name: git('cat-file', 'blob', f'{release}:{name}') for name in BACKEND}
+    files = {name: git('cat-file', 'blob', f'{release}:{name}') for name in (*BACKEND, *MANAGED_BACKEND)}
     files.update({f'assets/{name}': git('cat-file', 'blob', f'{release}:assets/{name}')
                   for name in ROOT_ASSETS})
     files.update({f'assets/experiments/{name}': git('cat-file', 'blob', f'{release}:assets/{name}')
@@ -151,6 +153,11 @@ def install(bundle, app=APP):
         current = app_file(app, name).read_bytes()
         files[name] = merge_python(state / 'merge', name, current, baseline[name], files[name])
         if files[name] != current:
+            backend_changed.append(name)
+    for name in MANAGED_BACKEND:
+        compile(files[name], name, 'exec')
+        target = app_file(app, name)
+        if not target.exists() or target.read_bytes() != files[name]:
             backend_changed.append(name)
     deployed = {'commit': manifest['commit'], 'base': manifest['base'],
                 'files': {name: digest(data) for name, data in files.items()}}

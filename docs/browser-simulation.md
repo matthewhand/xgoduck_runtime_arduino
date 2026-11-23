@@ -20,6 +20,19 @@ includes the browser's current physical checklist. The UNO Q retains the most
 recent finished trial, including a trial stopped early. Missing measurements
 are `null`.
 
+For the real Duck, open **Physical trial** from Build & Test. The recorder
+requires all 15 servos, fresh IMU feedback, and torque off at the start. Select
+**Start capture**, then use **Walk / get up** from Control. Use **Torque off**
+to release the motors. The capture ends when the armed stock policy ends,
+when you save it, or at 60 seconds. The recorder samples telemetry on the UNO Q
+while the browser may disconnect. The physical and simulation reports are
+retained separately and can be exported from Build & Test.
+
+The comparison shows peak board loads, missed Linux slots, and elapsed time
+from a controller-detected fall to return to the walk policy. The latter uses
+phase timestamps from the controller. Verify actual standing and walking in
+the physical checklist. The real Duck has no measured translation in this report.
+
 Use **Experimental** in the footer to reach the full simulation workspace,
 attachments, docking, and vision studies. Existing mode links such as
 `simulate.html?dock=1`, `simulate.html?mods=1` and `simulate.html?demo=1`

@@ -19,7 +19,7 @@ export function readRelease() {
   return releaseRequest;
 }
 
-export function mountTrialExport(button, message) {
+export function mountTrialExport(button, message, endpoint = '/api/lab/walk/report') {
   let runKey = null, exporting = false;
   const refresh = () => { button.disabled = !runKey || exporting; };
   button.addEventListener('click', async () => {
@@ -29,7 +29,7 @@ export function mountTrialExport(button, message) {
     message.textContent = 'Downloading trial report…';
     refresh();
     try {
-      const response = await fetch('/api/lab/walk/report', {cache:'no-store', signal:AbortSignal.timeout(5000)});
+      const response = await fetch(endpoint, {cache:'no-store', signal:AbortSignal.timeout(5000)});
       if (!response.ok) throw new Error('The UNO Q did not return a trial report.');
       const trial = await response.json();
       if (trial?.run_key !== expected) throw new Error('The latest trial changed. Select export again.');
@@ -38,7 +38,8 @@ export function mountTrialExport(button, message) {
       const url = URL.createObjectURL(file);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `duck-lab-trial-${trial.run_id}-${trial.run_key.slice(0,8)}.json`;
+      link.download = trial.source === 'physical-duck' ? `duck-lab-physical-${trial.run_id}.json`
+        : `duck-lab-trial-${trial.run_id}-${trial.run_key.slice(0,8)}.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
       message.textContent = `Downloaded trial ${trial.run_id}.`;
