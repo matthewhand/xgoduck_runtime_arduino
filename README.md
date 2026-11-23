@@ -40,9 +40,9 @@ reconnection leaves the robot unloaded until motion is explicitly enabled again.
 
 Connect **one servo at a time** when changing IDs.
 
-Opening **Servo setup** automatically unloads all servos, including from Default pose or Walk / get up. Scanning waits for the board to confirm setup mode with torque off. Leaving the page keeps the servos unloaded; enable motion again from Control when ready.
+Support the Duck and turn torque off before opening **Servo setup**. Select **Start servo setup** to unload the servos and take control of the servo bus. Leaving the page ends the session and keeps the servos unloaded.
 
-1. Open **Servo setup**, click **Scan all IDs**, and select a result. **Stop scan** ends the scan early.
+1. Start servo setup, click **Scan all IDs**, and select a result. **Stop scan** ends the scan early.
 2. To change its ID, enter the new number in **Change ID to** and click **Change ID**. Scan again to select the new ID.
 3. To view its settings, click **Read**.
 4. To adjust gains, enter KP and KD, then click **Set KpKd**. One click writes and verifies both the saved EEPROM gains and the live gains, so the values take effect immediately and survive a servo power cycle. The inputs start at **5** and **10**; reading keeps your input values.
@@ -69,10 +69,10 @@ Leg and head servo KP/KD values are preserved at startup, on arming, and through
 
 ## Calibration
 
-1. Open **Calibration**. All servos unload automatically.
+1. Support the Duck and turn torque off. Open **Calibration** and click **Start calibration** to unload all servos.
 2. Turn one joint by hand to its mechanical center, then click **Set center & hold** for that joint. It holds its center while the others stay unloaded.
 3. Repeat for every joint.
-4. Click **Unload all** to release the joints for another adjustment, or **Exit** to return to Control. Exiting unloads the servos.
+4. Click **Unload all** to release the joints for another adjustment, or **End calibration** to release all servos and close the session.
 
 ## Control
 

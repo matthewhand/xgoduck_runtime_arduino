@@ -1,13 +1,13 @@
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-let active=false, busy=false, selectedId=null, scanTask=null, scanController=null, closing=false;
+let session=null, canStart=false, busy=false, selectedId=null, scanTask=null, scanController=null, closing=false;
 const editIds=['kp','kd','new-id','reset-mid','set-gains','set-id','read'];
 const protectionIds=['protection-current','enable-protection','disable-protection','set-protection-current'];
 
 async function api(path,body,signal){
   const timeout=AbortSignal.timeout(4000);
-  const options={signal:signal?AbortSignal.any([signal,timeout]):timeout};
-  if(body!==undefined)Object.assign(options,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const options={cache:'no-store',signal:signal?AbortSignal.any([signal,timeout]):timeout};
+  if(body!==undefined)Object.assign(options,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session,...body})});
   const r=await fetch('/api/'+path,options);
   const x=await r.json();
   if(!r.ok)throw new Error(x.detail||'Request failed');
@@ -16,11 +16,13 @@ async function api(path,body,signal){
 function show(msg){$('message').textContent=msg;}
 function lock(value){
   busy=value;
-  editIds.forEach(id=>$(id).disabled=value||selectedId===null);
-  protectionIds.forEach(id=>$(id).disabled=value);
-  $('scan').disabled=value;
-  $('scan-results').querySelectorAll('button').forEach(b=>b.disabled=value);
-  $('exit').disabled=value&&!scanController;
+  const unavailable=value||closing||!session;
+  editIds.forEach(id=>$(id).disabled=unavailable||selectedId===null);
+  protectionIds.forEach(id=>$(id).disabled=unavailable);
+  $('start').disabled=value||closing||!!session||!canStart;
+  $('scan').disabled=unavailable;
+  $('scan-results').querySelectorAll('button').forEach(b=>b.disabled=unavailable);
+  $('exit').disabled=closing||!session||(value&&!scanController);
 }
 function selectId(id){
   selectedId=validId(id);
@@ -41,7 +43,6 @@ async function enter(signal){
   while(Date.now()<deadline){
     const s=await api('status',undefined,signal);
     if(s.mode==='servo_debug'&&s.mcu_servo_debug&&s.enabled===false&&s.feedback_age_ms!=null&&s.feedback_age_ms<500){
-      active=true;
       return;
     }
     await sleep(100);
@@ -55,22 +56,27 @@ function stopScan(){
   }
 }
 async function exit(){
-  if(closing)return;
+  if(closing||!session)return;
+  const owner=session;
   closing=true;
   stopScan();
   if(scanTask)await scanTask;
+  session=null;
+  canStart=false;
   lock(true);
-  try{await api('servo/exit',{});active=false;show('Servo setup closed');}
+  try{
+    const state=await api('servo/exit',{session:owner});
+    show(state.mode==='shadow'?'Servo setup closed':'This page no longer owns servo setup.');
+  }
   catch(e){show(e.message);}
-  finally{lock(false);closing=false;}
+  finally{closing=false;lock(false);}
 }
 async function send(action,extra={}){
-  if(busy||closing||selectedId===null)return;
+  if(!session||busy||closing||selectedId===null)return;
   lock(true);
   try{
     const id=selectedId;
     if(action==='set_id')extra.new_id=validId(extra.new_id);
-    await enter();
     show(action==='set_id'?`Changing ID ${id} to ${extra.new_id}…`:`ID ${id} · ${action==='reset_mid'?'Reset Mid':action==='set_gains'?'Set KpKd':'Read'}…`);
     const r=await api('servo',{action,target_id:id,...extra});
     if(action==='read'){
@@ -108,7 +114,6 @@ async function scan(){
   try{
     const s=await api('status',undefined,signal);
     if(s.servo_scan_version!==2)throw new Error('Deploy the updated project to enable servo setup.');
-    await enter(signal);
     await api('servo',{action:'torque_off',target_id:10},signal);
     show('Scanning · torque off');
     for(let id=0;id<=253;id++){
@@ -116,7 +121,6 @@ async function scan(){
       $('scan-status').textContent=`Scanning ID ${id} · ${checked}/254 checked · ${found.length} found`;
       let online=false;
       for(let attempt=0;attempt<2;attempt++){
-        await api('servo/enter',{},signal);
         signal.throwIfAborted();
         const r=await api('servo',{action:'ping',target_id:id},signal);
         if(r.op!==7||r.target_id!==id||typeof r.ok!=='boolean')throw new Error('Invalid scan reply');
@@ -145,7 +149,7 @@ async function scan(){
   }
 }
 async function sendProtection(action,enabled){
-  if(busy||closing)return;
+  if(!session||busy||closing)return;
   lock(true);
   try{
     const settingCurrent=action==='set_protection_current',body={action};
@@ -156,7 +160,6 @@ async function sendProtection(action,enabled){
     }else{
       body.protection_enabled=enabled;
     }
-    await enter();
     show('Broadcasting protection settings to all servos…');
     const r=await api('servo',body);
     if(!r.ok||r.broadcast!==true||r.target_id!==254||r.op!==(settingCurrent?10:9))throw new Error('Invalid broadcast reply');
@@ -170,10 +173,11 @@ async function sendProtection(action,enabled){
   finally{lock(false);}
 }
 $('scan').onclick=()=>{
-  if(busy||scanTask||closing)return;
+  if(!session||busy||scanTask||closing)return;
   scanTask=scan().finally(()=>{scanTask=null;});
 };
 $('scan-stop').onclick=stopScan;
+$('start').onclick=start;
 $('exit').onclick=exit;
 $('reset-mid').onclick=()=>send('reset_mid');
 $('set-gains').onclick=()=>send('set_gains',{kp:+$('kp').value,kd:+$('kd').value});
@@ -182,31 +186,55 @@ $('read').onclick=()=>send('read');
 $('enable-protection').onclick=()=>sendProtection('set_protection',true);
 $('disable-protection').onclick=()=>sendProtection('set_protection',false);
 $('set-protection-current').onclick=()=>sendProtection('set_protection_current');
+function releaseOnLeave(owner){
+  navigator.sendBeacon('/api/servo/exit',new Blob([JSON.stringify({session:owner})],{type:'application/json'}));
+}
 window.addEventListener('pagehide',()=>{
+  if(!session)return;
   stopScan();
-  navigator.sendBeacon('/api/servo/exit',new Blob(['{}'],{type:'application/json'}));
+  releaseOnLeave(session);
+  session=null;
+  canStart=false;
+  lock(busy);
 });
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&(active||scanTask))exit();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)exit();});
 
 let statusBusy=false;
 setInterval(async()=>{
   if(document.hidden||busy||closing||statusBusy)return;
   statusBusy=true;
+  const owner=session;
   try{
     const s=await api('status');
-    if(busy||closing)return;
-    active=s.mode==='servo_debug';
-    if(active)await api('servo/enter',{});
-  }catch(_){}
-  finally{statusBusy=false;}
+    if(busy||closing||session!==owner)return;
+    canStart=['off','shadow'].includes(s.mode)&&s.enabled===false;
+    if(owner&&s.mode==='servo_debug')await api('servo/enter',{keep_alive:true});
+    else if(owner){session=null;show('Servo setup ended. Select Start servo setup to continue.');}
+  }catch(e){
+    if(session===owner&&!busy&&!closing){
+      session=null;
+      canStart=false;
+      show(e.message);
+    }
+  }
+  finally{statusBusy=false;if(!busy&&!closing)lock(false);}
 },1000);
-async function initialize(){
+async function start(){
+  if($('start').disabled)return;
+  session=Array.from(crypto.getRandomValues(new Uint8Array(16)), byte=>byte.toString(16).padStart(2,'0')).join('');
+  const owner=session;
   lock(true);
   show('Entering servo setup and unloading all servos…');
   try{
     await enter();
-    show('All servos are unloaded. Scan for servos, then select an ID.');
-  }catch(e){show(e.message);}
+    if(session===owner)show('All servos are unloaded. Scan for servos, then select an ID.');
+  }catch(e){
+    if(session===owner){
+      releaseOnLeave(owner);
+      session=null;
+      canStart=false;
+      show(e.message);
+    }
+  }
   finally{lock(false);}
 }
-initialize();

@@ -7,11 +7,14 @@ import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase} from './qualificatio
 import {GuardPreview} from './guard-preview.mjs?v=10';
 import {DOCK_DESIGNS, dockSurfaceGeometry} from './dock-preview.mjs?v=7';
 import {SKATE_SURFACES} from './skate-terrain.mjs';
+import {mountMatrixControls} from './matrix-ui.mjs?v=2';
 
 import {modPolicyStatus} from './mod-policy.mjs?v=4';
 import {loadModPreview, showModLayers} from './mod-preview.mjs?v=2';
 
 const $ = id => document.getElementById(id);
+const query = new URLSearchParams(location.search);
+const stockView = query.get('stock') === '1';
 const viewport = $('viewport');
 const walk = new WalkPanel();
 const demo = new DemoCircuit(walk, showDemoScene, updateDemoStatus);
@@ -327,7 +330,7 @@ function updateModeText() {
   $('hardware-card').hidden = $('hardware-views').hidden = $('hardware-toolbar').hidden = !hardware;
   $('sim-toolbar').hidden = $('sim-stats').hidden = inspecting;
   $('matrix-player').hidden = $('board-strip').hidden = inspecting || skates || dockingReplay;
-  $('qualification-title').textContent = dockingReplay ? 'Docking replay' : 'Qualification replay';
+  $('qualification-title').textContent = stockView ? 'Stock simulation replay' : dockingReplay ? 'Docking replay' : 'Qualification replay';
   const dockSelectors = $('dock-replay-selectors');
   const selectorsDestination = dockingReplay ? dockSelectors : $('qualification-selectors');
   for (const id of ['qualification-case-field', 'qualification-variant-field', 'qualification-alternate-label']) {
@@ -370,7 +373,7 @@ function updateModeText() {
     : recordedDock?.qualification ? `${replay.selectedLabel} · #${recordedDock.qualification.id}`
     : recordedDock?.bar_entry ? `${replay.selectedLabel} · ${outcome}`
     : recordedDock?.lowering_test ? replay.selectedLabel : recordedDock?.chair ? 'CHAIR DOCK' : 'FLOOR DOCK';
-  $('scene-mode').textContent = skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? 'QUALIFICATION REPLAY' : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? (stockView ? 'STOCK SIMULATION' : 'QUALIFICATION REPLAY') : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : skates ? 'Roll forward gives the four passive wheels a push. Choose a surface or compare tow mounts in the skate controls.'
@@ -387,7 +390,7 @@ function updateModeText() {
         ? 'This trial starts outside the chair. The feet walk backwards and the skates start in a backward coast. Gold marks contact.'
         : 'This trial starts just clear of the backrest. The Duck settles with torque off before rising. Gold marks contact.')
       : 'The Duck settles with torque off. The shipped controller takes over after 1.2 s. Gold marks contact.')
-    : replaying ? 'Recorded MuJoCo poses. Switch variants to compare at the same time. Gold accessory shapes mark contact.'
+    : replaying ? (stockView ? 'Recorded stock MuJoCo trials. Use Trial to choose walking or a get-up.' : 'Recorded MuJoCo poses. Switch variants to compare at the same time. Gold accessory shapes mark contact.')
     : gait ? 'A procedural joint cycle for checking articulation. It is a kinematic preview, without gravity or a walking policy.'
     : 'Adjust joint angles within the CAD model’s limits. Poses are local previews; they do not send motor commands.';
   updateRows();
@@ -549,10 +552,26 @@ async function selectWorkspace(next) {
 }
 
 let dockIndex;
-async function readDockJson(path) {
+async function readReplayJson(path) {
   const response = await fetch(new URL(path, import.meta.url), {signal:AbortSignal.timeout(10000)});
-  if (!response.ok) throw new Error(`Dock replay download failed (HTTP ${response.status}).`);
+  if (!response.ok) throw new Error(`Replay download failed (HTTP ${response.status}).`);
   return response.json();
+}
+
+async function openStockReplay() {
+  await selectWorkspace('replay');
+  const status = $('qualification-status');
+  $('qualification-case-field').querySelector('label').textContent = 'Trial';
+  status.textContent = 'Loading stock trials…';
+  try {
+    const report = await readReplayJson('./stock-replay.json');
+    if (stopping) return;
+    replay.setRecording(report, {scenario:query.get('trial'), variant:'stock'});
+    running = true;
+    updateModeText();
+  } catch (error) {
+    status.textContent = error.message;
+  }
 }
 
 async function openDockReplay(variant, scenario = 'Skate turnaround trials') {
@@ -563,10 +582,10 @@ async function openDockReplay(variant, scenario = 'Skate turnaround trials') {
   const status = $('qualification-status');
   status.textContent = 'Loading the dock trials…';
   try {
-    dockIndex ??= await readDockJson('./dock-recording-index.json?v=1');
+    dockIndex ??= await readReplayJson('./dock-recording-index.json?v=1');
     if (!Object.hasOwn(dockIndex, scenario)) scenario = Object.keys(dockIndex)[0];
     const dockLoader = name => loadDockCase(dockIndex, name,
-      source => readDockJson(`./${source}-recording.json?v=10`));
+      source => readReplayJson(`./${source}-recording.json?v=10`));
     const report = await dockLoader(scenario);
     if (stopping || request !== workspaceRequest || fileRequest !== replay.fileRequest) return;
     replay.setRecording(report, {scenario, variant:variant ?? SKATE_TURN_LOOP[0], alternate:!variant, dockIndex, dockLoader});
@@ -1215,8 +1234,10 @@ async function start() {
     }
     stockSim.dispose(); skateSim?.dispose(); renderer.dispose();
   });
-  const query = new URLSearchParams(location.search);
-  if (['mods', 'teeth', 'tusks', 'tail'].some(key => query.get(key) === '1') || query.has('skin')) {
+  if (stockView) {
+    if (query.get('run') === '1') await selectWorkspace('walk');
+    else await openStockReplay();
+  } else if (['mods', 'teeth', 'tusks', 'tail'].some(key => query.get(key) === '1') || query.has('skin')) {
     $('mod-teeth').checked = query.get('teeth') === '1' && !$('mod-teeth').parentElement.hidden;
     $('mod-tusks').checked = query.get('tusks') === '1' && !$('mod-tusks').parentElement.hidden;
     const skin = query.get('skin');
@@ -1239,106 +1260,7 @@ async function start() {
   else if (query.get('demo') === '1') selectWorkspace('demo');
 }
 
-function attachMatrixControls() {
-  const next = $('matrix-next'), automatic = $('matrix-auto'), note = $('matrix-note');
-  let enabled = false, connected = false;
-  async function request(body) {
-    next.disabled = automatic.disabled = true;
-    const options = {cache:'no-store', signal:AbortSignal.timeout(1800)};
-    if (body) Object.assign(options, {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(body)});
-    try {
-      const response = await fetch('/api/matrix', options);
-      if (!response.ok) throw new Error('Matrix controls unavailable.');
-      const state = await response.json();
-      enabled = state.auto === true;
-      connected = true;
-      note.textContent = body?.action === 'next' ? 'Tap within 3 s: CPU → GPU → RAM → TMP → art.' : '';
-    } catch {
-      note.textContent = 'Matrix controls unavailable.';
-    } finally {
-      automatic.checked = enabled;
-      next.disabled = automatic.disabled = !connected;
-    }
-  }
-  next.addEventListener('click', () => request({action:'next'}));
-  automatic.addEventListener('change', () => request({action:'auto', enabled:automatic.checked}));
-  request();
-}
-
-function attachMatrixPlayer() {
-  const picker = $('matrix-scenes'), play = $('matrix-play'), skip = $('matrix-skip');
-  const playing = $('matrix-playing'), error = $('matrix-scene-error');
-  let requestId = 0, pending = false, available = false, catalog = null, noticeFrom = Infinity;
-
-  function updateButtons() {
-    picker.disabled = skip.disabled = pending || !available;
-    play.disabled = pending || !available || picker.value === '';
-    play.textContent = picker.value !== '' && Number(picker.value) >= noticeFrom ? 'Show once' : 'Play';
-  }
-
-  async function request(body) {
-    const id = ++requestId;
-    if (body) {
-      pending = true;
-      updateButtons();
-    }
-    const options = {cache:'no-store', signal:AbortSignal.timeout(1800)};
-    if (body) Object.assign(options, {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(body)});
-    try {
-      const response = await fetch('/api/matrix/scene', options);
-      if (!response.ok) throw new Error('Scene controls unavailable.');
-      const {scenes, current, encore_from: encoreFrom, marquee_from: marqueeFrom = scenes.length} = await response.json();
-      if (id !== requestId) return;
-      noticeFrom = marqueeFrom;
-      const key = JSON.stringify([scenes, encoreFrom, marqueeFrom]);
-      if (catalog !== key) {
-        const selection = picker.value;
-        picker.replaceChildren(new Option('Choose animation', ''));
-        for (const [label, start, end] of [
-          ['Notifications', marqueeFrom, scenes.length],
-          ['New scenes', encoreFrom, marqueeFrom],
-          ['Earlier scenes', 0, encoreFrom],
-        ]) {
-          if (start === end) continue;
-          const group = document.createElement('optgroup');
-          group.label = label;
-          for (let i = start; i < end; i++) group.append(new Option(scenes[i], String(i)));
-          picker.append(group);
-        }
-        picker.value = selection;
-        catalog = key;
-      }
-      playing.textContent = `${current >= noticeFrom ? 'Notification' : 'Now playing'} · ${scenes[current]}`;
-      error.hidden = true;
-      available = true;
-    } catch {
-      if (id !== requestId) return;
-      playing.textContent = 'Board unavailable';
-      error.textContent = 'Could not reach the scene controls. Retrying…';
-      error.hidden = false;
-      available = false;
-    } finally {
-      if (id === requestId) {
-        pending = false;
-        updateButtons();
-      }
-    }
-  }
-
-  picker.addEventListener('change', updateButtons);
-  play.addEventListener('click', () => request({index:Number(picker.value)}));
-  skip.addEventListener('click', () => request({action:'skip'}));
-  async function poll() {
-    if (!document.hidden && !pending) await request();
-    if (!stopping) setTimeout(poll, 1800);
-  }
-  poll();
-}
-
-attachMatrixControls();
-attachMatrixPlayer();
+if (!stockView) mountMatrixControls(() => !stopping);
 start().catch(error => {
   $('loading').textContent = 'The 3D workspace could not start.';
   showError(error);

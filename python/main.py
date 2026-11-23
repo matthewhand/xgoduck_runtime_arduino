@@ -92,34 +92,45 @@ def left_kick(_body: dict = None):
     try: return controller.start_kick('left')
     except ValueError as exc: raise HTTPException(400, str(exc))
 
-def cal_enter(_body: dict = None):
-    try: return controller.set_mode('calibrate')
+def tool_session(body):
+    session = body.get('session') if isinstance(body, dict) else None
+    if not isinstance(session, str) or len(session) != 32 or any(c not in '0123456789abcdef' for c in session):
+        raise HTTPException(400, 'Reload the board tool and select Start.')
+    return session
+
+def cal_enter(body: dict = None):
+    try: return controller.set_mode('calibrate', tool_session=tool_session(body))
     except ValueError as exc: raise HTTPException(400, str(exc))
 
-def cal_exit(_body: dict = None):
-    try: return controller.set_mode('shadow')
+def cal_exit(body: dict = None):
+    try: return controller.set_mode('shadow', tool_session=tool_session(body), closing_mode='calibrate')
     except ValueError as exc: raise HTTPException(400, str(exc))
 
-def cal_heartbeat(_body: dict = None):
-    try: return controller.cal_heartbeat()
-    except ValueError as exc: raise HTTPException(400, str(exc))
+def cal_heartbeat(body: dict = None):
+    try: return controller.tool_heartbeat('calibrate', tool_session(body))
+    except ValueError as exc: raise HTTPException(409, str(exc))
 
 def cal_center(body: dict):
-    try: return controller.cal_center(body['index'])
+    try: return controller.cal_center(body['index'], tool_session(body))
     except (KeyError, TypeError, ValueError) as exc: raise HTTPException(400, str(exc))
 
-def servo_enter(_body: dict = None):
-    try: return controller.set_mode('servo_debug')
+def servo_enter(body: dict = None):
+    session = tool_session(body)
+    try:
+        if body.get('keep_alive') is True:
+            return controller.tool_heartbeat('servo_debug', session)
+        return controller.set_mode('servo_debug', tool_session=session)
     except ValueError as exc: raise HTTPException(400, str(exc))
 
-def servo_exit(_body: dict = None):
-    try: return controller.set_mode('shadow')
+def servo_exit(body: dict = None):
+    try: return controller.set_mode('shadow', tool_session=tool_session(body), closing_mode='servo_debug')
     except ValueError as exc: raise HTTPException(400, str(exc))
 
 def servo_action(body: dict):
     try:
         return controller.servo_op(
             body['action'], body.get('target_id'),
+            session=tool_session(body),
             new_id=body.get('new_id'), kp=body.get('kp', 5), kd=body.get('kd', 20),
             protection_enabled=body.get('protection_enabled', True), current_a=body.get('current_a', 1.0))
     except (KeyError, TypeError, ValueError) as exc:

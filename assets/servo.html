@@ -6,15 +6,16 @@
   <div><small>ARDUINO UNO Q</small><h1>Servo setup</h1></div>
   <div class="header-actions">
     <nav class="nav"><a href="/">Control</a><a href="/simulate.html">Duck Lab</a><a href="/calibrate.html">Calibration</a><a href="/servo.html" aria-current="page">Servo setup</a></nav>
-    <button class="stop" id="exit">Exit</button>
+    <button class="stop" id="exit" disabled>End servo setup</button>
   </div>
 </header>
 <p class="warn">When changing an ID, connect only the servo you want to change. Duplicate IDs cannot be distinguished on the same bus.</p>
-<p id="message" role="status">Entering servo setup and unloading all servos…</p>
+<p id="message" role="status">Support the Duck and turn torque off before starting.</p>
 <section class="servo-panel">
   <div class="servo-scan">
     <div class="servo-scan-actions">
-      <button id="scan">Scan all IDs</button>
+      <button id="start" disabled>Start servo setup</button>
+      <button id="scan" disabled>Scan all IDs</button>
       <button id="scan-stop" hidden>Stop scan</button>
       <span id="scan-status" role="status">Scan IDs 0–253 to find connected servos.</span>
     </div>
@@ -46,18 +47,18 @@
 <section class="servo-panel servo-protection">
   <h2>All-servo voltage / overcurrent protection</h2>
   <div class="protection-controls">
-    <button id="enable-protection">Enable</button>
-    <button id="disable-protection">Disable</button>
+    <button id="enable-protection" disabled>Enable</button>
+    <button id="disable-protection" disabled>Disable</button>
     <span id="protection-out" class="servo-readout" role="status">Not applied</span>
   </div>
   <div class="protection-controls">
-    <input id="protection-current" type="number" min="0" step="any" value="1.5" inputmode="decimal" aria-label="Protection current in amperes">
+    <input id="protection-current" type="number" min="0" step="any" value="1.5" inputmode="decimal" aria-label="Protection current in amperes" disabled>
     <span>A</span>
-    <button id="set-protection-current">Set protection current</button>
+    <button id="set-protection-current" disabled>Set protection current</button>
     <span id="protection-current-out" class="servo-readout" role="status">Not applied</span>
   </div>
   <p class="hint">Enable / Disable changes only the protection switch. Set protection current changes only the current threshold. Both operations broadcast to every servo; no scan or ID selection is needed. Overheat protection stays enabled, and stored voltage limits are unchanged. Current resolution is 6.5 mA. Broadcast writes have no per-servo acknowledgement.</p>
 </section>
 </main>
-<script src="servo.js?v=20261105-1"></script>
+<script src="servo.js?v=2"></script>
 </html>

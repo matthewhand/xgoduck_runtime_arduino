@@ -1,7 +1,57 @@
 # Duck Lab: browser simulation and live view
 
 Open **Duck Lab** from the runtime's navigation, or visit
-`http://<board-ip>:9527/simulate.html`.
+`http://<board-ip>:9527/simulate.html`. It opens **Build & Test**, with board
+tools, the recorded stock walk and four get-ups, and the two V1.1 backpack
+fit-test plates in print order. The stock replays run without a connected
+board. **Run live simulation** opens the interactive walking simulation on the
+UNO Q.
+
+Use **Experimental** in the footer to reach the full simulation workspace,
+attachments, docking, and vision studies. Existing mode links such as
+`simulate.html?dock=1`, `simulate.html?mods=1` and `simulate.html?demo=1`
+still open their corresponding views. To open the original Pose workspace
+directly, use `simulate.html?lab=1`.
+
+On the UNO Q Wi-Fi deployment, `/experiments` serves the working simulator
+and its assets. The root simulator and companion page URLs forward to that
+same copy, including their query parameters and fragment. The legacy root
+`/simulate.html?demo=1` bookmark keeps its older pond demo on boards with that
+installation; open the Experimental page for the current Demo circuit.
+
+## Deploy Build & Test over Wi-Fi
+
+Run the following from a checkout with the release committed. The board must
+already run the XGO Duck app and have the Duck Lab experiments installed. Use
+its saved SSH alias with the host key pinned. Set `--address` to its current Wi-Fi
+address when the alias points to an older address.
+
+```sh
+python tools/check-build-plates.py assets/sim
+node tools/check-browser-sim.mjs
+python tools/deploy-duck-lab.py --ref HEAD --host uno-q-duck --address <board-ip>
+```
+
+Use `--output build-test-release.zip` to keep the staged bundle. The deployment
+checks file hashes and merges the board-tool changes with the installed Python
+files using the release's parent as the base. If the backend changes span more
+than one commit, pass the commit before those changes as `--base`. A merge
+conflict stops the deployment before installation. The installed commit and
+hashes are available at `/experiments/build-test-release.json`. The command also
+prints the board-side backup directory and identifies any changed Python files.
+
+If Python files changed, confirm torque is already off and no simulation is
+running before restarting the XGO Duck app. Check the Build & Test page, both
+3MF downloads, the stock replay, and live board status after the restart.
+
+To restore the previous release, use SSH to run the installer saved next to
+the reported `backup` directory on the board:
+
+```sh
+flock -n "$HOME/.duck-lab-deploy/build-test.lock" python3 -B <release-dir>/install.py --restore <release-dir>/backup
+```
+
+Restart the app again if the rollback restored Python files.
 
 For WebGPU, use a browser with WebGPU support and a secure origin. The USB
 forward is a convenient localhost origin:

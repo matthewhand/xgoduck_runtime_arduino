@@ -3,6 +3,10 @@
 @media(max-width:760px){main{padding:0 15px 22px}.topbar{gap:20px;min-height:48px}.topbar nav{gap:16px}.topbar nav a{font-size:12px;padding:14px 0}.lab-layout{grid-template-columns:1fr}.stage-panel{position:static}.controls-panel{display:grid;grid-template-columns:1fr 1fr}.joint-card{grid-column:1/-1}#joint-controls{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}#viewport{height:clamp(280px,calc(100dvh - 160px),560px)}.stats>div{padding:0 10px}.board-strip{justify-content:flex-start;gap:13px 22px}.engine{font-size:9px}.stage-bar{padding:11px}}
 @media(max-width:480px){.wordmark{font-size:16px}.topbar nav{gap:13px}.controls-panel{display:flex}#joint-controls{grid-template-columns:1fr}.stats strong{font-size:19px}.stats>div{padding:0 8px}.stats small{font-size:7px}.stats span{font-size:8px}.stage-toolbar>div{width:100%}.tabs button{padding:7px 10px}.stage-bar{gap:5px}.engine{font-size:8px}.viewport-help{font-size:7px}.card{padding:17px}}
 .tabs{flex-wrap:wrap}
+.stock-only{display:none}
+.stock-view .stock-only{display:block}
+.stock-view .lab-extra,.stock-view .stage-bar .tabs,.stock-view #physics-controller-label,.stock-view #matrix-player,.stock-view #qualification-open,.stock-view #qualification-variant-field{display:none}
+.stock-view .topbar nav{flex-wrap:wrap;column-gap:16px;row-gap:0}
 #walk-card{grid-column:1/-1}
 .walk-buttons{margin-top:12px}
 #walk-state{min-height:2.8em}

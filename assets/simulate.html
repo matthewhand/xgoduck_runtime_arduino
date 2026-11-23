@@ -4,12 +4,16 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
-  <link rel="stylesheet" href="sim/sim.css?v=15">
+  <script>
+    if (!location.search && !location.hash) location.replace('build-test.html');
+    if (new URLSearchParams(location.search).get('stock') === '1') document.documentElement.classList.add('stock-view');
+  </script>
+  <link rel="stylesheet" href="sim/sim.css?v=16">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
 <main>
-  <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="/">Control</a><a href="/simulate.html" aria-current="page">Duck Lab</a><a href="dock-vision.html">Dock vision</a><a href="camera-replay.html">Camera replay</a><a href="tail-sizing.html">Tail studies</a><a href="/calibrate.html">Calibration</a></nav></header>
+  <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="build-test.html">Build &amp; Test</a><a href="simulate.html?lab=1" class="lab-extra" aria-current="page">Simulation workspace</a><a href="simulate.html?stock=1" class="stock-only">Stock replay</a><a href="simulate.html?stock=1&amp;run=1" class="stock-only">Run on UNO Q</a></nav></header>
   <div class="lab-layout">
     <section class="stage-panel" aria-label="3D Duck workspace">
       <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="skates" aria-pressed="false" disabled>Skates</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button><button data-mode="hardware" aria-pressed="false" disabled>Hardware</button><button data-mode="mods" aria-pressed="false" disabled>Mods</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
@@ -206,9 +210,9 @@
     </aside>
   </div>
   <section class="board-strip" id="board-strip" aria-label="Board telemetry"><div><span class="status-dot" id="board-dot"></span><strong>UNO Q</strong><span id="board-state">Connecting…</span></div><div>Feedback <strong id="board-feedback">—</strong></div><div>Servos <strong id="board-servos">—</strong></div><div>Board CPU <strong id="board-cpu">—</strong></div><div>Board GPU <strong id="board-gpu">—</strong></div><div>Missed Linux slots <strong id="board-missed">—</strong></div><div id="board-torque">Torque status unknown</div></section>
-  <footer><span id="engine-note">Graphics run on the viewing device. The UNO Q serves the app.</span><span>MuJoCo 3.12 · Three.js r187 · <a href="sim/NOTICE.txt">Sources &amp; licenses</a></span></footer>
+  <footer><span id="engine-note">Graphics run on the viewing device. The UNO Q serves the app.</span><span>MuJoCo 3.12 · Three.js r187 · <a href="sim/NOTICE.txt">Sources &amp; licenses</a></span><a href="experimental.html">Experimental</a></footer>
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=53"></script>
+<script type="module" src="sim/sim-ui.mjs?v=55"></script>
 </body></html>

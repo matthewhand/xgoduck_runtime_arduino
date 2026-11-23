@@ -145,6 +145,7 @@ class Controller:
         self.started = time.monotonic()
         self.boot_pd = {}
         self.raw_pos = [SERVO_CENTER_POS]*15
+        self.tool_session = None
         self.cal_done = [False]*15
         self.cal_reply = None
         self.cal_seq = 0
@@ -411,10 +412,20 @@ class Controller:
                                  message='IMU calibration reset. Previous calibration backed up.')
             return self._imu_status_locked()
 
-    def set_mode(self, mode):
+    def set_mode(self, mode, *, tool_session=None, closing_mode=None):
         if mode not in ('shadow', 'off', 'hold', 'policy', 'calibrate', 'servo_debug'):
             raise ValueError('unknown mode')
         with self.lock:
+            if mode in EXCLUSIVE_MODES:
+                if tool_session is None:
+                    raise ValueError('Open the board tool and select Start.')
+                if self.mode == mode:
+                    self._require_tool_session_locked(mode, tool_session)
+                elif (self.mode not in ('off', 'shadow') or self.arm_pending
+                      or (self.feedback and self.feedback.enabled)):
+                    raise ValueError('Turn torque off and close any other board tool before starting.')
+            elif closing_mode is not None and (self.mode != closing_mode or tool_session != self.tool_session):
+                return {'mode': self.mode}
             if self._imu_job['active']:
                 if mode == 'off' or (self.mode == 'calibrate' and mode == 'shadow'):
                     self._imu_job_token += 1
@@ -436,6 +447,7 @@ class Controller:
                 fb = self._require_feedback(0)
             previous = self.mode
             self.generation += 1; self.mode = mode
+            self.tool_session = tool_session if mode in EXCLUSIVE_MODES else None
             self.heading.reset()
             self.recovery.reset(); self.policy_needs_reset = True
             self._cancel_actions_locked()
@@ -818,32 +830,34 @@ class Controller:
             self.web_time = time.monotonic()
         return {'ok': True}
 
-    def cal_heartbeat(self):
+    def _require_tool_session_locked(self, mode, session):
+        if self.mode != mode or session != self.tool_session:
+            raise ValueError('This page does not own the active tool session.')
+
+    def tool_heartbeat(self, mode, session):
         with self.lock:
-            if self.mode != 'calibrate':
-                raise ValueError('not in calibrate mode')
+            self._require_tool_session_locked(mode, session)
             self.web_time = time.monotonic()
         return {'ok': True}
 
-    def cal_center(self, index):
+    def cal_center(self, index, session):
         if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < 15:
             raise ValueError('joint index out of range')
         with self.cal_op_lock:
-            with self.lock:
-                self._check_imu_idle_locked()
-                if self.mode != 'calibrate':
-                    raise ValueError('not in calibrate mode')
-                if not self.feedback or time.monotonic()-self.rx_time > .15:
-                    raise ValueError('MCU feedback is stale')
-                generation = self.generation
-                self.cal_seq = (self.cal_seq + 1) & 0xffffffff
-                seq = self.cal_seq
-                self.web_time = time.monotonic()
-                self.cal_reply = None
-                self.cal_reply_event.clear()
-                self.cal_expected_index = (seq, index)
             try:
-                self.bridge.notify('duck_cal', encode_cal(CAL_CENTER_ONE, index=index, seq=seq))
+                with self.lock:
+                    self._require_tool_session_locked('calibrate', session)
+                    self._check_imu_idle_locked()
+                    if not self.feedback or time.monotonic()-self.rx_time > .15:
+                        raise ValueError('MCU feedback is stale')
+                    generation = self.generation
+                    self.cal_seq = (self.cal_seq + 1) & 0xffffffff
+                    seq = self.cal_seq
+                    self.web_time = time.monotonic()
+                    self.cal_reply = None
+                    self.cal_reply_event.clear()
+                    self.cal_expected_index = (seq, index)
+                    self.bridge.notify('duck_cal', encode_cal(CAL_CENTER_ONE, index=index, seq=seq))
                 if not self.cal_reply_event.wait(.75):
                     raise ValueError('centering acknowledgement timeout')
                 with self.lock:
@@ -857,35 +871,30 @@ class Controller:
                 with self.lock:
                     self.cal_expected_index = None
 
-    def _require_servo_debug(self):
-        if self.mode != 'servo_debug':
-            raise ValueError('not in servo_debug mode')
-        self.web_time = time.monotonic()
-
-    def servo_op(self, action, target_id=None, new_id=None, kp=5, kd=20, *, protection_enabled=True, current_a=1.0):
+    def servo_op(self, action, target_id=None, new_id=None, kp=5, kd=20, *, session, protection_enabled=True, current_a=1.0):
         with self.servo_op_lock:
             if action != 'set_id':
                 return self._servo_op(action, target_id, new_id, kp, kd,
-                                      protection_enabled=protection_enabled, current_a=current_a)
+                                      session=session, protection_enabled=protection_enabled, current_a=current_a)
             target_id, new_id = int(target_id), int(new_id)
             if not 0 <= target_id <= 253 or not 0 <= new_id <= 253:
                 raise ValueError('ID must be between 0 and 253')
-            if not self._servo_op('ping', target_id)['ok']:
+            if not self._servo_op('ping', target_id, session=session)['ok']:
                 raise ValueError(f'No servo replied at ID {target_id}; ID was not changed')
             if target_id == new_id:
                 return dict(ok=True, op=SERVO_SET_ID, target_id=target_id, new_id=new_id)
-            if self._servo_op('ping', new_id)['ok']:
+            if self._servo_op('ping', new_id, session=session)['ok']:
                 raise ValueError(f'ID {new_id} is already in use; choose another ID')
             # Keep the checks, write and verification in one serialized operation.
-            reply = self._servo_op(action, target_id, new_id, kp, kd)
+            reply = self._servo_op(action, target_id, new_id, kp, kd, session=session)
             time.sleep(0.05)
-            if not self._servo_op('ping', new_id)['ok']:
+            if not self._servo_op('ping', new_id, session=session)['ok']:
                 raise ValueError(f'ID write sent, but ID {new_id} did not reply. Scan again')
-            if self._servo_op('ping', target_id)['ok']:
+            if self._servo_op('ping', target_id, session=session)['ok']:
                 raise ValueError('Both old and new IDs replied. Connect only one servo and scan again')
             return dict(reply, new_id=new_id)
 
-    def _servo_op(self, action, target_id, new_id=None, kp=5, kd=20, *, protection_enabled=True, current_a=1.0):
+    def _servo_op(self, action, target_id, new_id=None, kp=5, kd=20, *, session, protection_enabled=True, current_a=1.0):
         if action in ('set_protection', 'set_protection_current'):
             if target_id is not None and target_id != BROADCAST_ID:
                 raise ValueError('protection applies to all servos; target must be broadcast')
@@ -893,7 +902,8 @@ class Controller:
         else:
             target_id = int(target_id)
         with self.lock:
-            self._require_servo_debug()
+            self._require_tool_session_locked('servo_debug', session)
+            self.web_time = time.monotonic()
             if action == 'unlock':
                 op, payload = SERVO_UNLOCK, encode_servo(SERVO_UNLOCK, target_id)
             elif action == 'set_id':
@@ -926,9 +936,16 @@ class Controller:
             self.servo_reply_event.clear()
             self.servo_reply = None
             self.servo_expected_reply = (op, target_id)
+            try:
+                self.bridge.notify('duck_servo', payload)
+            except Exception:
+                self.servo_expected_reply = None
+                raise
         try:
-            self.bridge.notify('duck_servo', payload)
-            return self._wait_servo_reply(op, target_id=target_id)
+            reply = self._wait_servo_reply(op, target_id=target_id)
+            with self.lock:
+                self._require_tool_session_locked('servo_debug', session)
+            return reply
         finally:
             with self.lock:
                 self.servo_expected_reply = None
@@ -970,6 +987,7 @@ class Controller:
                     self.mode = mode = 'shadow'; self.generation += 1
                     self.last_error = 'calibrate/servo_debug heartbeat lost; exited'
                     generation = self.generation
+                    self.tool_session = None
                     if previous == 'calibrate':
                         self.cal_done = [False]*15
                         self.cal_expected_index = None

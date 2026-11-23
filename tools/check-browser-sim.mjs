@@ -181,13 +181,30 @@ try {
   }
   console.log('PASS: real MJCF compiles; 14 distinct motor/joint mappings and valid CAD mesh indices');
 
+  const stockReport = JSON.parse(await read('stock-replay.json'));
+  assert.deepEqual(stockReport.source.policies_sha256, stockModels);
+  const jointIds = sim.joints.map(joint => joint.id);
+  const stockCases = parseQualificationReport(stockReport, jointIds);
+  assert.deepEqual([...stockCases.keys()], [
+    'Walking', 'Get up from back', 'Get up from right side', 'Get up from front', 'Get up from left side',
+  ]);
+  for (const [label, variants] of stockCases) {
+    const trial = variants.get('stock');
+    assert.equal(trial.result.passed, true, label);
+    assert.equal(trial.duration, 20, label);
+    if (label !== 'Walking') {
+      assert(trial.events.get('Walk again') > trial.events.get('Get-up'), label);
+    }
+  }
+  console.log('PASS: the stock walk and all four recovery clips load with the shipped policies');
+
   const dockSources = [
     'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
     'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',
   ];
   const recordings = await Promise.all(dockSources.map(async name => JSON.parse(await read(`${name}-recording.json`))));
   const dockReport = mergeDockRecordings(recordings);
-  const dockCases = parseQualificationReport(dockReport, sim.joints.map(joint => joint.id));
+  const dockCases = parseQualificationReport(dockReport, jointIds);
   const expectedIndex = Object.fromEntries([...dockCases.keys()].map(scenario => [scenario,
     dockSources.filter((_, i) =>
       Object.values(recordings[i]).some(variants => Object.hasOwn(variants, scenario)))]));

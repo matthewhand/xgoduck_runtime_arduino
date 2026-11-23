@@ -6,22 +6,21 @@
   <div><small>ARDUINO UNO Q</small><h1>Calibration</h1></div>
   <div class="header-actions">
     <nav class="nav"><a href="/">Control</a><a href="/simulate.html">Duck Lab</a><a href="/calibrate.html" aria-current="page">Calibration</a><a href="/servo.html">Servo setup</a></nav>
-    <button class="stop" id="exit">Exit</button>
+    <button class="stop" id="exit" disabled>End calibration</button>
   </div>
 </header>
-<p id="message" role="status">Entering calibration and unloading all servos…</p>
+<p id="message" role="status">Support the Duck and turn torque off before starting.</p>
 <section>
   <h2>Procedure</h2>
   <div class="buttons">
-    <button id="start">Unload all</button>
-    <button id="exit2">Exit</button>
+    <button id="start" disabled>Start calibration</button>
   </div>
-  <p class="hint">Opening this page unloads all motors. Align each joint by hand, then choose Set center &amp; hold. Use Unload all to readjust. Exit releases the motors.</p>
+  <p class="hint">Start calibration unloads all servos. Align each joint by hand, then choose Set center &amp; hold. Use Unload all to readjust. End calibration releases the servos.</p>
 </section>
 <section>
   <h2>Joints <span id="mode">—</span></h2>
   <div id="joints" class="cal-list"></div>
 </section>
 </main>
-<script src="calibrate.js?v=20261105-joints1"></script>
+<script src="calibrate.js?v=2"></script>
 </html>
