@@ -1,4 +1,5 @@
 """Start at most one bounded Duck Lab rollout and retain its latest sample."""
+from datetime import datetime, timezone
 import importlib.util
 import json
 import os
@@ -6,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+import time
 from uuid import uuid4
 
 from walk_sim import MODEL, PUSH_SPEEDS, RUN_S
@@ -13,6 +15,8 @@ from search_mission import ARENAS, MISSION_S
 
 PYTHON = Path(__file__).resolve().parent
 DEPS = PYTHON.parent / '.cache/walk-sim-deps'
+REPORT = PYTHON.parent / '.cache/walk-trial-report.json'
+RELEASE = PYTHON.parent / 'assets/experiments/build-test-release.json'
 
 
 def walk_command(body):
@@ -29,13 +33,24 @@ def walk_command(body):
     return (*values, None)
 
 
+def read_record(path):
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 class WalkLab:
-    def __init__(self, board_missed):
+    def __init__(self, board_missed, board_load):
         self.board_missed = board_missed
+        self.board_load = board_load
         self.lock = threading.Lock()
         self.process = None
         self.run_id = 0
         self.latest = {'state': 'idle'}
+        saved = read_record(REPORT)
+        self.latest_report = saved if saved.get('schema') == 1 and saved.get('run_key') else None
 
     def available(self):
         return (MODEL.is_file()
@@ -44,11 +59,16 @@ class WalkLab:
 
     def _snapshot(self):
         result = dict(self.latest, available=self.available(), run_id=self.run_id,
-                      duration_s=MISSION_S if self.latest.get('arena') else RUN_S)
+                      duration_s=MISSION_S if self.latest.get('arena') else RUN_S,
+                      report_run_key=self.latest_report['run_key'] if self.latest_report else None)
         if 'missed_at_start' in result:
             end = result.get('missed_at_end', self.board_missed())
             result['board_missed_delta'] = end - result['missed_at_start']
         return result
+
+    def report(self):
+        with self.lock:
+            return self.latest_report
 
     def status(self):
         with self.lock:
@@ -80,6 +100,11 @@ class WalkLab:
             return self._snapshot()
 
     def _collect(self, process):
+        started_at = datetime.now(timezone.utc).isoformat()
+        release = read_record(RELEASE).get('commit')
+        missed_at_start = self.latest['missed_at_start']
+        next_load_at = 0
+        loads, pushes, recoveries = [], {}, {}
         with process.stdout:
             for line in process.stdout:
                 try:
@@ -89,6 +114,20 @@ class WalkLab:
                 with self.lock:
                     if self.latest['state'] != 'stopping':
                         push = sample.get('push')
+                        now = time.monotonic()
+                        if sample.get('state') == 'running' and now >= next_load_at:
+                            next_load_at = now + 1
+                            loads.append(dict(sim_time_s=sample['time_s'], sim_missed_slots=sample['missed'],
+                                              board_missed_slots=self.board_missed() - missed_at_start,
+                                              **self.board_load()))
+                        if push:
+                            pushes[push['time_s']] = push
+                        recovery = sample.get('recovery') or {}
+                        fall, resumed = recovery.get('fall_at_s'), recovery.get('resumed_at_s')
+                        if fall is not None:
+                            recoveries[fall] = dict(fall_at_s=fall, getup_at_s=recovery.get('getup_at_s'),
+                                                    resumed_at_s=resumed, fall_to_walk_s=None if resumed is None
+                                                    else round(resumed - fall, 3))
                         if push and push['time_s'] != self.latest.get('push', {}).get('time_s'):
                             self.latest['push_pending'] = False
                         self.latest.update(sample)
@@ -103,6 +142,26 @@ class WalkLab:
                 self.latest['state'] = 'stopped'
             elif self.latest['state'] not in ('complete', 'found', 'fallen', 'error'):
                 self.latest.update(state='error', detail=f'Walking worker exited ({code}). Check app logs.')
+            self.latest_report = {
+                'schema': 1, 'source': 'uno-q-simulation', 'run_id': self.run_id,
+                'release': release,
+                'started_at': started_at, 'finished_at': datetime.now(timezone.utc).isoformat(),
+                **{key: self.latest.get(key) for key in ('run_key', 'state', 'detail', 'vx', 'yaw', 'arena',
+                                                        'pond', 'time_s', 'hz', 'slots', 'path_m',
+                                                        'inference_ms', 'slot_p95_ms')},
+                'sim_missed_slots': self.latest.get('missed'),
+                'board_missed_slots': self.latest['missed_at_end'] - missed_at_start,
+                'load_peaks': {key: max((row[key] for row in loads if row[key] is not None), default=None)
+                               for key in ('cpu_percent', 'busiest_core_percent', 'gpu_percent')},
+                'load_samples': loads, 'pushes': list(pushes.values()), 'recoveries': list(recoveries.values()),
+            }
+            try:
+                REPORT.parent.mkdir(parents=True, exist_ok=True)
+                staged = REPORT.with_suffix('.tmp')
+                staged.write_text(json.dumps(self.latest_report, allow_nan=False), encoding='utf-8')
+                staged.replace(REPORT)
+            except (OSError, ValueError):
+                pass  # The report remains available in memory if the disk write fails.
 
     def push(self, run_id, kind):
         if type(run_id) is not int or not isinstance(kind, str) or kind not in PUSH_SPEEDS:

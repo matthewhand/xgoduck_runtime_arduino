@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs?v=4';
-import {WalkPanel} from './walk-ui.mjs?v=6';
+import {WalkPanel} from './walk-ui.mjs?v=7';
 import {DemoCircuit} from './demo-ui.mjs?v=2';
 import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase} from './qualification-replay.mjs?v=19';
 import {GuardPreview} from './guard-preview.mjs?v=10';

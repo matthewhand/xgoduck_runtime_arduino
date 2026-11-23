@@ -7,6 +7,19 @@ fit-test plates in print order. The stock replays run without a connected
 board. **Run live simulation** opens the interactive walking simulation on the
 UNO Q.
 
+Tick the physical checklist after checking rail retention, cable clearance,
+servo mapping, IMU orientation, stock walking and getting back up. Duck Lab
+saves checked timestamps and the installed release in this browser. The live
+servo count and IMU status are available alongside the checklist.
+
+After a live simulation, choose **Export trial** in the simulation or **Export
+last trial** on Build & Test. The JSON file includes the run ID and release,
+board CPU and GPU samples, simulation misses, the change in the board's Linux
+missed-slot counter, and recovery times when there was a fall or a push. It also
+includes the browser's current physical checklist. The UNO Q retains the most
+recent finished trial, including a trial stopped early. Missing measurements
+are `null`.
+
 Use **Experimental** in the footer to reach the full simulation workspace,
 attachments, docking, and vision studies. Existing mode links such as
 `simulate.html?dock=1`, `simulate.html?mods=1` and `simulate.html?demo=1`

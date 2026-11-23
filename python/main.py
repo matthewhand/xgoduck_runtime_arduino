@@ -16,7 +16,17 @@ from walk_lab import WalkLab, walk_command
 sys.setswitchinterval(0.001)
 controller = Controller(Bridge)
 gpu = GpuTelemetry(Bridge)
-walk_lab = WalkLab(lambda: controller.loop_missed)
+
+
+def simulation_load():
+    sample = gpu.latest
+    cpu = sample.get('cpu', CPU_DISABLED)
+    return {'cpu_percent': cpu.get('load_percent') if cpu['available'] else None,
+            'busiest_core_percent': cpu.get('busiest_core_percent') if cpu['available'] else None,
+            'gpu_percent': sample.get('load_percent') if sample['available'] else None}
+
+
+walk_lab = WalkLab(lambda: controller.loop_missed, simulation_load)
 try:
     ui = WebUI(port=9527, cors_origins='')
 except TypeError as exc:
@@ -217,6 +227,7 @@ ui.expose_api('GET', '/api/lab/walk', walk_lab.status)
 ui.expose_api('POST', '/api/lab/walk/start', walk_start)
 ui.expose_api('POST', '/api/lab/walk/stop', walk_stop)
 ui.expose_api('POST', '/api/lab/walk/push', walk_push)
+ui.expose_api('GET', '/api/lab/walk/report', walk_lab.report)
 ui.expose_api('GET', '/api/gpu', lambda: {key: value for key, value in gpu.latest.items() if key not in ('cpu', 'health')})
 ui.expose_api('POST', '/api/mode', mode)
 ui.expose_api('POST', '/api/roller', roller)

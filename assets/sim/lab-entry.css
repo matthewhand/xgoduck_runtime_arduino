@@ -15,6 +15,13 @@
 .entry-action.primary { background: var(--mint); border-color: var(--mint); }
 .entry-action.primary:hover { background: #b5efde; color: #0b2825; }
 .board-tools { margin: 10px 0; }
+.build-checklist-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.build-checklist-heading span { color: var(--mint); font-size: .83rem; }
+.build-checklist { display: grid; gap: 2px; }
+.build-checklist label { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; line-height: 1.4; }
+.build-checklist input { flex: none; margin: 0; accent-color: var(--mint); }
+.trial-download { margin-top: 12px; }
+#build-trial-state, #checklist-board, #checklist-storage { font-size: .83rem; }
 .lab-entry .matrix-player { margin: 0; }
 .lab-entry .matrix-player p, .lab-entry #wifi-reboot-note { font-size: .82rem; }
 .lab-entry footer a { font-size: .86rem; }

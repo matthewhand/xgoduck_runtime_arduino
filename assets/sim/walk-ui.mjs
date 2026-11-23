@@ -1,3 +1,5 @@
+import {mountTrialExport} from './trial-report.mjs?v=1';
+
 const $ = id => document.getElementById(id);
 const active = state => ['loading', 'running', 'stopping'].includes(state);
 const fmt = (value, digits, unit) => Number.isFinite(value) ? value.toFixed(digits) + unit : '—';
@@ -22,6 +24,7 @@ export class WalkPanel {
     this.timer = null;
     this.pending = false;
     this.error = '';
+    this.setExportRun = mountTrialExport($('walk-export'), $('walk-export-result'));
     for (const [key, unit] of [['vx', ' m/s'], ['yaw', ' rad/s']]) {
       const input = $('walk-' + key);
       input.addEventListener('input', () => {
@@ -49,6 +52,7 @@ export class WalkPanel {
     $('search-inputs').hidden = !this.explore || demo;
     $('search-map-panel').hidden = !this.explore;
     $('walk-action-buttons').hidden = $('walk-push-buttons').hidden = demo;
+    $('walk-export-actions').hidden = demo;
     this.setVisible(mode === 'walk' || this.explore);
     this.update();
   }
@@ -115,6 +119,7 @@ export class WalkPanel {
     const busy = active(run?.state);
     const matching = Boolean(run?.arena) === this.explore;
     const trial = matching ? run : null;
+    this.setExportRun(trial?.report_run_key === trial?.run_key ? trial?.run_key : null);
     const recovery = trial?.recovery;
     const searchState = {loading:'Loading the walking policy and MuJoCo…',
       running:'Scanning and choosing a route.', complete:'Time ran out before the beacon was seen.'};

@@ -180,6 +180,7 @@
           <div title="Rollout slots skipped to keep pace with wall time"><dt>Missed sim slots</dt><dd id="walk-missed">—</dd></div>
           <div title="Change in the real Duck runtime’s Linux missed-slot counter during this trial"><dt>Missed Duck slots</dt><dd id="walk-duck-missed">—</dd></div>
         </dl>
+        <div class="button-row walk-buttons" id="walk-export-actions"><button id="walk-export" disabled>Export trial</button><span class="muted" id="walk-export-result" role="status"></span></div>
         <div class="section-heading load-heading"><h3>Board load</h3><span>LAST 30 SECONDS</span></div>
         <svg class="walk-graph" viewBox="0 0 290 70" role="img" aria-label="UNO Q CPU, busiest CPU core, and Adreno GPU load over time" preserveAspectRatio="none">
           <path class="grid-lines" d="M0 2H290 M0 35H290 M0 68H290"/>
@@ -214,5 +215,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=55"></script>
+<script type="module" src="sim/sim-ui.mjs?v=56"></script>
 </body></html>

@@ -16,15 +16,15 @@ REPO = Path(__file__).resolve().parents[1]
 APP = Path.home() / 'ArduinoApps/xgo-duck'
 ROOT_ASSETS = ('index.html', 'calibrate.html', 'calibrate.js', 'servo.html', 'servo.js')
 LAB_ASSETS = (
-    'sim/sim.css', 'sim/lab-entry.css', 'sim/matrix-ui.mjs', 'sim/build-test.mjs',
+    'sim/sim.css', 'sim/lab-entry.css', 'sim/matrix-ui.mjs', 'sim/build-test.mjs', 'sim/trial-report.mjs',
     'sim/stock-replay.json', 'sim/v5-receiver-rail-fit-u1.3mf',
-    'sim/v5-torso-backpack-fit-u1.3mf', 'sim/sim-ui.mjs', 'experimental.html',
+    'sim/v5-torso-backpack-fit-u1.3mf', 'sim/sim-ui.mjs', 'sim/walk-ui.mjs', 'experimental.html',
     'build-test.html', 'simulate.html',
 )
 COMPANION_PAGES = ('attachments.html', 'camera-replay.html', 'dock-vision.html', 'tail-sizing.html')
 ALIASES = ('simulate.html', 'build-test.html', 'experimental.html', *COMPANION_PAGES)
-BACKEND = ('python/main.py', 'python/controller.py')
-EXPERIMENT_BASE = (*COMPANION_PAGES, 'sim/qualification-replay.mjs', 'sim/walk-ui.mjs',
+BACKEND = ('python/main.py', 'python/controller.py', 'python/walk_lab.py')
+EXPERIMENT_BASE = (*COMPANION_PAGES, 'sim/qualification-replay.mjs',
                    'sim/vendor/three/three.webgpu.js', 'sim/vendor/mujoco/mujoco.wasm')
 STAMP = 'assets/experiments/build-test-release.json'
 LEGACY_POND = 'assets/pond-demo-legacy.html'

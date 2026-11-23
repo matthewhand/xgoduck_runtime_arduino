@@ -4,34 +4,52 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Build &amp; Test · Duck Lab</title>
   <link rel="stylesheet" href="sim/sim.css?v=16">
-  <link rel="stylesheet" href="sim/lab-entry.css?v=1">
+  <link rel="stylesheet" href="sim/lab-entry.css?v=2">
 </head>
 <body>
 <main class="lab-entry">
   <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="build-test.html" aria-current="page">Duck Lab</a></nav></header>
   <h1>Build &amp; Test</h1>
   <div class="build-grid">
-    <section class="card print-card" aria-labelledby="print-title">
-      <h2 id="print-title">Backpack bench fit</h2>
-      <p>For V5 with the V1.1 expansion board. The U1 projects use a 0.4 mm nozzle, 0.20 mm PLA layers, and Textured PEI at 60 °C.</p>
-      <ol class="print-sequence">
-        <li>
-          <h3>Receiver and rails</h3>
-          <p>Check that both cartridges slide, latch, and release. Inspect the pocket bridges on the first print.</p>
-          <div class="entry-actions"><a class="entry-action primary" href="sim/v5-receiver-rail-fit-u1.3mf" download="v5-receiver-rail-fit-u1-pei60.3mf">Download plate 1</a><span>1 h 5 min · 28 g</span></div>
-        </li>
-        <li>
-          <h3>Torso, battery holder, and shell</h3>
-          <p>Print after both rails latch and release. Reuse plate 1’s parts and dry-fit the stack with the board unpowered.</p>
-          <div class="entry-actions"><a class="entry-action" href="sim/v5-torso-backpack-fit-u1.3mf" download="v5-torso-backpack-fit-u1-pei60.3mf">Download plate 2</a><span>1 h 39 min · 44 g</span></div>
-        </li>
-      </ol>
-    </section>
+    <div class="build-tools">
+      <section class="card print-card" aria-labelledby="print-title">
+        <h2 id="print-title">Backpack bench fit</h2>
+        <p>For V5 with the V1.1 expansion board. The U1 projects use a 0.4 mm nozzle, 0.20 mm PLA layers, and Textured PEI at 60 °C.</p>
+        <ol class="print-sequence">
+          <li>
+            <h3>Receiver and rails</h3>
+            <p>Check that both cartridges slide, latch, and release. Inspect the pocket bridges on the first print.</p>
+            <div class="entry-actions"><a class="entry-action primary" href="sim/v5-receiver-rail-fit-u1.3mf" download="v5-receiver-rail-fit-u1-pei60.3mf">Download plate 1</a><span>1 h 5 min · 28 g</span></div>
+          </li>
+          <li>
+            <h3>Torso, battery holder, and shell</h3>
+            <p>Print after both rails latch and release. Reuse plate 1’s parts and dry-fit the stack with the board unpowered.</p>
+            <div class="entry-actions"><a class="entry-action" href="sim/v5-torso-backpack-fit-u1.3mf" download="v5-torso-backpack-fit-u1-pei60.3mf">Download plate 2</a><span>1 h 39 min · 44 g</span></div>
+          </li>
+        </ol>
+      </section>
+      <section class="card" aria-labelledby="checklist-title">
+        <div class="build-checklist-heading"><h2 id="checklist-title">Physical build checklist</h2><span id="checklist-count" aria-live="polite">0 of 6 checked</span></div>
+        <p>Tick each item after checking the physical Duck. Progress is saved in this browser.</p>
+        <div class="build-checklist" id="build-checklist">
+          <label><input type="checkbox" value="rails" disabled> Both rails slide, latch and release</label>
+          <label><input type="checkbox" value="dry_fit" disabled> Torso and shell dry-fit with cables clear</label>
+          <label><input type="checkbox" value="servos" disabled> All 15 servos report and match their joints</label>
+          <label><input type="checkbox" value="imu" disabled> IMU reports the expected orientation on a level surface</label>
+          <label><input type="checkbox" value="stock_walk" disabled> Stock Duck walks on level ground</label>
+          <label><input type="checkbox" value="stock_getup" disabled> Stock Duck gets up and resumes walking</label>
+        </div>
+        <p id="checklist-board" role="status">Waiting for board feedback…</p>
+        <p id="checklist-storage" role="status" hidden></p>
+      </section>
+    </div>
     <div class="build-tools">
       <section class="card" aria-labelledby="motion-title">
         <h2 id="motion-title">Stock walk and get-up</h2>
         <p>Replay the recorded walk and four get-ups, or run a fresh simulation on the UNO Q with hardware torque off.</p>
         <div class="entry-actions"><a class="entry-action primary" href="simulate.html?stock=1">Play stock replay</a><a class="entry-action" href="simulate.html?stock=1&amp;run=1">Run live simulation</a></div>
+        <div class="entry-actions trial-download"><button type="button" id="build-export" disabled>Export last trial</button><span id="build-export-result" role="status"></span></div>
+        <p id="build-trial-state">Run a live simulation to record load, missed slots and recovery.</p>
       </section>
       <section class="card" aria-labelledby="board-title">
         <h2 id="board-title">Board tools</h2>
@@ -55,5 +73,5 @@
   </div>
   <footer><a href="experimental.html">Experimental</a></footer>
 </main>
-<script type="module" src="sim/build-test.mjs?v=2"></script>
+<script type="module" src="sim/build-test.mjs?v=3"></script>
 </body></html>
