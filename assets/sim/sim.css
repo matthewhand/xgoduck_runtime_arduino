@@ -54,7 +54,9 @@
 .dock-replay-selectors select{padding:6px}
 .qualification-alternate{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer}
 .dock-contact-overlay{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);max-width:92%;width:max-content;padding:5px 8px;border-radius:5px;background:#0b1820de;color:var(--amber);font-size:10px;pointer-events:none}
-.dock-overhead{position:absolute;z-index:1;right:12px;top:10px;font-size:11px;padding:6px 8px}
+.viewport-actions{position:absolute;z-index:2;right:12px;top:10px;display:flex;gap:6px}
+.viewport-actions button{font-size:11px;min-height:44px;padding:6px 10px;background:#101c25ed}
+.viewport-actions button:hover:not(:disabled){background:#284039}
 .dock-overhead[aria-pressed=true]{background:#284039;border-color:#597d73;color:#bbf4dc}
 .qualification-contact{grid-column:1/-1}
 .qualification-summary{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
@@ -100,8 +102,8 @@
 
 @media (max-width: 600px), (max-width: 960px) and (max-height: 500px) {
   .sim-page{overflow-anchor:none}
-  .sim-page main{padding-inline:10px}
-  .sim-workspace{display:flex;flex-direction:column;height:100svh;min-height:320px}
+  .sim-page main{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
+  .sim-workspace{display:flex;flex-direction:column;height:100svh;min-height:320px;padding-block:env(safe-area-inset-top) env(safe-area-inset-bottom)}
   .sim-page .topbar{gap:8px 16px;flex-wrap:wrap}
   .sim-page .topbar nav{gap:4px 12px;flex-wrap:wrap;margin-left:auto}
   .sim-page .topbar nav a{align-content:center;padding:0;min-height:44px}
@@ -115,7 +117,7 @@
   .sim-controls[open] > summary{border-bottom:1px solid var(--line)}
   .sim-controls-content{max-height:min(43svh,430px);overflow:auto;overscroll-behavior-y:contain;padding:8px;gap:8px}
   .controls-panel,#joint-controls{display:flex;flex-direction:column;gap:8px}
-  .sim-controls button,.sim-controls select,.sim-controls .toggle,.sim-controls input[type=range],.dock-overhead{min-height:44px}
+  .sim-controls button,.sim-controls select,.sim-controls .toggle,.sim-controls input[type=range]{min-height:44px}
   .sim-controls .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
   .sim-controls .tabs button{padding-inline:4px;white-space:normal}
   .sim-controls .stage-toolbar select{width:auto}
@@ -125,4 +127,69 @@
   .lab-layout:has(> .sim-controls[open]){flex-direction:row}
   .sim-controls[open]{width:min(42%,330px);overflow:hidden}
   .sim-controls-content{max-height:calc(100svh - 112px)}
+}
+
+.sim-fullscreen{overflow:hidden}
+.sim-fullscreen .topbar,.sim-fullscreen .board-strip,.sim-fullscreen footer{visibility:hidden}
+.lab-layout.is-fullscreen{
+  position:fixed;
+  inset:0;
+  z-index:10;
+  display:block;
+  width:100%;
+  height:100dvh;
+  margin:0;
+  overflow:hidden;
+  background:#0c1720;
+}
+.is-fullscreen .stage-panel{position:static;height:100%;border:0;border-radius:0}
+.is-fullscreen #viewport{height:100%}
+.is-fullscreen .viewport-help{display:none}
+.is-fullscreen .scene-label{left:calc(12px + env(safe-area-inset-left));top:calc(16px + env(safe-area-inset-top))}
+.is-fullscreen .viewport-actions{right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top))}
+.is-fullscreen .walk-hud,.is-fullscreen .dock-contact-overlay{bottom:calc(66px + env(safe-area-inset-bottom))}
+.is-fullscreen .sim-controls{
+  position:absolute;
+  z-index:3;
+  left:calc(10px + env(safe-area-inset-left));
+  right:calc(10px + env(safe-area-inset-right));
+  bottom:calc(10px + env(safe-area-inset-bottom));
+  width:auto;
+  max-width:420px;
+  margin-left:auto;
+  border:0;
+  background:transparent;
+  overflow:visible;
+  pointer-events:none;
+}
+.is-fullscreen .sim-controls > summary,.is-fullscreen .sim-controls-content{
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel);
+  pointer-events:auto;
+}
+.is-fullscreen .sim-controls > summary{
+  display:list-item;
+  align-content:center;
+  width:max-content;
+  min-height:46px;
+  margin-left:auto;
+  padding:0 14px;
+  color:var(--mint);
+  font-size:14px;
+  font-weight:650;
+  cursor:pointer;
+}
+.is-fullscreen .sim-controls-content{
+  position:absolute;
+  right:0;
+  bottom:calc(100% + 8px);
+  left:0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  max-height:min(58dvh,460px);
+  overflow:auto;
+  overscroll-behavior:contain;
+  padding:8px;
 }

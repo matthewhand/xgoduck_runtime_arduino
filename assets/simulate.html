@@ -1,21 +1,21 @@
 <!doctype html>
 <html lang="en" class="sim-page">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
   <title>Duck Lab · XGO Duck</title>
   <script>
     if (!location.search && !location.hash) location.replace('build-test.html');
     if (new URLSearchParams(location.search).get('stock') === '1') document.documentElement.classList.add('stock-view');
   </script>
-  <link rel="stylesheet" href="sim/sim.css?v=20">
+  <link rel="stylesheet" href="sim/sim.css?v=21">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
 <main>
   <div class="sim-workspace">
     <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="build-test.html">Build &amp; Test</a><a href="simulate.html?lab=1" class="lab-extra" aria-current="page">Simulation workspace</a><a href="simulate.html?stock=1" class="stock-only">Stock replay</a><a href="simulate.html?stock=1&amp;run=1" class="stock-only">Run on UNO Q</a></nav></header>
-    <div class="lab-layout">
+    <div class="lab-layout" id="sim-layout">
       <section class="stage-panel" aria-label="3D Duck workspace">
         <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit. Pinch or scroll to zoom.">
           <div id="loading" role="status"><strong>Duck Lab</strong><span id="loading-message">Loading the Duck’s CAD model…</span></div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div>
@@ -25,7 +25,10 @@
           </div>
           <div class="viewport-help">Drag to orbit <span>·</span> Pinch or scroll to zoom</div>
           <div class="dock-contact-overlay" id="dock-contact-overlay" hidden></div>
-          <button type="button" class="dock-overhead" id="dock-overhead" aria-pressed="false" hidden>Overhead</button>
+          <div class="viewport-actions">
+            <button type="button" class="dock-overhead" id="dock-overhead" aria-pressed="false" hidden>Overhead</button>
+            <button type="button" id="sim-fullscreen" hidden>Fullscreen</button>
+          </div>
         </div>
       </section>
       <details class="sim-controls" id="sim-controls">
@@ -222,5 +225,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=58"></script>
+<script type="module" src="sim/sim-ui.mjs?v=59"></script>
 </body></html>

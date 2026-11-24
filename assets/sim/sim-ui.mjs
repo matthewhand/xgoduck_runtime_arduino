@@ -16,11 +16,56 @@ const $ = id => document.getElementById(id);
 const query = new URLSearchParams(location.search);
 const stockView = query.get('stock') === '1';
 const viewport = $('viewport');
+const layout = $('sim-layout');
 const controls = $('sim-controls');
+const fullscreenButton = $('sim-fullscreen');
 const compactLayout = matchMedia('(max-width: 600px), (max-width: 960px) and (max-height: 500px)');
-const updateControlsLayout = () => { controls.open = !compactLayout.matches; };
+const updateControlsLayout = () => {
+  if (!layout.classList.contains('is-fullscreen')) controls.open = !compactLayout.matches;
+};
 compactLayout.addEventListener('change', updateControlsLayout);
 updateControlsLayout();
+
+let controlsBeforeFullscreen, compactBeforeFullscreen;
+let fullscreenPending = false;
+function setFullscreenLayout(active) {
+  if (layout.classList.contains('is-fullscreen') === active) return;
+  if (active) {
+    controlsBeforeFullscreen = controls.open;
+    compactBeforeFullscreen = compactLayout.matches;
+  }
+  layout.classList.toggle('is-fullscreen', active);
+  document.documentElement.classList.toggle('sim-fullscreen', active);
+  controls.open = !active && (compactLayout.matches === compactBeforeFullscreen ? controlsBeforeFullscreen : !compactLayout.matches);
+  fullscreenButton.textContent = active ? 'Exit fullscreen' : 'Fullscreen';
+  fullscreenButton.focus({preventScroll: true});
+}
+
+fullscreenButton.addEventListener('click', async () => {
+  if (fullscreenPending) return;
+  if (layout.classList.contains('is-fullscreen')) {
+    if (document.fullscreenElement === layout) await document.exitFullscreen();
+    else setFullscreenLayout(false);
+    return;
+  }
+  setFullscreenLayout(true);
+  if (!document.fullscreenEnabled || !layout.requestFullscreen) return;
+  fullscreenPending = true;
+  try { await layout.requestFullscreen(); }
+  catch { /* Keep the viewport-filling layout when native fullscreen is blocked. */ }
+  finally { fullscreenPending = false; }
+});
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement !== layout) setFullscreenLayout(false);
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !fullscreenPending && !document.fullscreenElement && layout.classList.contains('is-fullscreen')) {
+    event.preventDefault();
+    setFullscreenLayout(false);
+  }
+});
+fullscreenButton.hidden = false;
+
 const walk = new WalkPanel();
 const demo = new DemoCircuit(walk, showDemoScene, updateDemoStatus);
 const rolloutMode = name => name === 'walk' || name === 'explore';
