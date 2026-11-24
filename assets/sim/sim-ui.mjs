@@ -16,6 +16,11 @@ const $ = id => document.getElementById(id);
 const query = new URLSearchParams(location.search);
 const stockView = query.get('stock') === '1';
 const viewport = $('viewport');
+const controls = $('sim-controls');
+const compactLayout = matchMedia('(max-width: 600px), (max-width: 960px) and (max-height: 500px)');
+const updateControlsLayout = () => { controls.open = !compactLayout.matches; };
+compactLayout.addEventListener('change', updateControlsLayout);
+updateControlsLayout();
 const walk = new WalkPanel();
 const demo = new DemoCircuit(walk, showDemoScene, updateDemoStatus);
 const rolloutMode = name => name === 'walk' || name === 'explore';
@@ -1114,11 +1119,22 @@ function attachControls() {
   viewport.addEventListener('keydown', event => {
     if (event.code === 'Space' && !$('play').disabled && !$('play').hidden) { event.preventDefault(); $('play').click(); }
   });
-  let down = null;
-  renderer.domElement.addEventListener('pointerdown', event => { down = {x:event.clientX,y:event.clientY}; });
-  renderer.domElement.addEventListener('pointerup', event => {
-    if (mode === 'hardware' || mode === 'mods' || !down || Math.hypot(down.x-event.clientX,down.y-event.clientY)>5) return;
-    const rect = renderer.domElement.getBoundingClientRect();
+  const canvas = renderer.domElement;
+  let tap = null;
+  const moved = event => Math.hypot(tap.x - event.clientX, tap.y - event.clientY) > 5;
+  canvas.addEventListener('pointerdown', event => {
+    tap = event.isPrimary && event.button === 0 ? {id: event.pointerId, x: event.clientX, y: event.clientY} : null;
+  });
+  canvas.addEventListener('pointermove', event => {
+    if (tap?.id === event.pointerId && moved(event)) tap = null;
+  });
+  canvas.addEventListener('pointercancel', () => { tap = null; });
+  canvas.addEventListener('lostpointercapture', () => { tap = null; });
+  canvas.addEventListener('pointerup', event => {
+    const pick = tap?.id === event.pointerId && !moved(event);
+    tap = null;
+    if (!pick || mode === 'hardware' || mode === 'mods') return;
+    const rect = canvas.getBoundingClientRect();
     pointer.set((event.clientX-rect.left)/rect.width*2-1, -(event.clientY-rect.top)/rect.height*2+1);
     raycaster.setFromCamera(pointer,camera);
     const hit = raycaster.intersectObjects(visualMeshes).find(hit => hit.object.userData.jointId);
@@ -1176,7 +1192,8 @@ function frame(time) {
 
 async function start() {
   scene = new THREE.Scene(); scene.background = new THREE.Color('#0c1720');
-  camera = new THREE.PerspectiveCamera(36,1,0.005,12); camera.up.set(0,0,1);
+  const verticalFov = 36;
+  camera = new THREE.PerspectiveCamera(verticalFov,1,0.005,12); camera.up.set(0,0,1);
   renderer = new THREE.WebGPURenderer({antialias:true, alpha:false});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1186,7 +1203,10 @@ async function start() {
   $('engine-note').textContent = webgpu ? 'WebGPU graphics on this viewing device · Playground physics in browser · Walking policy on UNO Q'
     : `${window.isSecureContext ? 'This browser selected WebGL 2.' : 'Wi-Fi HTTP uses WebGL 2; open localhost over USB for WebGPU.'} The walking policy runs on the UNO Q CPU.`;
   viewport.prepend(renderer.domElement);
-  orbit = new OrbitControls(camera,renderer.domElement); orbit.enableDamping=true;
+  orbit = new OrbitControls(camera,renderer.domElement);
+  orbit.enableDamping = true;
+  orbit.touches.ONE = THREE.TOUCH.ROTATE;
+  orbit.touches.TWO = THREE.TOUCH.DOLLY_PAN;
   orbit.minDistance=0.15; orbit.maxDistance=1.8; orbit.maxPolarAngle=Math.PI*0.49; resetCamera();
   scene.add(new THREE.HemisphereLight('#e8f9ff','#294443',2.6));
   const light = new THREE.DirectionalLight('#fff3db',3.2); light.position.set(-0.3,-0.4,0.8); scene.add(light);
@@ -1205,7 +1225,12 @@ async function start() {
   buildSkateScene();
   const resize = new ResizeObserver(() => {
     const width = viewport.clientWidth, height = viewport.clientHeight;
-    camera.aspect=width/height; camera.updateProjectionMatrix(); renderer.setSize(width,height,false);
+    if (!width || !height) return;
+    camera.aspect = width / height;
+    const aspectScale = Math.max(1, .55 / camera.aspect);
+    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(verticalFov / 2)) * aspectScale));
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height, false);
   }); resize.observe(viewport);
   sim = stockSim = await DuckSimulation.create();
   replay = new QualificationReplay($('qualification-card'), sim.joints.map(joint => joint.id), showReplayTrial);

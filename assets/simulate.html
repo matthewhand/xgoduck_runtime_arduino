@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="sim-page">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="An XGO Duck workspace for poses, physics, walking policy trials and live telemetry.">
@@ -8,212 +8,219 @@
     if (!location.search && !location.hash) location.replace('build-test.html');
     if (new URLSearchParams(location.search).get('stock') === '1') document.documentElement.classList.add('stock-view');
   </script>
-  <link rel="stylesheet" href="sim/sim.css?v=16">
+  <link rel="stylesheet" href="sim/sim.css?v=20">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
 <main>
-  <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="build-test.html">Build &amp; Test</a><a href="simulate.html?lab=1" class="lab-extra" aria-current="page">Simulation workspace</a><a href="simulate.html?stock=1" class="stock-only">Stock replay</a><a href="simulate.html?stock=1&amp;run=1" class="stock-only">Run on UNO Q</a></nav></header>
-  <div class="lab-layout">
-    <section class="stage-panel" aria-label="3D Duck workspace">
-      <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="skates" aria-pressed="false" disabled>Skates</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button><button data-mode="hardware" aria-pressed="false" disabled>Hardware</button><button data-mode="mods" aria-pressed="false" disabled>Mods</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
-      <div class="hardware-views" id="hardware-views" role="group" aria-label="Backpack configuration" hidden>
-        <button type="button" data-assembly="cutout" aria-pressed="false">Open cut-out</button>
-        <button type="button" data-assembly="translucent" aria-pressed="true">Translucent window</button>
-        <button type="button" data-assembly="exploded" aria-pressed="false">Explode</button>
-        <button type="button" data-assembly="dock" aria-pressed="false">Dock</button>
-      </div>
-      <div class="dock-replay-selectors" id="dock-replay-selectors" hidden></div>
-      <div class="button-row skate-tools" id="skate-tools" role="group" aria-label="Roller skate controls" hidden>
-        <button id="roll-forward" class="primary">Roll forward</button><button id="explode-wheels" aria-pressed="false">Explode wheels</button>
-      </div>
-      <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit, scroll to zoom.">
-        <div id="loading" role="status"><strong>Duck Lab</strong><span id="loading-message">Loading the Duck’s CAD model…</span></div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div>
-        <div id="walk-hud" class="walk-hud" aria-label="Board load and missed slots" hidden>
-          <span>CPU <b id="hud-cpu">—</b></span><span>Top core <b id="hud-core">—</b></span><span>GPU <b id="hud-gpu">—</b></span>
-          <span>Misses <b id="hud-misses">—</b></span>
-        </div>
-        <div class="viewport-help">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div>
-        <div class="dock-contact-overlay" id="dock-contact-overlay" hidden></div>
-        <button type="button" class="dock-overhead" id="dock-overhead" aria-pressed="false" hidden>Overhead</button>
-      </div>
-      <div class="stage-toolbar" id="sim-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label id="physics-controller-label" hidden>Controller <select id="physics-controller"><option value="walk">Walking policy</option><option value="physics">Playground</option></select></label><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
-      <div class="hardware-toolbar" id="hardware-toolbar" role="group" aria-label="Inspect the backpack" hidden>
-        <button type="button" data-hardware-camera="rear">Rear view</button>
-        <button type="button" data-hardware-camera="matrix">Matrix close-up</button>
-        <button type="button" data-hardware-camera="side">Side view</button>
-        <label><input type="checkbox" id="hardware-test-pattern"> Light all LEDs</label>
-      </div>
-      <p class="mode-note" id="mode-note" aria-live="polite">Preparing the simulation…</p>
-      <section class="matrix-player" id="matrix-player" aria-labelledby="matrix-title">
-        <div class="matrix-heading"><h2 id="matrix-title">Back display</h2><span id="matrix-playing">Connecting…</span></div>
-        <div class="matrix-actions">
-          <select id="matrix-scenes" aria-label="Choose animation" disabled><option value="">Choose animation</option></select>
-          <button id="matrix-play" class="primary" disabled>Play</button>
-          <button id="matrix-skip" disabled>Next animation</button>
-        </div>
-        <p id="matrix-scene-error" class="muted" role="status" hidden></p>
-        <div class="matrix-readouts">
-          <button id="matrix-next" disabled>Matrix readout</button>
-          <label title="Show load after four clips or after a sustained 15 percentage point change"><input type="checkbox" id="matrix-auto" disabled> Automatic load flashes</label>
-          <span id="matrix-note" class="muted" role="status"></span>
-        </div>
-      </section>
-      <div class="stats" id="sim-stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
-    </section>
-    <aside class="controls-panel">
-      <section class="card" id="mods-card" hidden>
-        <div class="section-heading"><h2>Mods</h2><a href="attachments.html">Attachment studies ↗</a></div>
-        <label class="toggle"><input type="checkbox" id="mod-pack" checked> Top-entry charging backpack</label>
-        <label class="toggle"><input type="checkbox" id="mod-tail"> Articulated tail backpack</label>
-        <div id="mod-tail-controls" hidden>
-          <label class="toggle"><input type="checkbox" id="mod-tail-play"> Loop recorded trial</label>
-          <p class="muted" id="mod-tail-note" role="status"></p>
-        </div>
-        <label class="toggle"><input type="checkbox" id="mod-skates"> Roller skates</label>
-        <label class="toggle" id="mod-trace-label"><input type="checkbox" id="mod-trace" checked> See wiring through cover</label>
-        <p id="mod-pack-id" class="muted" hidden><a href="sim/pack-id.png" target="_blank" rel="noopener">Reader and tag placement ↗</a> · Optional NFC mount design. Pack detection awaits firmware support.</p>
-        <p class="muted" id="mod-routing">Orange and blue show the two contact paths through the removable connector to the carrier charge inlet. Component positions are proposed.</p>
-        <label class="toggle"><input type="checkbox" id="mod-teeth"> Dinosaur teeth</label>
-        <label class="toggle"><input type="checkbox" id="mod-tusks"> Tusks</label>
-        <p id="mod-tusk-camera" hidden><a href="sim/tusk-camera.png" target="_blank" rel="noopener">Predicted camera view ↗</a></p>
-        <label for="mod-skin">Shell pattern</label>
-        <select id="mod-skin"><option value="plain">Plain</option><option value="feather">Feather</option><option value="orbit">Orbit</option><option value="chevron">Chevron</option></select>
-        <p id="mod-jaw-mass" class="muted" hidden></p>
-        <p id="mod-skin-note" class="muted" hidden>Flush patterns share the stock mass assumption for the same polymer and print settings.</p>
-        <p id="mod-mass"></p>
-        <details id="mod-bill"><summary>Added mass breakdown</summary><dl class="hardware-legend" id="mod-components"></dl></details>
-        <h3>Board policy</h3>
-        <p id="mod-status" role="status"></p>
-        <p class="muted" id="mod-board"></p>
-      </section>
-      <section class="card hardware-card" id="hardware-card" hidden>
-        <div class="section-heading"><h2>V5 board shroud</h2><a class="muted hardware-source" href="https://github.com/LuwuDynamics/xgoduck_hardware/tree/master/structure/V5_AUDIO_VIDEO_" target="_blank" rel="noopener">V5 parts ↗</a></div>
-        <p id="hardware-note" role="status">The optional translucent window covers the display opening. Air can still pass around the open edges.</p>
-        <div id="dock-controls" hidden>
-          <label class="range-label" for="dock-design">Guide design</label>
-          <select id="dock-design"></select>
-          <p><button type="button" class="primary" id="dock-replay">Play dock trials</button></p>
-        </div>
-        <dl class="hardware-legend">
-          <div><dt>Matrix</dt><dd>The LEDs face through the blue carrier’s cut-out. Use the close-up to look straight through both openings.</dd></div>
-          <div><dt>Open edges</dt><dd>Standoffs leave air and cable paths around the stack. Check finger room at the white UNO Q button on the actual build.</dd></div>
-          <div><dt>Expansion</dt><dd>The carrier occupies the Arduino headers. Explode the stack to see where a future breakout would connect.</dd></div>
-        </dl>
-        <p class="muted">Check fit, USB-C and button clearance, roll contact, and window readability on the assembled V5 before printing the final part.</p>
-      </section>
-      <section class="card" id="qualification-card" hidden>
-        <div class="section-heading"><h2 id="qualification-title">Qualification replay</h2></div>
-        <div class="button-row">
-          <button type="button" id="qualification-open">Open recording</button>
-          <input id="qualification-file" type="file" accept=".json,application/json" hidden>
-        </div>
-        <p class="muted" id="qualification-status" role="status">Choose a qualification JSON report with a recorded trace. It stays on this device.</p>
-        <div id="qualification-controls" hidden>
-          <div id="qualification-selectors">
-            <div id="qualification-case-field">
-              <label class="range-label" for="qualification-case">Entry</label>
-              <select id="qualification-case"></select>
-            </div>
-            <div id="qualification-variant-field">
-              <label class="range-label" for="qualification-variant">Design</label>
-              <select id="qualification-variant"></select>
-            </div>
-            <label id="qualification-alternate-label" class="qualification-alternate" hidden><input id="qualification-alternate" type="checkbox"> Cycle through trials</label>
+  <div class="sim-workspace">
+    <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="build-test.html">Build &amp; Test</a><a href="simulate.html?lab=1" class="lab-extra" aria-current="page">Simulation workspace</a><a href="simulate.html?stock=1" class="stock-only">Stock replay</a><a href="simulate.html?stock=1&amp;run=1" class="stock-only">Run on UNO Q</a></nav></header>
+    <div class="lab-layout">
+      <section class="stage-panel" aria-label="3D Duck workspace">
+        <div id="viewport" tabindex="0" aria-label="3D Duck. Drag to orbit. Pinch or scroll to zoom.">
+          <div id="loading" role="status"><strong>Duck Lab</strong><span id="loading-message">Loading the Duck’s CAD model…</span></div><div class="scene-label"><span class="status-dot"></span><span id="scene-mode">POSE WORKSPACE</span></div>
+          <div id="walk-hud" class="walk-hud" aria-label="Board load and missed slots" hidden>
+            <span>CPU <b id="hud-cpu">—</b></span><span>Top core <b id="hud-core">—</b></span><span>GPU <b id="hud-gpu">—</b></span>
+            <span>Misses <b id="hud-misses">—</b></span>
           </div>
-          <div class="button-row qualification-switch"><button type="button" id="qualification-stock">Show variant</button></div>
-          <label class="range-label" for="qualification-seek">Timeline <output id="qualification-time" for="qualification-seek">0.00 s</output></label>
-          <input id="qualification-seek" type="range" min="0" max="0" step="any" value="0">
-          <div class="button-row" id="qualification-events"></div>
-          <label class="range-label" for="qualification-speed">Playback speed</label>
-          <select id="qualification-speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Real time</option><option value="2">2× speed</option></select>
-          <dl class="walk-metrics qualification-position">
-            <div><dt>Phase</dt><dd id="qualification-phase">—</dd></div>
-            <div><dt>Footfalls</dt><dd id="qualification-footfalls">—</dd></div>
-            <div id="qualification-contact-field" class="qualification-contact" hidden><dt>Accessory contact</dt><dd id="qualification-contact">—</dd></div>
-            <div id="qualification-pushoff-field" class="qualification-contact" hidden><dt>Push-off contact</dt><dd id="qualification-pushoff">—</dd></div>
-          </dl>
-          <table class="qualification-summary" aria-label="Recorded qualification results">
-            <thead><tr id="qualification-head"></tr></thead>
-            <tbody id="qualification-metrics"></tbody>
-          </table>
+          <div class="viewport-help">Drag to orbit <span>·</span> Pinch or scroll to zoom</div>
+          <div class="dock-contact-overlay" id="dock-contact-overlay" hidden></div>
+          <button type="button" class="dock-overhead" id="dock-overhead" aria-pressed="false" hidden>Overhead</button>
         </div>
       </section>
-      <section class="card" id="demo-card" hidden>
-        <div class="section-heading"><h2>Demo circuit</h2><span id="demo-progress">LOOP</span></div>
-        <p id="demo-state" role="status">Starting the demo…</p>
-        <div class="button-row"><button id="demo-toggle">Stop demo</button></div>
-        <p class="muted">Poses, step cycle, roller skate glide, drop test, and live telemetry. Walk and beacon hunt join the loop when the UNO Q worker is available.</p>
-      </section>
-      <section class="card" id="walk-card" hidden>
-        <div class="section-heading"><h2 id="walk-title">Walking policy</h2><span>UNO Q CPU</span></div>
-        <div id="walk-inputs">
-          <label class="range-label" for="walk-vx">Forward speed <output id="walk-vx-value">0.20 m/s</output></label>
-          <input id="walk-vx" type="range" min="-0.25" max="0.3" step="0.05" value="0.2">
-          <label class="range-label" for="walk-yaw">Turn rate <output id="walk-yaw-value">0.00 rad/s</output></label>
-          <input id="walk-yaw" type="range" min="-1" max="1" step="0.1" value="0">
+      <details class="sim-controls" id="sim-controls">
+        <summary>Simulation controls</summary>
+        <div class="sim-controls-content controls-panel">
+          <section class="sim-setup" aria-label="Workspace settings">
+            <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="skates" aria-pressed="false" disabled>Skates</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button><button data-mode="hardware" aria-pressed="false" disabled>Hardware</button><button data-mode="mods" aria-pressed="false" disabled>Mods</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
+            <div class="hardware-views" id="hardware-views" role="group" aria-label="Backpack configuration" hidden>
+              <button type="button" data-assembly="cutout" aria-pressed="false">Open cut-out</button>
+              <button type="button" data-assembly="translucent" aria-pressed="true">Translucent window</button>
+              <button type="button" data-assembly="exploded" aria-pressed="false">Explode</button>
+              <button type="button" data-assembly="dock" aria-pressed="false">Dock</button>
+            </div>
+            <div class="dock-replay-selectors" id="dock-replay-selectors" hidden></div>
+            <div class="button-row skate-tools" id="skate-tools" role="group" aria-label="Roller skate controls" hidden>
+              <button id="roll-forward" class="primary">Roll forward</button><button id="explode-wheels" aria-pressed="false">Explode wheels</button>
+            </div>
+            <div class="stage-toolbar" id="sim-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label id="physics-controller-label" hidden>Controller <select id="physics-controller"><option value="walk">Walking policy</option><option value="physics">Playground</option></select></label><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
+            <div class="hardware-toolbar" id="hardware-toolbar" role="group" aria-label="Inspect the backpack" hidden>
+              <button type="button" data-hardware-camera="rear">Rear view</button>
+              <button type="button" data-hardware-camera="matrix">Matrix close-up</button>
+              <button type="button" data-hardware-camera="side">Side view</button>
+              <label><input type="checkbox" id="hardware-test-pattern"> Light all LEDs</label>
+            </div>
+            <p class="mode-note" id="mode-note" aria-live="polite">Preparing the simulation…</p>
+          </section>
+          <section class="card" id="mods-card" hidden>
+            <div class="section-heading"><h2>Mods</h2><a href="attachments.html">Attachment studies ↗</a></div>
+            <label class="toggle"><input type="checkbox" id="mod-pack" checked> Top-entry charging backpack</label>
+            <label class="toggle"><input type="checkbox" id="mod-tail"> Articulated tail backpack</label>
+            <div id="mod-tail-controls" hidden>
+              <label class="toggle"><input type="checkbox" id="mod-tail-play"> Loop recorded trial</label>
+              <p class="muted" id="mod-tail-note" role="status"></p>
+            </div>
+            <label class="toggle"><input type="checkbox" id="mod-skates"> Roller skates</label>
+            <label class="toggle" id="mod-trace-label"><input type="checkbox" id="mod-trace" checked> See wiring through cover</label>
+            <p id="mod-pack-id" class="muted" hidden><a href="sim/pack-id.png" target="_blank" rel="noopener">Reader and tag placement ↗</a> · Optional NFC mount design. Pack detection awaits firmware support.</p>
+            <p class="muted" id="mod-routing">Orange and blue show the two contact paths through the removable connector to the carrier charge inlet. Component positions are proposed.</p>
+            <label class="toggle"><input type="checkbox" id="mod-teeth"> Dinosaur teeth</label>
+            <label class="toggle"><input type="checkbox" id="mod-tusks"> Tusks</label>
+            <p id="mod-tusk-camera" hidden><a href="sim/tusk-camera.png" target="_blank" rel="noopener">Predicted camera view ↗</a></p>
+            <label for="mod-skin">Shell pattern</label>
+            <select id="mod-skin"><option value="plain">Plain</option><option value="feather">Feather</option><option value="orbit">Orbit</option><option value="chevron">Chevron</option></select>
+            <p id="mod-jaw-mass" class="muted" hidden></p>
+            <p id="mod-skin-note" class="muted" hidden>Flush patterns share the stock mass assumption for the same polymer and print settings.</p>
+            <p id="mod-mass"></p>
+            <details id="mod-bill"><summary>Added mass breakdown</summary><dl class="hardware-legend" id="mod-components"></dl></details>
+            <h3>Board policy</h3>
+            <p id="mod-status" role="status"></p>
+            <p class="muted" id="mod-board"></p>
+          </section>
+          <section class="card hardware-card" id="hardware-card" hidden>
+            <div class="section-heading"><h2>V5 board shroud</h2><a class="muted hardware-source" href="https://github.com/LuwuDynamics/xgoduck_hardware/tree/master/structure/V5_AUDIO_VIDEO_" target="_blank" rel="noopener">V5 parts ↗</a></div>
+            <p id="hardware-note" role="status">The optional translucent window covers the display opening. Air can still pass around the open edges.</p>
+            <div id="dock-controls" hidden>
+              <label class="range-label" for="dock-design">Guide design</label>
+              <select id="dock-design"></select>
+              <p><button type="button" class="primary" id="dock-replay">Play dock trials</button></p>
+            </div>
+            <dl class="hardware-legend">
+              <div><dt>Matrix</dt><dd>The LEDs face through the blue carrier’s cut-out. Use the close-up to look straight through both openings.</dd></div>
+              <div><dt>Open edges</dt><dd>Standoffs leave air and cable paths around the stack. Check finger room at the white UNO Q button on the actual build.</dd></div>
+              <div><dt>Expansion</dt><dd>The carrier occupies the Arduino headers. Explode the stack to see where a future breakout would connect.</dd></div>
+            </dl>
+            <p class="muted">Check fit, USB-C and button clearance, roll contact, and window readability on the assembled V5 before printing the final part.</p>
+          </section>
+          <section class="card" id="qualification-card" hidden>
+            <div class="section-heading"><h2 id="qualification-title">Qualification replay</h2></div>
+            <div class="button-row">
+              <button type="button" id="qualification-open">Open recording</button>
+              <input id="qualification-file" type="file" accept=".json,application/json" hidden>
+            </div>
+            <p class="muted" id="qualification-status" role="status">Choose a qualification JSON report with a recorded trace. It stays on this device.</p>
+            <div id="qualification-controls" hidden>
+              <div id="qualification-selectors">
+                <div id="qualification-case-field">
+                  <label class="range-label" for="qualification-case">Entry</label>
+                  <select id="qualification-case"></select>
+                </div>
+                <div id="qualification-variant-field">
+                  <label class="range-label" for="qualification-variant">Design</label>
+                  <select id="qualification-variant"></select>
+                </div>
+                <label id="qualification-alternate-label" class="qualification-alternate" hidden><input id="qualification-alternate" type="checkbox"> Cycle through trials</label>
+              </div>
+              <div class="button-row qualification-switch"><button type="button" id="qualification-stock">Show variant</button></div>
+              <label class="range-label" for="qualification-seek">Timeline <output id="qualification-time" for="qualification-seek">0.00 s</output></label>
+              <input id="qualification-seek" type="range" min="0" max="0" step="any" value="0">
+              <div class="button-row" id="qualification-events"></div>
+              <label class="range-label" for="qualification-speed">Playback speed</label>
+              <select id="qualification-speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Real time</option><option value="2">2× speed</option></select>
+              <dl class="walk-metrics qualification-position">
+                <div><dt>Phase</dt><dd id="qualification-phase">—</dd></div>
+                <div><dt>Footfalls</dt><dd id="qualification-footfalls">—</dd></div>
+                <div id="qualification-contact-field" class="qualification-contact" hidden><dt>Accessory contact</dt><dd id="qualification-contact">—</dd></div>
+                <div id="qualification-pushoff-field" class="qualification-contact" hidden><dt>Push-off contact</dt><dd id="qualification-pushoff">—</dd></div>
+              </dl>
+              <table class="qualification-summary" aria-label="Recorded qualification results">
+                <thead><tr id="qualification-head"></tr></thead>
+                <tbody id="qualification-metrics"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="card" id="demo-card" hidden>
+            <div class="section-heading"><h2>Demo circuit</h2><span id="demo-progress">LOOP</span></div>
+            <p id="demo-state" role="status">Starting the demo…</p>
+            <div class="button-row"><button id="demo-toggle">Stop demo</button></div>
+            <p class="muted">Poses, step cycle, roller skate glide, drop test, and live telemetry. Walk and beacon hunt join the loop when the UNO Q worker is available.</p>
+          </section>
+          <section class="card" id="walk-card" hidden>
+            <div class="section-heading"><h2 id="walk-title">Walking policy</h2><span>UNO Q CPU</span></div>
+            <div id="walk-inputs">
+              <label class="range-label" for="walk-vx">Forward speed <output id="walk-vx-value">0.20 m/s</output></label>
+              <input id="walk-vx" type="range" min="-0.25" max="0.3" step="0.05" value="0.2">
+              <label class="range-label" for="walk-yaw">Turn rate <output id="walk-yaw-value">0.00 rad/s</output></label>
+              <input id="walk-yaw" type="range" min="-1" max="1" step="0.1" value="0">
+            </div>
+            <div id="search-inputs" hidden>
+              <label class="range-label" for="search-arena">Arena layout</label>
+              <select id="search-arena"><option value="north">North passage</option><option value="south">South passage</option></select>
+            </div>
+            <div id="walk-action-buttons" class="button-row walk-buttons"><button id="walk-start" class="primary" disabled>Run 20 s</button><button id="walk-stop" disabled>Stop</button></div>
+            <p class="muted" id="walk-state" role="status">Checking the UNO Q…</p>
+            <div id="walk-push-controls">
+              <div id="walk-push-buttons" class="button-row walk-buttons" role="group" aria-label="Push the simulated Duck">
+                <button data-walk-push="poke" disabled>Poke</button><button data-walk-push="nudge" disabled>Nudge</button><button data-walk-push="bash" disabled>Bash</button>
+              </div>
+              <p class="muted" id="walk-push-state" role="status">Poke and Nudge test balance. Bash can knock the Duck over.</p>
+            </div>
+            <div id="search-map-panel" hidden>
+              <div class="section-heading load-heading"><h3>Duck’s range map</h3><span id="search-coverage">AWAITING SCAN</span></div>
+              <canvas id="search-map" width="360" height="240" role="img" aria-label="Observed floor, walls, and the Duck’s route through the arena"></canvas>
+              <ul class="search-key" aria-label="Range map legend">
+                <li>Unknown</li><li>Seen floor</li><li>Wall</li><li>Trail</li><li>Waypoint</li><li>Beacon</li>
+              </ul>
+            </div>
+            <dl class="walk-metrics">
+              <div><dt>Policy rate</dt><dd id="walk-hz">—</dd></div>
+              <div><dt>ONNX average</dt><dd id="walk-inference">—</dd></div>
+              <div title="95th percentile of recent policy and physics work; the slot budget is 20 ms"><dt>Slot work p95</dt><dd id="walk-work">—</dd></div>
+              <div><dt>Distance travelled</dt><dd id="walk-path">—</dd></div>
+              <div title="Rollout slots skipped to keep pace with wall time"><dt>Missed sim slots</dt><dd id="walk-missed">—</dd></div>
+              <div title="Change in the real Duck runtime’s Linux missed-slot counter during this trial"><dt>Missed Duck slots</dt><dd id="walk-duck-missed">—</dd></div>
+            </dl>
+            <div class="button-row walk-buttons" id="walk-export-actions"><button id="walk-export" disabled>Export trial</button><span class="muted" id="walk-export-result" role="status"></span></div>
+            <div class="section-heading load-heading"><h3>Board load</h3><span>LAST 30 SECONDS</span></div>
+            <svg class="walk-graph" viewBox="0 0 290 70" role="img" aria-label="UNO Q CPU, busiest CPU core, and Adreno GPU load over time" preserveAspectRatio="none">
+              <path class="grid-lines" d="M0 2H290 M0 35H290 M0 68H290"/>
+              <path id="walk-core-path" class="graph-core"/><path id="walk-cpu-path" class="graph-cpu"/><path id="walk-gpu-path" class="graph-gpu"/>
+            </svg>
+            <dl class="walk-legend"><div class="graph-cpu"><dt>CPU</dt><dd id="walk-cpu">—</dd></div><div class="graph-core"><dt>Top core</dt><dd id="walk-core">—</dd></div><div class="graph-gpu"><dt>GPU</dt><dd id="walk-gpu">—</dd></div></dl>
+          </section>
+          <section class="card" id="pose-card"><div class="section-heading"><h2>Try a pose</h2><span>01</span></div><div class="preset-grid"><button data-preset="STAND" disabled>Stand</button><button data-preset="SIT" disabled>Sit</button><button data-preset="FOLD" disabled>Fold</button><button id="gait" disabled>Step cycle</button></div><p class="muted" id="preset-note">Exact joint frames and limits from Luwu’s model.</p></section>
+          <section class="card" id="physics-card" hidden>
+            <div class="section-heading"><h2 id="physics-title">Physics playground</h2></div>
+            <div id="skate-settings" hidden>
+              <label class="range-label" for="skate-surface">Surface</label>
+              <select id="skate-surface"><option value="flat">Smooth floor</option><option value="tiles">450 mm tiles · 5 mm grout</option><option value="tiles-xl">600 mm tiles · 5 mm grout</option><option value="carpet">Carpet · rolling drag</option><option value="bumps">Thresholds · 6 and 12 mm</option></select>
+              <label class="range-label" for="tow-mount">Tow attachment point</label>
+              <select id="tow-mount"><option value="mouth">Mouth hook</option><option value="chassis">Low chassis hitch</option></select>
+              <div class="button-row walk-buttons"><button id="start-tow">Run tow test</button></div>
+              <p id="tow-status" class="muted" role="status">The simulated hitch releases at 1.5 N.</p>
+            </div>
+            <div class="button-row"><button id="drop">Drop test</button><button id="nudge">Nudge</button><button id="step">Step 20 ms</button></div>
+            <label class="toggle"><input id="hold" type="checkbox"> Hold joint targets <span>viewer PD</span></label>
+            <label class="range-label" for="gravity">Gravity <output id="gravity-value">9.81 m/s²</output></label><input id="gravity" type="range" min="0" max="15" value="9.81" step="0.01">
+            <label class="range-label" for="friction">Floor friction <output id="friction-value">1.00</output></label><input id="friction" type="range" min="0.1" max="2" value="1" step="0.05">
+            <label class="range-label" for="speed">Simulation speed</label><select id="speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Real time</option></select>
+            <p class="muted">Gravity and contacts run in MuJoCo on this browser’s CPU. Viewer PD approximates servos. Training uses BAM actuator models.</p>
+          </section>
+          <section class="card" id="live-card" hidden><div class="section-heading"><h2>Read the real Duck</h2><span>02</span></div><label class="range-label" for="live-source">Display source</label><select id="live-source"><option value="targets">Commanded targets</option><option value="measured">Measured joint angles</option></select><p id="live-health" class="muted" role="status">Waiting for board telemetry…</p><p class="muted">Position is anchored in this view. IMU gravity provides roll and pitch when available; yaw and world position are not measured.</p></section>
+          <section class="matrix-player" id="matrix-player" aria-labelledby="matrix-title">
+            <div class="matrix-heading"><h2 id="matrix-title">Back display</h2><span id="matrix-playing">Connecting…</span></div>
+            <div class="matrix-actions">
+              <select id="matrix-scenes" aria-label="Choose animation" disabled><option value="">Choose animation</option></select>
+              <button id="matrix-play" class="primary" disabled>Play</button>
+              <button id="matrix-skip" disabled>Next animation</button>
+            </div>
+            <p id="matrix-scene-error" class="muted" role="status" hidden></p>
+            <div class="matrix-readouts">
+              <button id="matrix-next" disabled>Matrix readout</button>
+              <label title="Show load after four clips or after a sustained 15 percentage point change"><input type="checkbox" id="matrix-auto" disabled> Automatic load flashes</label>
+              <span id="matrix-note" class="muted" role="status"></span>
+            </div>
+          </section>
+          <div class="stats" id="sim-stats"><div><small>RENDER</small><strong id="fps">—</strong><span>frames / sec</span></div><div><small id="clock-label">SIM TIME</small><strong id="sim-time">0.00</strong><span>seconds</span></div><div><small>CONTACTS</small><strong id="contacts">0</strong><span>MuJoCo contacts</span></div><div><small>BODY HEIGHT</small><strong id="height">—</strong><span>centimetres</span></div></div>
+          <section class="card joint-card" id="joint-card"><div class="section-heading"><h2>Joint inspector</h2><span id="joint-count">14 DOF</span></div><p class="muted">Select a part in 3D or adjust its angle below.</p><div id="joint-controls"></div><p class="muted small-note">Motor 34 (mouth) is absent from the upstream model.</p><div class="button-row"><button id="export" disabled>Save pose</button><button id="import" disabled>Load pose</button><input id="pose-file" type="file" accept=".json,application/json" hidden></div><p id="pose-message" class="muted" role="status"></p></section>
         </div>
-        <div id="search-inputs" hidden>
-          <label class="range-label" for="search-arena">Arena layout</label>
-          <select id="search-arena"><option value="north">North passage</option><option value="south">South passage</option></select>
-        </div>
-        <div id="walk-action-buttons" class="button-row walk-buttons"><button id="walk-start" class="primary" disabled>Run 20 s</button><button id="walk-stop" disabled>Stop</button></div>
-        <p class="muted" id="walk-state" role="status">Checking the UNO Q…</p>
-        <div id="walk-push-controls">
-          <div id="walk-push-buttons" class="button-row walk-buttons" role="group" aria-label="Push the simulated Duck">
-            <button data-walk-push="poke" disabled>Poke</button><button data-walk-push="nudge" disabled>Nudge</button><button data-walk-push="bash" disabled>Bash</button>
-          </div>
-          <p class="muted" id="walk-push-state" role="status">Poke and Nudge test balance. Bash can knock the Duck over.</p>
-        </div>
-        <div id="search-map-panel" hidden>
-          <div class="section-heading load-heading"><h3>Duck’s range map</h3><span id="search-coverage">AWAITING SCAN</span></div>
-          <canvas id="search-map" width="360" height="240" role="img" aria-label="Observed floor, walls, and the Duck’s route through the arena"></canvas>
-          <ul class="search-key" aria-label="Range map legend">
-            <li>Unknown</li><li>Seen floor</li><li>Wall</li><li>Trail</li><li>Waypoint</li><li>Beacon</li>
-          </ul>
-        </div>
-        <dl class="walk-metrics">
-          <div><dt>Policy rate</dt><dd id="walk-hz">—</dd></div>
-          <div><dt>ONNX average</dt><dd id="walk-inference">—</dd></div>
-          <div title="95th percentile of recent policy and physics work; the slot budget is 20 ms"><dt>Slot work p95</dt><dd id="walk-work">—</dd></div>
-          <div><dt>Distance travelled</dt><dd id="walk-path">—</dd></div>
-          <div title="Rollout slots skipped to keep pace with wall time"><dt>Missed sim slots</dt><dd id="walk-missed">—</dd></div>
-          <div title="Change in the real Duck runtime’s Linux missed-slot counter during this trial"><dt>Missed Duck slots</dt><dd id="walk-duck-missed">—</dd></div>
-        </dl>
-        <div class="button-row walk-buttons" id="walk-export-actions"><button id="walk-export" disabled>Export trial</button><span class="muted" id="walk-export-result" role="status"></span></div>
-        <div class="section-heading load-heading"><h3>Board load</h3><span>LAST 30 SECONDS</span></div>
-        <svg class="walk-graph" viewBox="0 0 290 70" role="img" aria-label="UNO Q CPU, busiest CPU core, and Adreno GPU load over time" preserveAspectRatio="none">
-          <path class="grid-lines" d="M0 2H290 M0 35H290 M0 68H290"/>
-          <path id="walk-core-path" class="graph-core"/><path id="walk-cpu-path" class="graph-cpu"/><path id="walk-gpu-path" class="graph-gpu"/>
-        </svg>
-        <dl class="walk-legend"><div class="graph-cpu"><dt>CPU</dt><dd id="walk-cpu">—</dd></div><div class="graph-core"><dt>Top core</dt><dd id="walk-core">—</dd></div><div class="graph-gpu"><dt>GPU</dt><dd id="walk-gpu">—</dd></div></dl>
-      </section>
-      <section class="card" id="pose-card"><div class="section-heading"><h2>Try a pose</h2><span>01</span></div><div class="preset-grid"><button data-preset="STAND" disabled>Stand</button><button data-preset="SIT" disabled>Sit</button><button data-preset="FOLD" disabled>Fold</button><button id="gait" disabled>Step cycle</button></div><p class="muted" id="preset-note">Exact joint frames and limits from Luwu’s model.</p></section>
-      <section class="card" id="physics-card" hidden>
-        <div class="section-heading"><h2 id="physics-title">Physics playground</h2></div>
-        <div id="skate-settings" hidden>
-          <label class="range-label" for="skate-surface">Surface</label>
-          <select id="skate-surface"><option value="flat">Smooth floor</option><option value="tiles">450 mm tiles · 5 mm grout</option><option value="tiles-xl">600 mm tiles · 5 mm grout</option><option value="carpet">Carpet · rolling drag</option><option value="bumps">Thresholds · 6 and 12 mm</option></select>
-          <label class="range-label" for="tow-mount">Tow attachment point</label>
-          <select id="tow-mount"><option value="mouth">Mouth hook</option><option value="chassis">Low chassis hitch</option></select>
-          <div class="button-row walk-buttons"><button id="start-tow">Run tow test</button></div>
-          <p id="tow-status" class="muted" role="status">The simulated hitch releases at 1.5 N.</p>
-        </div>
-        <div class="button-row"><button id="drop">Drop test</button><button id="nudge">Nudge</button><button id="step">Step 20 ms</button></div>
-        <label class="toggle"><input id="hold" type="checkbox"> Hold joint targets <span>viewer PD</span></label>
-        <label class="range-label" for="gravity">Gravity <output id="gravity-value">9.81 m/s²</output></label><input id="gravity" type="range" min="0" max="15" value="9.81" step="0.01">
-        <label class="range-label" for="friction">Floor friction <output id="friction-value">1.00</output></label><input id="friction" type="range" min="0.1" max="2" value="1" step="0.05">
-        <label class="range-label" for="speed">Simulation speed</label><select id="speed"><option value="0.25">¼ speed</option><option value="0.5">½ speed</option><option value="1" selected>Real time</option></select>
-        <p class="muted">Gravity and contacts run in MuJoCo on this browser’s CPU. Viewer PD approximates servos. Training uses BAM actuator models.</p>
-      </section>
-      <section class="card" id="live-card" hidden><div class="section-heading"><h2>Read the real Duck</h2><span>02</span></div><label class="range-label" for="live-source">Display source</label><select id="live-source"><option value="targets">Commanded targets</option><option value="measured">Measured joint angles</option></select><p id="live-health" class="muted" role="status">Waiting for board telemetry…</p><p class="muted">Position is anchored in this view. IMU gravity provides roll and pitch when available; yaw and world position are not measured.</p></section>
-      <section class="card joint-card" id="joint-card"><div class="section-heading"><h2>Joint inspector</h2><span id="joint-count">14 DOF</span></div><p class="muted">Select a part in 3D or adjust its angle below.</p><div id="joint-controls"></div><p class="muted small-note">Motor 34 (mouth) is absent from the upstream model.</p><div class="button-row"><button id="export" disabled>Save pose</button><button id="import" disabled>Load pose</button><input id="pose-file" type="file" accept=".json,application/json" hidden></div><p id="pose-message" class="muted" role="status"></p></section>
-    </aside>
+      </details>
+    </div>
   </div>
   <section class="board-strip" id="board-strip" aria-label="Board telemetry"><div><span class="status-dot" id="board-dot"></span><strong>UNO Q</strong><span id="board-state">Connecting…</span></div><div>Feedback <strong id="board-feedback">—</strong></div><div>Servos <strong id="board-servos">—</strong></div><div>Board CPU <strong id="board-cpu">—</strong></div><div>Board GPU <strong id="board-gpu">—</strong></div><div>Missed Linux slots <strong id="board-missed">—</strong></div><div id="board-torque">Torque status unknown</div></section>
   <footer><span id="engine-note">Graphics run on the viewing device. The UNO Q serves the app.</span><span>MuJoCo 3.12 · Three.js r187 · <a href="sim/NOTICE.txt">Sources &amp; licenses</a></span><a href="experimental.html">Experimental</a></footer>
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=56"></script>
+<script type="module" src="sim/sim-ui.mjs?v=58"></script>
 </body></html>
