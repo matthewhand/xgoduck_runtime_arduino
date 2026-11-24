@@ -17,13 +17,14 @@ APP = Path.home() / 'ArduinoApps/xgo-duck'
 ROOT_ASSETS = ('index.html', 'calibrate.html', 'calibrate.js', 'servo.html', 'servo.js',
                'sim/physical-trial.mjs', 'sim/trial-report.mjs')
 LAB_ASSETS = (
+    'bench.html', 'sim/bench-data.mjs', 'sim/bench-ui.mjs', 'sim/bench.css',
     'sim/sim.css', 'sim/lab-entry.css', 'sim/matrix-ui.mjs', 'sim/build-test.mjs', 'sim/trial-report.mjs',
     'sim/stock-replay.json', 'sim/v5-receiver-rail-fit-u1.3mf',
     'sim/v5-torso-backpack-fit-u1.3mf', 'sim/sim-ui.mjs', 'sim/walk-ui.mjs', 'experimental.html',
     'build-test.html', 'simulate.html',
 )
 COMPANION_PAGES = ('attachments.html', 'camera-replay.html', 'dock-vision.html', 'tail-sizing.html')
-ALIASES = ('simulate.html', 'build-test.html', 'experimental.html', *COMPANION_PAGES)
+ALIASES = ('simulate.html', 'build-test.html', 'experimental.html', 'bench.html', *COMPANION_PAGES)
 BACKEND = ('python/main.py', 'python/controller.py', 'python/walk_lab.py')
 MANAGED_BACKEND = ('python/physical_trial.py',)
 EXPERIMENT_BASE = (*COMPANION_PAGES, 'sim/qualification-replay.mjs',

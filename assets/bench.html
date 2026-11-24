@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bench diagnostics · Duck Lab</title>
+  <link rel="stylesheet" href="sim/sim.css?v=16">
+  <link rel="stylesheet" href="sim/lab-entry.css?v=3">
+  <link rel="stylesheet" href="sim/bench.css?v=1">
+</head>
+<body>
+<main class="lab-entry">
+  <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="build-test.html">Build &amp; Test</a></nav></header>
+  <div class="bench-heading">
+    <h1>Bench diagnostics</h1>
+    <p id="bench-link-state" role="status">Connecting to the UNO Q…</p>
+  </div>
+  <div class="bench-grid">
+    <section class="card" aria-labelledby="bench-controller-title">
+      <h2 id="bench-controller-title">Controller</h2>
+      <dl class="bench-readings">
+        <div><dt>Feedback</dt><dd id="bench-rate">—</dd></div>
+        <div><dt>Frame age</dt><dd id="bench-age">—</dd></div>
+        <div><dt>Torque</dt><dd id="bench-torque">—</dd></div>
+        <div><dt>Linux misses</dt><dd id="bench-misses">—</dd></div>
+        <div><dt>STM32 overruns</dt><dd id="bench-overruns">—</dd></div>
+      </dl>
+      <p id="bench-controller-error" class="bench-error" hidden></p>
+    </section>
+    <section class="card" aria-labelledby="bench-servo-title">
+      <h2 id="bench-servo-title">Servo bus</h2>
+      <dl class="bench-readings">
+        <div><dt>Expected IDs online</dt><dd id="bench-servo-count">—</dd></div>
+        <div><dt>Servo voltage</dt><dd id="bench-voltage">—</dd></div>
+      </dl>
+      <div class="bench-id-group"><h3>Detected</h3><p id="bench-servo-detected">—</p></div>
+      <div class="bench-id-group"><h3>Missing</h3><p id="bench-servo-missing">—</p></div>
+      <div id="bench-unexpected-group" class="bench-id-group" hidden><h3>Unexpected</h3><p id="bench-servo-unexpected"></p></div>
+    </section>
+    <section class="card" aria-labelledby="bench-imu-title">
+      <h2 id="bench-imu-title">IMU</h2>
+      <p id="bench-imu-state">Waiting for feedback…</p>
+      <dl class="bench-readings">
+        <div><dt>Sample sequence</dt><dd id="bench-sequence">—</dd></div>
+        <div><dt>Init attempts</dt><dd id="bench-init">—</dd></div>
+        <div><dt>Errors</dt><dd id="bench-errors">—</dd></div>
+        <div><dt>Tilt from upright</dt><dd id="bench-tilt">—</dd></div>
+        <div><dt>Calibration</dt><dd id="bench-calibration">—</dd></div>
+      </dl>
+      <dl class="bench-readings bench-vectors">
+        <div><dt>Body gravity XYZ</dt><dd id="bench-gravity">—</dd></div>
+        <div><dt>Raw accel XYZ (m/s²)</dt><dd id="bench-acc">—</dd></div>
+        <div><dt>Corrected gyro XYZ (°/s)</dt><dd id="bench-gyro">—</dd></div>
+      </dl>
+    </section>
+  </div>
+  <section class="card bench-files" aria-labelledby="bench-snapshot-title">
+    <h2 id="bench-snapshot-title">Snapshots</h2>
+    <div class="entry-actions">
+      <button id="bench-export" type="button" class="primary" disabled>Export snapshot</button>
+      <label for="bench-import">Compare saved snapshot</label><input id="bench-import" type="file" accept=".json,application/json">
+    </div>
+    <p id="bench-file-state" role="status" hidden></p>
+    <table id="bench-comparison" class="trial-comparison" aria-label="Saved and live bench telemetry" hidden>
+      <thead><tr><th scope="col">Metric</th><th id="bench-saved-time" scope="col">Saved</th><th scope="col">Live</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Feedback</th><td>—</td><td>—</td></tr>
+        <tr><th scope="row">Detected IDs</th><td>—</td><td>—</td></tr>
+        <tr><th scope="row">IMU</th><td>—</td><td>—</td></tr>
+        <tr><th scope="row">Tilt</th><td>—</td><td>—</td></tr>
+        <tr><th scope="row">IMU init attempts</th><td>—</td><td>—</td></tr>
+        <tr><th scope="row">IMU errors</th><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+<script type="module" src="sim/bench-ui.mjs?v=1"></script>
+</body>
+</html>

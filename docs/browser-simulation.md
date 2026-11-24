@@ -12,6 +12,13 @@ servo mapping, IMU orientation, stock walking and getting back up. Duck Lab
 saves checked timestamps and the installed release in this browser. The live
 servo count and IMU status are available alongside the checklist.
 
+**Bench diagnostics** reports controller feedback, torque, exact detected and
+missing servo IDs, voltage feedback, and IMU initialization counters. Sensor
+vectors and tilt require fresh feedback and an online IMU. Export a JSON
+snapshot before changing the bench setup, then open it with **Compare saved
+snapshot** to see its readings beside live telemetry. The comparison stays in
+the browser and the page only reads from the controller.
+
 After a live simulation, choose **Export trial** in the simulation or **Export
 last trial** on Build & Test. The JSON file includes the run ID and release,
 board CPU and GPU samples, simulation misses, the change in the board's Linux
