@@ -1,7 +1,7 @@
 const SCENES = [
   {name:'Stand, sit, and fold', mode:'pose'},
   {name:'Step cycle', mode:'gait', ms:3500},
-  {name:'Roller skate glide', mode:'skates', ms:4500},
+  {name:'Roller policy sprint', mode:'skates', ms:6400},
   {name:'Playground drop', mode:'drop', ms:3000},
   {name:'Walk, Bash, and get up', mode:'walk', worker:true},
   {name:'Beacon hunt', mode:'explore', worker:true},

@@ -66,6 +66,8 @@ function parseModules(modules) {
   return modules;
 }
 
+export const usesSkates = result => Boolean(result?.skate || result?.dock?.skates);
+
 export function parseQualificationReport(report, jointIds) {
   const cases = new Map();
   if (!object(report)) throw new Error('Choose a hardware qualification JSON report.');
@@ -80,7 +82,7 @@ export function parseQualificationReport(report, jointIds) {
         if (!Number.isFinite(frame?.time_s) || frame.time_s < 0 || frame.time_s <= previousTime
             || !vector(frame.root, 7)
             || Math.abs(Math.hypot(...frame.root.slice(3)) - 1) > 0.001
-            || (result.dock?.skates && !vector(frame.wheels_rad, 4))
+            || (usesSkates(result) && !vector(frame.wheels_rad, 4))
             || !jointIds.every(id => Number.isFinite(frame.joints_rad?.[id]))) {
           throw new Error(`The recording for ${label(name)} has an invalid frame.`);
         }
@@ -254,7 +256,7 @@ export class QualificationReplay {
   select(next, action = 'variant') {
     if (!this.trials.has(next)) return;
     this.selected = next;
-    if (action === 'manual' && (this.trial.result.dock?.navigation || this.trial.result.dock?.qualification || this.trial.result.dock?.lowering_test || this.trial.result.dock?.bar_entry)) this.time = 0;
+    if (action === 'manual' && (this.trial.result.skate || this.trial.result.dock?.navigation || this.trial.result.dock?.qualification || this.trial.result.dock?.lowering_test || this.trial.result.dock?.bar_entry)) this.time = 0;
     this.updateDuration();
     if (next !== 'stock') this.previousVariant = next;
     this.get('variant').value = next;
@@ -303,10 +305,13 @@ export class QualificationReplay {
     if (frame === this.lastDisplay) return;
     this.lastDisplay = frame;
     const phase = frame?.recovery?.phase;
-    this.get('phase').textContent = phase === 'walk' && this.trial.result.dock?.skates ? 'Skating policy'
+    const skate = this.trial.result.skate;
+    this.get('phase').textContent = skate ? skate.profile
+      : phase === 'walk' && this.trial.result.dock?.skates ? 'Skating policy'
       : phase === 'approach_missed' && this.trial.result.dock?.navigation ? this.trial.result.dock.navigation.outcome
       : Object.hasOwn(PHASES, phase) ? PHASES[phase] : 'Recorded pose';
     const feet = frame?.footfalls;
+    this.get('footfalls').parentElement.hidden = Boolean(skate);
     this.get('footfalls').textContent = Number.isInteger(feet?.left) && Number.isInteger(feet?.right)
       ? `${feet.left} left · ${feet.right} right` : '—';
     const contacts = frame?.module_contacts;
@@ -428,6 +433,13 @@ export class QualificationReplay {
             ? result.dock.roller_release.exit_chair_contacts.join(', ') || 'None detected' : 'Policy did not start'],
         ] : []),
       ] : []),
+    ] : this.trial.result.skate ? [
+      ['Forward command', result => number(result.skate.command_m_s, 2, 'm/s')],
+      ['Forward distance', result => number(result.forward_m, 2, 'm')],
+      ['Average speed', result => number(result.average_m_s, 2, 'm/s')],
+      ['Peak speed over 0.5 s', result => number(result.peak_half_second_m_s, 2, 'm/s')],
+      ['Maximum sideways drift', result => number(result.max_side_m * 100, 1, 'cm')],
+      ['Clean runs', result => result.skate.total ? `${result.skate.clean} / ${result.skate.total}` : '—'],
     ] : [
       ['Result', result => result.passed === true ? 'Passed' : result.passed === false ? 'Failed' : '—'],
       ['Total mass', result => number(result.mass_g, 0, 'g')],

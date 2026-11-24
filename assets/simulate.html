@@ -23,6 +23,9 @@
             <span>CPU <b id="hud-cpu">—</b></span><span>Top core <b id="hud-core">—</b></span><span>GPU <b id="hud-gpu">—</b></span>
             <span>Misses <b id="hud-misses">—</b></span>
           </div>
+          <div id="skate-hud" class="walk-hud" aria-label="Recorded skate distance" hidden>
+            <span id="skate-run-label"></span><span>Forward <b id="skate-distance">0.00 m</b></span>
+          </div>
           <div class="viewport-help">Drag to orbit <span>·</span> Pinch or scroll to zoom</div>
           <div class="dock-contact-overlay" id="dock-contact-overlay" hidden></div>
           <div class="viewport-actions">
@@ -44,7 +47,7 @@
             </div>
             <div class="dock-replay-selectors" id="dock-replay-selectors" hidden></div>
             <div class="button-row skate-tools" id="skate-tools" role="group" aria-label="Roller skate controls" hidden>
-              <button id="roll-forward" class="primary">Roll forward</button><button id="explode-wheels" aria-pressed="false">Explode wheels</button>
+              <button id="skate-speed" class="primary">Play speed trials</button><button id="roll-forward">Passive roll</button><button id="explode-wheels" aria-pressed="false">Explode wheels</button>
             </div>
             <div class="stage-toolbar" id="sim-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label id="physics-controller-label" hidden>Controller <select id="physics-controller"><option value="walk">Walking policy</option><option value="physics">Playground</option></select></label><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
             <div class="hardware-toolbar" id="hardware-toolbar" role="group" aria-label="Inspect the backpack" hidden>
@@ -102,6 +105,7 @@
               <input id="qualification-file" type="file" accept=".json,application/json" hidden>
             </div>
             <p class="muted" id="qualification-status" role="status">Choose a qualification JSON report with a recorded trace. It stays on this device.</p>
+            <a class="muted" id="skate-speed-data" href="sim/skate-speed-recording.json" download hidden>Download skate trial results</a>
             <div id="qualification-controls" hidden>
               <div id="qualification-selectors">
                 <div id="qualification-case-field">
@@ -136,7 +140,7 @@
             <div class="section-heading"><h2>Demo circuit</h2><span id="demo-progress">LOOP</span></div>
             <p id="demo-state" role="status">Starting the demo…</p>
             <div class="button-row"><button id="demo-toggle">Stop demo</button></div>
-            <p class="muted">Poses, step cycle, roller skate glide, drop test, and live telemetry. Walk and beacon hunt join the loop when the UNO Q worker is available.</p>
+            <p class="muted">Poses, step cycle, skate sprint, drop test, and live telemetry. Walk and beacon hunt join the loop when the UNO Q worker is available.</p>
           </section>
           <section class="card" id="walk-card" hidden>
             <div class="section-heading"><h2 id="walk-title">Walking policy</h2><span>UNO Q CPU</span></div>
@@ -225,5 +229,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=59"></script>
+<script type="module" src="sim/sim-ui.mjs?v=61"></script>
 </body></html>

@@ -100,11 +100,27 @@ fallback. The renderer badge reports the backend actually initialized.
 ## Roller skates and exploded views
 
 Open **Skates** or add `?skates=1` to try the upstream roller MJCF with four
-passive wheels. **Roll forward** holds the skate stance with browser position
-actuators and gives the Duck a forward push. **Explode wheels** pauses the
-simulation and separates the four wheels along their axles. Drag to orbit and
-use **Assemble wheels** or **Play** to put them back. Demo includes a skate
-glide each lap. Its walking and beacon trials require the UNO Q worker.
+passive wheels. **Play speed trials** loops the fastest clean run from the
+flat-floor sweep. Choose **Previous passive push** to compare the old demo.
+**Passive roll** holds the skate stance with browser position actuators and
+gives the Duck an initial push on the selected surface. **Explode wheels**
+pauses the simulation and separates the four wheels along their axles. Drag
+to orbit and use **Assemble wheels** or **Play** to put them back.
+
+The Demo circuit replays the roller policy sprint each lap. The sprint uses
+the shipped `xgoduck_roller.onnx` from rest and lane steering based on the
+simulated position and heading. Its recorded joint and wheel motion plays
+in the browser. The separate walking and beacon trials still use the UNO Q
+worker.
+
+Run `python tools/check-skate-speed.py --recording assets/sim/skate-speed-recording.json`
+with MuJoCo, NumPy and ONNX Runtime to reproduce the sweep. The script tests
+six command profiles at seven forward settings up to the controller’s
+0.40 m/s command limit. Each profile and speed combination gets nine runs
+using three friction coefficients and three starting headings. A clean run
+stays upright within 15 cm of the lane centre for six seconds, with wheel
+contact only. The fastest candidate is the one with the highest median
+average forward speed among settings that pass all nine runs.
 
 The skate controls include 450 mm and 600 mm tiles with 5 mm recessed grout,
 a carpet approximation with added axle drag, and 6 mm and 12 mm thresholds.

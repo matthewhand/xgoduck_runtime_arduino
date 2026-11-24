@@ -198,6 +198,19 @@ try {
   }
   console.log('PASS: the stock walk and all four recovery clips load with the shipped policies');
 
+  const skateSpeed = JSON.parse(await read('skate-speed-recording.json'));
+  const rollerModel = await readFile(new URL('../../python/xgoduck_roller.onnx', base));
+  assert.equal(skateSpeed.model_sha256, createHash('sha256').update(rollerModel).digest('hex'));
+  const top = skateSpeed.ranked[0];
+  assert.equal(top.clean, top.total);
+  const speedCase = {Sprint: {skate: top, trace: skateSpeed.winner.trace}};
+  const speedCases = parseQualificationReport({'Fastest clean policy': speedCase}, jointIds);
+  assert.equal(speedCases.get('Sprint').get('Fastest clean policy').duration, skateSpeed.duration_s);
+  assert(skateSpeed.winner.forward_m > skateSpeed.baseline.forward_m);
+  assert(skateSpeed.winner.max_side_m < skateSpeed.lane_half_width_m);
+  assert(skateSpeed.winner.trace.at(-1).wheels_rad.every(angle => Math.abs(angle) > 1));
+  console.log('PASS: shipped roller policy replay advances from rest with four rotating wheels');
+
   const dockSources = [
     'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
     'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',
