@@ -4,8 +4,8 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bench diagnostics · Duck Lab</title>
   <link rel="stylesheet" href="sim/sim.css?v=16">
-  <link rel="stylesheet" href="sim/lab-entry.css?v=3">
-  <link rel="stylesheet" href="sim/bench.css?v=1">
+  <link rel="stylesheet" href="sim/lab-entry.css?v=4">
+  <link rel="stylesheet" href="sim/bench.css?v=2">
 </head>
 <body>
 <main class="lab-entry">
@@ -14,6 +14,10 @@
     <h1>Bench diagnostics</h1>
     <p id="bench-link-state" role="status">Connecting to the UNO Q…</p>
   </div>
+  <nav class="lab-section-nav" aria-label="Bench sections">
+    <a href="#bench-controller-title">Controller</a><a href="#bench-servo-title">Servos</a>
+    <a href="#bench-imu-title">IMU</a><a href="#bench-snapshot-title">Snapshots</a>
+  </nav>
   <div class="bench-grid">
     <section class="card" aria-labelledby="bench-controller-title">
       <h2 id="bench-controller-title">Controller</h2>
@@ -55,13 +59,14 @@
   </div>
   <section class="card bench-files" aria-labelledby="bench-snapshot-title">
     <h2 id="bench-snapshot-title">Snapshots</h2>
-    <div class="entry-actions">
+    <div class="entry-actions bench-file-actions">
       <button id="bench-export" type="button" class="primary" disabled>Export snapshot</button>
-      <label for="bench-import">Compare saved snapshot</label><input id="bench-import" type="file" accept=".json,application/json">
+      <button id="bench-choose" type="button">Compare snapshot</button>
+      <input id="bench-import" type="file" accept=".json,application/json" hidden>
     </div>
     <p id="bench-file-state" role="status" hidden></p>
     <table id="bench-comparison" class="trial-comparison" aria-label="Saved and live bench telemetry" hidden>
-      <thead><tr><th scope="col">Metric</th><th id="bench-saved-time" scope="col">Saved</th><th scope="col">Live</th></tr></thead>
+      <thead><tr><th scope="col">Metric</th><th scope="col">Saved<time id="bench-saved-time"></time></th><th scope="col">Live</th></tr></thead>
       <tbody>
         <tr><th scope="row">Feedback</th><td>—</td><td>—</td></tr>
         <tr><th scope="row">Detected IDs</th><td>—</td><td>—</td></tr>
@@ -73,6 +78,6 @@
     </table>
   </section>
 </main>
-<script type="module" src="sim/bench-ui.mjs?v=1"></script>
+<script type="module" src="sim/bench-ui.mjs?v=2"></script>
 </body>
 </html>

@@ -12,7 +12,9 @@ readRelease().then(stamp => { release = stamp?.commit ?? null; });
 function showComparison() {
   $('comparison').hidden = !saved;
   if (!saved) return;
-  $('saved-time').textContent = 'Saved · ' + new Date(saved.captured_at).toLocaleString();
+  const captured = new Date(saved.captured_at);
+  $('saved-time').dateTime = saved.captured_at;
+  $('saved-time').textContent = captured.toLocaleString(undefined, {dateStyle:'short', timeStyle:'short'});
   const left = comparisonRows(saved);
   const right = current ? comparisonRows(current) : [];
   for (const [i, row] of Array.from($('comparison').tBodies[0].rows).entries()) {
@@ -80,11 +82,13 @@ $('export').addEventListener('click', () => {
   announce('Snapshot downloaded.');
 });
 
+$('choose').addEventListener('click', () => $('import').click());
+
 $('import').addEventListener('change', async event => {
   const {target} = event;
   const [file] = target.files;
   if (!file) return;
-  target.disabled = true;
+  $('choose').disabled = true;
   try {
     if (file.size > 32768) throw new Error('Choose a Bench diagnostics snapshot under 32 KiB.');
     saved = readBenchSnapshot(JSON.parse(await file.text()));
@@ -94,7 +98,7 @@ $('import').addEventListener('change', async event => {
     announce(error instanceof SyntaxError ? 'The file could not be read as JSON.' : error.message);
   } finally {
     target.value = '';
-    target.disabled = false;
+    $('choose').disabled = false;
   }
 });
 

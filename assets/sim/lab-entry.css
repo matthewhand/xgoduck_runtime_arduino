@@ -2,7 +2,11 @@
 .lab-entry h1 { margin: 22px 0 16px; font-size: clamp(1.55rem, 5vw, 2.1rem); }
 .lab-entry h2 { margin: 0; font-size: 1.08rem; }
 .lab-entry h3 { margin: 0; font-size: .95rem; }
+.lab-entry h2[id] { scroll-margin-block-start: 12px; }
 .lab-entry .card p { margin: .5rem 0 .85rem; color: var(--muted); line-height: 1.5; }
+.lab-entry :where(button, .entry-action, .matrix-actions select) { min-block-size: 44px; }
+.lab-entry .topbar nav a { display: inline-flex; align-items: center; min-block-size: 44px; }
+.lab-section-nav { display: none; }
 .build-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 14px; align-items: start; }
 .build-tools { display: grid; gap: 14px; }
 .print-sequence { margin: 15px 0 0; padding: 0 0 0 1.35rem; }
@@ -10,7 +14,7 @@
 .print-sequence li::marker { color: var(--mint); font-weight: 700; }
 .entry-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .entry-actions span { color: var(--muted); font-size: .83rem; }
-.entry-action { display: inline-block; padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px; background: #162731; }
+.entry-action { display: inline-flex; align-items: center; padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px; background: #162731; }
 .entry-action:hover { border-color: var(--mint); }
 .entry-action.primary { background: var(--mint); border-color: var(--mint); }
 .entry-action.primary:hover { background: #b5efde; color: #0b2825; }
@@ -18,12 +22,12 @@
 .build-checklist-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .build-checklist-heading span { color: var(--mint); font-size: .83rem; }
 .build-checklist { display: grid; gap: 2px; }
-.build-checklist label { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; line-height: 1.4; }
-.build-checklist input { flex: none; margin: 0; accent-color: var(--mint); }
+.build-checklist label { display: flex; align-items: center; min-block-size: 44px; gap: 9px; padding: 7px 0; line-height: 1.4; cursor: pointer; }
+.build-checklist input { flex: none; inline-size: 18px; block-size: 18px; margin: 0; accent-color: var(--mint); }
 .trial-download { margin-top: 12px; }
 #build-trial-state, #checklist-board, #checklist-storage { font-size: .83rem; }
 .trial-comparison { width: 100%; font-size: .83rem; border-collapse: collapse; }
-.trial-comparison th, .trial-comparison td { padding: 6px 4px; border-top: 1px solid var(--line); text-align: right; }
+.trial-comparison th, .trial-comparison td { padding: 6px 4px; border-top: 1px solid var(--line); text-align: right; overflow-wrap: anywhere; }
 .trial-comparison th:first-child { text-align: left; }
 .lab-entry .matrix-player { margin: 0; }
 .lab-entry .matrix-player p, .lab-entry #wifi-reboot-note { font-size: .82rem; }
@@ -32,6 +36,15 @@
 .experiment-links { list-style: none; margin: 10px 0 0; padding: 0; }
 .experiment-links a { display: block; padding: 8px 0; color: var(--mint); }
 .experiment-links a:hover { text-decoration: underline; }
-@media (max-width: 720px) {
-  .build-grid, .experiment-grid { grid-template-columns: 1fr; }
+@media (max-width: 960px) {
+  .lab-section-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0 0 14px; }
+  .lab-section-nav a { display: grid; place-items: center; min-block-size: 44px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; font-size: .83rem; text-align: center; }
+  .board-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .experiment-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .build-grid, .experiment-grid { grid-template-columns: minmax(0, 1fr); }
+  .lab-entry .matrix-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lab-entry .matrix-actions select { grid-column: 1 / -1; }
+  .lab-entry .matrix-readouts label { display: flex; align-items: center; min-block-size: 44px; }
 }
