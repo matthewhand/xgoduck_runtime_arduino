@@ -19,7 +19,7 @@ ROOT_ASSETS = ('index.html', 'calibrate.html', 'calibrate.js', 'servo.html', 'se
 LAB_ASSETS = (
     'bench.html', 'sim/bench-data.mjs', 'sim/bench-ui.mjs', 'sim/bench.css',
     'sim/sim.css', 'sim/lab-entry.css', 'sim/matrix-ui.mjs', 'sim/build-test.mjs', 'sim/trial-report.mjs',
-    'sim/demo-ui.mjs', 'sim/qualification-replay.mjs', 'sim/skate-speed-recording.json',
+    'sim/demo-ui.mjs', 'sim/qualification-replay.mjs', 'sim/skate-speed-recording.json', 'sim/skate-terrain-recording.json',
     'sim/stock-replay.json', 'sim/v5-receiver-rail-fit-u1.3mf',
     'sim/v5-torso-backpack-fit-u1.3mf', 'sim/sim-ui.mjs', 'sim/walk-ui.mjs', 'experimental.html',
     'build-test.html', 'simulate.html',

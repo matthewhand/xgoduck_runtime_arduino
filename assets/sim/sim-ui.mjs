@@ -3,7 +3,7 @@ import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs?v=4';
 import {WalkPanel} from './walk-ui.mjs?v=7';
 import {DemoCircuit} from './demo-ui.mjs?v=3';
-import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase, usesSkates} from './qualification-replay.mjs?v=20';
+import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase, usesSkates} from './qualification-replay.mjs?v=21';
 import {GuardPreview} from './guard-preview.mjs?v=10';
 import {DOCK_DESIGNS, dockSurfaceGeometry} from './dock-preview.mjs?v=7';
 import {SKATE_SURFACES} from './skate-terrain.mjs';
@@ -84,6 +84,8 @@ const walkRotation = new THREE.Quaternion(), walkTarget = new THREE.Quaternion()
 let walkRun = null;
 let searchWorld, searchBeacon, searchWaypoint, wallGeometry, wallMaterial;
 let terrain, towLine, towPoint, skateTrack;
+let floorGroup, ground, grid, shownSkateTerrain, visibleSprintTiles;
+const sprintTiles = new Map();
 let replay, lastReplayPose, replayModules = [];
 let dockOverhead = false;
 let modPreview, modLoad, dino, dinoModule, dinoLoad, skinModule;
@@ -91,6 +93,12 @@ let tailPreview, tailLoad, tailGeneration = 0, tailClock = 0, tailPlaying = fals
 let modRequest = 0, jawBody = -1, appliedSkin = 'plain', appliedJawSkin = 'plain';
 let guardPreview, hardwareAssembly = 'translucent';
 const assemblyCamera = assembly => assembly === 'dock' ? 'dock' : assembly === 'exploded' ? 'side' : 'rear';
+
+function sprintGroundHeight(config, x, y) {
+  if (!config) return 0;
+  const radians = THREE.MathUtils.degToRad;
+  return x * Math.tan(radians(config.grade_deg ?? 0)) + y * Math.tan(radians(config.cross_deg ?? 0));
+}
 
 function showError(error) {
   $('error').hidden = false;
@@ -155,8 +163,9 @@ function resetCamera() {
       camera.position.set(x, y-.002, .64);
       orbit.target.set(x, y, .055);
     } else {
-      camera.position.set(x+.27, y-.36, .26);
-      orbit.target.set(x+.025, y, .10);
+      const floorHeight = sprintGroundHeight(replay.trial?.result.skate?.terrain, x, y);
+      camera.position.set(x+.27, y-.36, .26+floorHeight);
+      orbit.target.set(x+.025, y, .10+floorHeight);
     }
   } else {
     camera.position.set(x+0.36, y-0.43, 0.28);
@@ -278,15 +287,52 @@ function buildSkateScene() {
   towPoint = new THREE.Mesh(new THREE.SphereGeometry(.008,12,8), new THREE.MeshBasicMaterial({color:'#edc16f'}));
   towPoint.visible = false;
   const laneMarks = [];
-  for (let x = 0; x <= 4; x += .25) laneMarks.push(x, -.15, .001, x, .15, .001);
+  for (let x = 0; x <= 8; x += .25) laneMarks.push(x, -.15, .001, x, .15, .001);
   skateTrack = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',
     new THREE.Float32BufferAttribute(laneMarks, 3)), new THREE.LineBasicMaterial({color:'#7caeaa'}));
   skateTrack.visible = false;
   scene.add(towLine,towPoint,skateTrack);
 }
 
+function sprintTileMesh(config) {
+  const {tile_m: spacing, grout_depth_m: depth, gap_m: gap, tile_columns: columns, tile_origin_m: origin} = config;
+  if (![.45, .60].includes(spacing) || !Array.isArray(columns) || columns.length > 32
+      || !columns.every(Number.isInteger) || ![depth, gap, origin].every(Number.isFinite)
+      || depth <= 0 || gap <= 0 || gap >= spacing) throw new Error('Invalid tile replay geometry.');
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(spacing-gap, spacing-gap, depth),
+    new THREE.MeshStandardMaterial({roughness:.94}), 3*columns.length);
+  const colors = [new THREE.Color('#576f74'), new THREE.Color('#4c6268')];
+  let index = 0;
+  for (const row of [-1,0,1]) for (const col of columns) {
+    matrix.makeTranslation(origin+(col+.5)*spacing, row*spacing, -depth/2);
+    mesh.setMatrixAt(index, matrix);
+    mesh.setColorAt(index++, colors[Math.abs(row+col)%2]);
+  }
+  scene.add(mesh);
+  return mesh;
+}
+
+function showSprintTerrain(config) {
+  if (config === shownSkateTerrain) return;
+  shownSkateTerrain = config;
+  if (visibleSprintTiles) visibleSprintTiles.visible = false;
+  if (config?.tile_m) {
+    if (!sprintTiles.has(config.label)) sprintTiles.set(config.label, sprintTileMesh(config));
+    visibleSprintTiles = sprintTiles.get(config.label);
+    visibleSprintTiles.visible = true;
+  }
+  const radians = THREE.MathUtils.degToRad;
+  floorGroup.rotation.set(radians(config?.cross_deg ?? 0), -radians(config?.grade_deg ?? 0), 0);
+  floorGroup.position.z = -(config?.grout_depth_m ?? 0);
+  skateTrack.rotation.copy(floorGroup.rotation);
+  ground.material.color.set(config?.axle_damping ? '#4b405b' : '#15252c');
+  grid.visible = !config?.axle_damping;
+}
+
 function updateSkateScene() {
-  skateTrack.visible = mode === 'replay' && Boolean(replay.trial?.result.skate);
+  const recording = mode === 'replay' && replay.trial?.result.skate;
+  skateTrack.visible = Boolean(recording);
+  showSprintTerrain(recording?.terrain);
   for (const [name, group] of Object.entries(terrain)) group.visible = mode === 'skates' && sim.surface === name;
   const tow = mode === 'skates' && sim.tow;
   towPoint.visible = towLine.visible = Boolean(tow && !wheelsExploded && tow.status === 'Pulling');
@@ -372,6 +418,7 @@ function updateModeText() {
   const replaying = mode === 'replay';
   const dockingReplay = replaying && Boolean(replay.trial?.result.dock);
   const skateReplay = replaying && replay.trial?.result.skate;
+  const skateTerrain = skateReplay?.terrain;
   const inspecting = mode === 'hardware' || mode === 'mods';
   const hardware = mode === 'hardware';
   $('mods-card').hidden = mode !== 'mods';
@@ -387,10 +434,15 @@ function updateModeText() {
   $('hardware-card').hidden = $('hardware-views').hidden = $('hardware-toolbar').hidden = !hardware;
   $('sim-toolbar').hidden = $('sim-stats').hidden = inspecting;
   $('matrix-player').hidden = $('board-strip').hidden = inspecting || skates || dockingReplay || Boolean(skateReplay);
-  $('qualification-title').textContent = skateReplay ? 'Skate speed trials' : stockView ? 'Stock simulation replay' : dockingReplay ? 'Docking replay' : 'Qualification replay';
+  $('qualification-title').textContent = skateTerrain ? 'Terrain speed trials' : skateReplay ? 'Skate speed trials' : stockView ? 'Stock simulation replay' : dockingReplay ? 'Docking replay' : 'Qualification replay';
+  $('qualification-case-field').querySelector('label').textContent = skateTerrain ? 'Surface' : stockView ? 'Trial' : 'Entry';
+  $('qualification-variant-field').hidden = Boolean(skateTerrain);
   $('qualification-variant-field').querySelector('label').textContent = skateReplay ? 'Run' : 'Design';
   $('skate-speed-data').hidden = $('skate-hud').hidden = !skateReplay;
-  if (skateReplay) $('skate-run-label').textContent = skateReplay.profile;
+  if (skateReplay) {
+    $('skate-run-label').textContent = skateTerrain?.label ?? skateReplay.profile;
+    $('skate-speed-data').href = `sim/${skateTerrain ? 'skate-terrain' : 'skate-speed'}-recording.json`;
+  }
   const dockSelectors = $('dock-replay-selectors');
   const selectorsDestination = dockingReplay ? dockSelectors : $('qualification-selectors');
   for (const id of ['qualification-case-field', 'qualification-variant-field', 'qualification-alternate-label']) {
@@ -433,10 +485,11 @@ function updateModeText() {
     : recordedDock?.qualification ? `${replay.selectedLabel} · #${recordedDock.qualification.id}`
     : recordedDock?.bar_entry ? `${replay.selectedLabel} · ${outcome}`
     : recordedDock?.lowering_test ? replay.selectedLabel : recordedDock?.chair ? 'CHAIR DOCK' : 'FLOOR DOCK';
-  $('scene-mode').textContent = skateReplay ? 'SKATE SPEED TRIAL' : skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? (stockView ? 'STOCK SIMULATION' : 'QUALIFICATION REPLAY') : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = skateTerrain ? 'TERRAIN SPEED TRIAL' : skateReplay ? 'SKATE SPEED TRIAL' : skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? (stockView ? 'STOCK SIMULATION' : 'QUALIFICATION REPLAY') : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : skates ? 'Replay the fastest roller-policy run or try a passive roll on the selected surface.'
+    : skateTerrain ? 'Each clip shows the fastest clean setting for that surface. Choose a surface or cycle through all of them.'
     : skateReplay ? 'Recorded MuJoCo trial. Compare the shipped roller policy from rest with the previous passive push.'
     : mode === 'explore' ? 'Watch the Duck build a range map and choose its next destination. The beacon appears when its scan reaches it.'
     : mode === 'walk' ? 'The UNO Q runs the shipped walking ONNX policy and MuJoCo on its CPU. This view follows the simulated Duck. No motor commands are sent.'
@@ -623,32 +676,40 @@ async function readReplayJson(path) {
   return response.json();
 }
 
-let skateSpeedRecording;
-async function loadSkateSpeed() {
+const skateSpeedRecordings = new Map();
+async function loadSkateSpeed(terrainSweep = false) {
+  const file = terrainSweep ? 'skate-terrain-recording.json' : 'skate-speed-recording.json';
   const [report] = await Promise.all([
-    skateSpeedRecording ?? readReplayJson('./skate-speed-recording.json?v=1'), prepareSkates(),
+    skateSpeedRecordings.get(file) ?? readReplayJson(`./${file}?v=1`), prepareSkates(),
   ]);
-  return skateSpeedRecording = report;
+  skateSpeedRecordings.set(file, report);
+  return report;
 }
 
-function playSkateSpeed(report) {
-  const trial = 'Six-second flat-floor run';
-  const {profile, command_m_s, clean, total} = report.ranked[0];
+function skateTrial(recording) {
+  const {profile, command_m_s, clean, total, median_m_s, trials} = recording.ranked[0];
+  const worst_drift_m = Math.max(...trials.map(trial => trial.max_side_m));
+  return {...recording.winner, skate:{profile, command_m_s, clean, total, median_m_s, worst_drift_m, terrain:recording.terrain}};
+}
+
+function playSkateSpeed(report, terrainSweep = false) {
+  const flat = 'Six-second flat-floor run';
+  const cases = terrainSweep ? Object.fromEntries(Object.values(report).filter(item => item.winner)
+    .map(item => [item.terrain.label, skateTrial(item)])) : {[flat]: skateTrial(report)};
+  const recording = {'Fastest clean policy': cases};
+  if (!terrainSweep) recording['Previous passive push'] = {[flat]: {...report.baseline, skate:{profile:'Passive push'}}};
   setMode('replay');
-  replay.setRecording({
-    'Fastest clean policy': {[trial]: {...report.winner, skate:{profile, command_m_s, clean, total}}},
-    'Previous passive push': {[trial]: {...report.baseline, skate:{profile:'Passive push'}}},
-  });
+  replay.setRecording(recording, {alternate:terrainSweep, cycleCases:terrainSweep});
   running = true;
   updateModeText();
 }
 
-async function openSkateSpeed() {
+async function openSkateSpeed(terrainSweep = false) {
   const request = ++workspaceRequest;
   try {
-    const report = await loadSkateSpeed();
+    const report = await loadSkateSpeed(terrainSweep);
     if (stopping || request !== workspaceRequest) return;
-    playSkateSpeed(report);
+    playSkateSpeed(report, terrainSweep);
   } catch (error) {
     if (request === workspaceRequest && !stopping) showError(error);
   }
@@ -657,7 +718,6 @@ async function openSkateSpeed() {
 async function openStockReplay() {
   await selectWorkspace('replay');
   const status = $('qualification-status');
-  $('qualification-case-field').querySelector('label').textContent = 'Trial';
   status.textContent = 'Loading stock trials…';
   try {
     const report = await readReplayJson('./stock-replay.json');
@@ -828,6 +888,8 @@ function applyReplayPose() {
   if (typeof replay.trial.result.dock?.approach_reached !== 'boolean') {
     orbit.target.x += dx; orbit.target.y += dy;
     camera.position.x += dx; camera.position.y += dy;
+    const dz = sprintGroundHeight(replay.trial.result.skate?.terrain, dx, dy);
+    orbit.target.z += dz; camera.position.z += dz;
   }
 }
 
@@ -835,7 +897,7 @@ async function showReplayTrial(action) {
   if (mode !== 'replay') return;
   const trial = replay.trial;
   const skates = usesSkates(trial.result);
-  if (action === 'seek' || (action === 'case' && !trial.result.dock)) running = false;
+  if (action === 'seek' || (action === 'case' && !trial.result.dock && !trial.result.skate)) running = false;
   if (skates && !skateSim) {
     try { await prepareSkates(); }
     catch (error) {
@@ -1162,6 +1224,7 @@ function attachControls() {
   });
   $('roll-forward').addEventListener('click', startSkateRoll);
   $('skate-speed').addEventListener('click', () => void openSkateSpeed());
+  $('skate-terrain-speed').addEventListener('click', () => void openSkateSpeed(true));
   $('skate-surface').addEventListener('change', event => {
     sim.setSurface(event.target.value);
     sim.reset();
@@ -1309,9 +1372,11 @@ async function start() {
   scene.add(new THREE.HemisphereLight('#e8f9ff','#294443',2.6));
   const light = new THREE.DirectionalLight('#fff3db',3.2); light.position.set(-0.3,-0.4,0.8); scene.add(light);
   const fill = new THREE.DirectionalLight('#8edac8',1.8); fill.position.set(0.5,0.25,0.4); scene.add(fill);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(16,16),new THREE.MeshStandardMaterial({color:'#15252c',roughness:0.95}));
-  ground.position.z=-0.0005; scene.add(ground);
-  const grid = new THREE.GridHelper(14,280,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001; scene.add(grid);
+  floorGroup = new THREE.Group();
+  ground = new THREE.Mesh(new THREE.PlaneGeometry(16,16),new THREE.MeshStandardMaterial({color:'#15252c',roughness:0.95}));
+  ground.position.z=-0.0005;
+  grid = new THREE.GridHelper(14,280,'#47606b','#243b46'); grid.rotation.x=Math.PI/2; grid.position.z=0.0001;
+  floorGroup.add(ground, grid); scene.add(floorGroup);
   const axes = new THREE.AxesHelper(0.05); axes.position.set(-0.16,-0.13,0.001); scene.add(axes);
   searchWorld = new THREE.Group();
   searchWorld.visible = false;
@@ -1349,6 +1414,7 @@ async function start() {
       geometry?.dispose(); material?.dispose();
     });
     for (const marker of [towLine,towPoint,skateTrack]) { marker.geometry.dispose(); marker.material.dispose(); }
+    for (const tile of sprintTiles.values()) { tile.geometry.dispose(); tile.material.dispose(); tile.dispose(); }
     guardPreview?.dispose();
     for (const group of [modPreview,dino].filter(Boolean)) {
       const geometries = new Set(), materials = new Set();
@@ -1378,7 +1444,7 @@ async function start() {
   } else if (query.get('hardware') === '1') {
     await selectWorkspace('hardware');
   }
-  else if (query.get('sprint') === '1') await openSkateSpeed();
+  else if (query.get('sprint') === '1') await openSkateSpeed(query.get('terrain') === '1');
   else if (query.get('skates') === '1') selectWorkspace('skates');
   else if (query.get('replay') === '1') selectWorkspace('replay');
   else if (query.get('demo') === '1') selectWorkspace('demo');

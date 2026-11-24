@@ -156,7 +156,7 @@ export class QualificationReplay {
       this.select(event.target.value, 'manual');
     });
     this.get('alternate').addEventListener('change', () => {
-      if (this.alternating && !this.playlist.includes(this.selected)) {
+      if (this.alternating && this.playlist && !this.playlist.includes(this.selected)) {
         this.time = 0;
         this.select(this.playlist[0]);
       } else {
@@ -180,11 +180,13 @@ export class QualificationReplay {
   get frame() { return this.trial && replayFrameAt(this.trial.result.trace, this.time); }
   get alternating() { return !this.get('alternate-label').hidden && this.get('alternate').checked; }
 
-  setRecording(report, {scenario, variant, filename, alternate = false, dockIndex, dockLoader} = {}) {
+  setRecording(report, {scenario, variant, filename, alternate = false, cycleCases = false, dockIndex, dockLoader} = {}) {
     const cases = parseQualificationReport(report, this.jointIds);
     this.caseRequest = {};
     this.dockLoader = dockLoader;
     this.cases = cases;
+    this.caseCycle = cycleCases && cases.size > 1 ? [...cases.keys()] : null;
+    this.get('alternate-text').textContent = this.caseCycle ? 'Cycle surfaces' : 'Cycle through trials';
     const options = dockIndex ? Object.keys(dockIndex) : [...cases.keys()];
     this.get('case').replaceChildren(...options.map(key => new Option(label(key), key)));
     this.get('case-field').hidden = options.length < 2;
@@ -239,11 +241,11 @@ export class QualificationReplay {
     this.trials = this.cases.get(next);
     this.time = 0;
     this.playlist = [LOWERING_PAIR, RELEASE_PAIR, TRIP_PAIR, CLEAR_LANE_LOOP, TURN_SEEK_LOOP, SKATE_TURN_LOOP].find(list => list.every(name => this.trials.has(name)));
-    this.get('alternate-label').hidden = !this.playlist;
+    this.get('alternate-label').hidden = !this.playlist && !this.caseCycle;
     this.get('variant').replaceChildren(...[...this.trials.keys()].map(key => new Option(label(key), key)));
     this.previousVariant = [...this.trials.keys()].find(key => key !== 'stock');
     const first = this.trials.has('stock') ? 'stock' : this.trials.keys().next().value;
-    const preferredVariant = this.alternating && !this.playlist.includes(preferred) ? this.playlist[0] : preferred;
+    const preferredVariant = this.alternating && this.playlist && !this.playlist.includes(preferred) ? this.playlist[0] : preferred;
     this.select(this.trials.has(preferredVariant) ? preferredVariant : first, 'case');
   }
 
@@ -287,6 +289,11 @@ export class QualificationReplay {
   advance(seconds, loop = false) {
     const next = this.time + seconds * Number(this.get('speed').value);
     if (loop && this.alternating && next >= this.duration) {
+      if (this.caseCycle) {
+        const index = (this.caseCycle.indexOf(this.case) + 1) % this.caseCycle.length;
+        this.selectCase(this.caseCycle[index]);
+        return true;
+      }
       this.time = next - this.duration;
       const index = (this.playlist.indexOf(this.selected) + 1) % this.playlist.length;
       this.select(this.playlist[index], 'loop');
@@ -439,6 +446,10 @@ export class QualificationReplay {
       ['Average speed', result => number(result.average_m_s, 2, 'm/s')],
       ['Peak speed over 0.5 s', result => number(result.peak_half_second_m_s, 2, 'm/s')],
       ['Maximum sideways drift', result => number(result.max_side_m * 100, 1, 'cm')],
+      ...(this.trial.result.skate.terrain ? [
+        ['Median clean speed', result => number(result.skate.median_m_s, 2, 'm/s')],
+        ['Worst drift across starts', result => number(result.skate.worst_drift_m * 100, 1, 'cm')],
+      ] : []),
       ['Clean runs', result => result.skate.total ? `${result.skate.clean} / ${result.skate.total}` : '—'],
     ] : [
       ['Result', result => result.passed === true ? 'Passed' : result.passed === false ? 'Failed' : '—'],

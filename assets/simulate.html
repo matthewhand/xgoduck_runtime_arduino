@@ -47,7 +47,7 @@
             </div>
             <div class="dock-replay-selectors" id="dock-replay-selectors" hidden></div>
             <div class="button-row skate-tools" id="skate-tools" role="group" aria-label="Roller skate controls" hidden>
-              <button id="skate-speed" class="primary">Play speed trials</button><button id="roll-forward">Passive roll</button><button id="explode-wheels" aria-pressed="false">Explode wheels</button>
+              <button id="skate-terrain-speed" class="primary">Terrain speed trials</button><button id="skate-speed">Flat speed trials</button><button id="roll-forward">Passive roll</button><button id="explode-wheels" aria-pressed="false">Explode wheels</button>
             </div>
             <div class="stage-toolbar" id="sim-toolbar"><div><button id="play" class="primary" disabled>Pause</button><button id="reset" disabled>Reset pose</button><button id="camera" disabled>Reset view</button></div><label id="physics-controller-label" hidden>Controller <select id="physics-controller"><option value="walk">Walking policy</option><option value="physics">Playground</option></select></label><label><input type="checkbox" id="collisions"> Collision hulls</label><label><input type="checkbox" id="axes"> Joint axes</label></div>
             <div class="hardware-toolbar" id="hardware-toolbar" role="group" aria-label="Inspect the backpack" hidden>
@@ -116,7 +116,7 @@
                   <label class="range-label" for="qualification-variant">Design</label>
                   <select id="qualification-variant"></select>
                 </div>
-                <label id="qualification-alternate-label" class="qualification-alternate" hidden><input id="qualification-alternate" type="checkbox"> Cycle through trials</label>
+              <label id="qualification-alternate-label" class="qualification-alternate" hidden><input id="qualification-alternate" type="checkbox"> <span id="qualification-alternate-text">Cycle through trials</span></label>
               </div>
               <div class="button-row qualification-switch"><button type="button" id="qualification-stock">Show variant</button></div>
               <label class="range-label" for="qualification-seek">Timeline <output id="qualification-time" for="qualification-seek">0.00 s</output></label>
@@ -229,5 +229,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=61"></script>
+<script type="module" src="sim/sim-ui.mjs?v=62"></script>
 </body></html>

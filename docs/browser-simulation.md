@@ -100,8 +100,11 @@ fallback. The renderer badge reports the backend actually initialized.
 ## Roller skates and exploded views
 
 Open **Skates** or add `?skates=1` to try the upstream roller MJCF with four
-passive wheels. **Play speed trials** loops the fastest clean run from the
+passive wheels. **Flat speed trials** loops the fastest clean run from the
 flat-floor sweep. Choose **Previous passive push** to compare the old demo.
+**Terrain speed trials** cycles through the winning runs on 450 and 600 mm
+tiles, carpet, and 3° grades and cross slopes. Open **Simulation controls**
+to choose a surface, switch off **Cycle surfaces**, or download the results.
 **Passive roll** holds the skate stance with browser position actuators and
 gives the Duck an initial push on the selected surface. **Explode wheels**
 pauses the simulation and separates the four wheels along their axles. Drag
@@ -121,6 +124,15 @@ using three friction coefficients and three starting headings. A clean run
 stays upright within 15 cm of the lane centre for six seconds, with wheel
 contact only. The fastest candidate is the one with the highest median
 average forward speed among settings that pass all nine runs.
+
+Add `--terrain` and record to `assets/sim/skate-terrain-recording.json` to
+repeat the sweep on all seven terrain cases. The tiles use 5 mm gaps and
+3 mm recesses. Carpet uses compliant ground contact and passive axle drag.
+Slope starts align the Duck to the floor with zero velocity and grade
+relative height checks. All runs measure forward distance on the same
+horizontal lane axis. For each winning setting, the replay uses the clean
+run closest to 0.75 friction and a straight starting heading. The report
+includes the full sweep and the winner’s reference replay for each surface.
 
 The skate controls include 450 mm and 600 mm tiles with 5 mm recessed grout,
 a carpet approximation with added axle drag, and 6 mm and 12 mm thresholds.

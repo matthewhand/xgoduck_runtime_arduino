@@ -1,8 +1,10 @@
-"""Rank flat-floor launches using the shipped roller policy and record the best run."""
+"""Rank launches using the shipped roller policy and record the fastest clean runs."""
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor
 import json
 import math
+import os
 from pathlib import Path
 from statistics import median
 import sys
@@ -27,16 +29,67 @@ PROFILES = {
     'Ramp with lane steering': (.6, 0, 1.8),
 }
 LANE_HALF_WIDTH = .15
+TERRAINS = {
+    'tiles-450': dict(label='450 mm tiles', tile_m=.45, gap_m=.005, grout_depth_m=.003),
+    'tiles-600': dict(label='600 mm tiles', tile_m=.60, gap_m=.005, grout_depth_m=.003),
+    'carpet': dict(label='Carpet', axle_damping=.0015),
+    'uphill': dict(label='3° uphill', grade_deg=3),
+    'downhill': dict(label='3° downhill', grade_deg=-3),
+    'cross-left': dict(label='3° cross slope · left side high', cross_deg=3),
+    'cross-right': dict(label='3° cross slope · right side high', cross_deg=-3),
+}
 
 
-def run(sim, policy, speed, profile, grip, heading, *, record=False):
+def surface_model(terrain):
+    import mujoco as mj
+
+    terrain = dict(terrain)
+    slope, cross = (math.radians(terrain.get(key, 0)) for key in ('grade_deg', 'cross_deg'))
+    half_pitch, half_roll = -slope / 2, cross / 2
+    ground_quat = [math.cos(half_roll) * math.cos(half_pitch), math.sin(half_roll) * math.cos(half_pitch),
+                   math.cos(half_roll) * math.sin(half_pitch), -math.sin(half_roll) * math.sin(half_pitch)]
+    ground_slope = (math.tan(slope), math.tan(cross))
+
+    def configure(spec):
+        floor = spec.geom('floor')
+        floor.quat = ground_quat
+        if 'tile_m' in terrain:
+            spacing = terrain['tile_m']
+            edge = (spacing - terrain['gap_m']) / 2
+            depth = terrain['grout_depth_m']
+            floor.pos = [0, 0, -depth]
+            columns = range(-2, math.ceil(8 / spacing))
+            terrain['tile_origin_m'] = .12
+            terrain['tile_columns'] = list(columns)
+            for row in range(-1, 2):
+                for col in columns:
+                    spec.worldbody.add_geom(name=f'sprint_tile_{row}_{col}', type=mj.mjtGeom.mjGEOM_BOX,
+                        size=[edge, edge, depth / 2], pos=[.12 + (col + .5) * spacing, row * spacing, -depth / 2],
+                        contype=1, conaffinity=1, condim=3)
+        if 'axle_damping' in terrain:
+            floor.solref = [.04, 1]
+            floor.priority = 2
+
+    sim = WalkSimulation(0, 0, configure=configure if terrain else None, skates=True)
+    if 'axle_damping' in terrain:
+        for name in WHEEL_NAMES:
+            sim.model.dof_damping[sim.model.joint(name).dofadr[0]] = terrain['axle_damping']
+    floor_geoms = {sim.floor, *(i for i in range(sim.model.ngeom)
+                               if sim.model.geom(i).name.startswith('sprint_tile_'))}
+    return sim, terrain, (floor_geoms, ground_quat, ground_slope)
+
+
+def run(sim, policy, speed, profile, grip, heading, *, record=False, surface=None):
     model, data, mj = sim.model, sim.data, sim.mj
     mj.mj_resetDataKeyframe(model, data, model.key('home').id)
     ramp, swizzle, steering = PROFILES.get(profile, (0, 0, 0))
-    model.geom_friction[[sim.floor, *sim.feet], 0] = grip
+    floor_geoms, ground_quat, (rise_x, rise_y) = surface or ({sim.floor}, (1., 0., 0., 0.), (0., 0.))
+    model.geom_friction[[*floor_geoms, *sim.feet], 0] = grip
     root = sim.root
     angle = math.radians(heading) / 2
-    data.qpos[root + 3:root + 7] = [math.cos(angle), 0, 0, math.sin(angle)]
+    w, x, y, z = ground_quat
+    cosine, sine = math.cos(angle), math.sin(angle)
+    data.qpos[root + 3:root + 7] = [w*cosine - z*sine, x*cosine + y*sine, y*cosine - x*sine, z*cosine + w*sine]
     wheels = [int(model.joint(name).qposadr[0]) for name in WHEEL_NAMES]
     # Benchmark the previous demo separately with its original initial shove.
     if profile == 'Passive push':
@@ -75,9 +128,9 @@ def run(sim, policy, speed, profile, grip, heading, *, record=False):
         max_side = max(max_side, abs(y - origin_y))
         if not all(math.isfinite(value) for value in (x, y, z, qx, qy)):
             raise RuntimeError('The rollout produced a non-finite pose')
-        if z < .085 or 1 - 2 * (qx * qx + qy * qy) < .70:
+        if z - x * rise_x - y * rise_y < .085 or 1 - 2 * (qx * qx + qy * qy) < .70:
             failure = 'Lost balance'
-        elif any(sim.floor in contact.geom and contact.dist < -.00015
+        elif any(contact.dist < -.00015 and any(geom in floor_geoms for geom in contact.geom)
                  and not any(geom in sim.feet for geom in contact.geom) for contact in data.contact):
             failure = 'Body touched floor'
         elif max_side > LANE_HALF_WIDTH:
@@ -99,30 +152,50 @@ def run(sim, policy, speed, profile, grip, heading, *, record=False):
     return result
 
 
-def sweep():
-    sim = WalkSimulation(0, 0, skates=True)
+def sweep(terrain=None):
+    sim, terrain, surface = surface_model(terrain or {})
     policy = load_roller_policy()
     ranked = []
     for profile in PROFILES:
         for speed in SPEEDS:
-            runs = [run(sim, policy, speed, profile, grip, heading) for grip in GRIPS for heading in HEADINGS]
+            runs = [run(sim, policy, speed, profile, grip, heading, surface=surface)
+                    for grip in GRIPS for heading in HEADINGS]
             clean = [trial for trial in runs if trial['failure'] is None]
             ranked.append(dict(profile=profile, command_m_s=speed, clean=len(clean), total=len(runs),
                                median_m_s=round(median(trial['average_m_s'] for trial in clean), 4) if clean else None,
                                trials=runs))
     ranked.sort(key=lambda row: (row['clean'], row['median_m_s'] if row['median_m_s'] is not None else -math.inf), reverse=True)
-    winner = ranked[0]
-    if winner['clean'] != winner['total']:
-        raise RuntimeError('No skate move completed every launch cleanly')
-    return dict(duration_s=DURATION, lane_half_width_m=LANE_HALF_WIDTH, model_sha256=policy.sha256,
-                winner=run(sim, policy, winner['command_m_s'], winner['profile'], .75, 0, record=True),
-                baseline=run(sim, policy, .28, 'Passive push', .75, 0, record=True), ranked=ranked)
+    ranked_winner = ranked[0]
+    clean = [trial for trial in ranked_winner['trials'] if trial['failure'] is None]
+    reference = min(clean, key=lambda trial: (abs(trial['grip'] - .75), abs(trial['heading_deg'])), default=None)
+    winner = (run(sim, policy, ranked_winner['command_m_s'], ranked_winner['profile'], reference['grip'],
+                  reference['heading_deg'], record=True, surface=surface) if reference else None)
+    report = dict(duration_s=DURATION, lane_half_width_m=LANE_HALF_WIDTH, model_sha256=policy.sha256,
+                  winner=winner, ranked=ranked)
+    if terrain:
+        report['terrain'] = terrain
+    else:
+        report['baseline'] = run(sim, policy, .28, 'Passive push', .75, 0, record=True, surface=surface)
+    return report
+
+
+def sweep_terrain(name):
+    report = sweep(TERRAINS[name])
+    top = report['ranked'][0]
+    print(name, top['profile'], top['command_m_s'], f"{top['clean']}/{top['total']}", top['median_m_s'], flush=True)
+    return name, report
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--recording', type=Path, required=True)
+    parser.add_argument('--terrain', action='store_true', help='Sweep all tile, carpet, and slope surfaces')
     args = parser.parse_args()
+    if args.terrain:
+        with ProcessPoolExecutor(max_workers=min(6, os.cpu_count() or 1)) as pool:
+            terrain_report = dict(pool.map(sweep_terrain, TERRAINS))
+        args.recording.write_text(json.dumps(terrain_report, separators=(',', ':')) + '\n', encoding='utf-8')
+        sys.exit()
     report = sweep()
     args.recording.write_text(json.dumps(report, separators=(',', ':')) + '\n', encoding='utf-8')
     for row in report['ranked']:

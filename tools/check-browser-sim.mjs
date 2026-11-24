@@ -211,6 +211,32 @@ try {
   assert(skateSpeed.winner.trace.at(-1).wheels_rad.every(angle => Math.abs(angle) > 1));
   console.log('PASS: shipped roller policy replay advances from rest with four rotating wheels');
 
+  const terrainSpeed = JSON.parse(await read('skate-terrain-recording.json'));
+  assert.deepEqual(Object.keys(terrainSpeed), ['tiles-450', 'tiles-600', 'carpet', 'uphill', 'downhill', 'cross-left', 'cross-right']);
+  const surfaceCases = {};
+  for (const report of Object.values(terrainSpeed)) {
+    const [winner] = report.ranked;
+    assert.equal(report.model_sha256, skateSpeed.model_sha256);
+    assert.equal(report.ranked.length, 42);
+    assert(report.ranked.every(setting => setting.trials.length === 9));
+    assert.equal(winner.clean, winner.total);
+    assert.equal(report.winner.failure, null);
+    assert.equal(report.winner.elapsed_s, report.duration_s);
+    assert(report.winner.forward_m > .15 && report.winner.max_side_m <= report.lane_half_width_m);
+    assert(Math.abs(report.winner.trace.at(-1).root[0] - report.winner.trace[0].root[0] - report.winner.forward_m) < .0001);
+    surfaceCases[report.terrain.label] = {...report.winner, skate:{terrain:report.terrain}};
+  }
+  assert.equal(terrainSpeed['tiles-450'].terrain.gap_m, .005);
+  assert.equal(terrainSpeed['tiles-600'].terrain.gap_m, .005);
+  assert(terrainSpeed.carpet.winner.average_m_s < terrainSpeed['tiles-450'].winner.average_m_s);
+  const terrainCases = parseQualificationReport({'Fastest clean policy':surfaceCases}, jointIds);
+  const caseCycle = [...terrainCases.keys()];
+  const cycleReplay = {caseCycle, case:caseCycle.at(-1), time:5.99, duration:6, alternating:true,
+    get:() => ({value:1}), selectCase(name) { this.case = name; }};
+  assert.equal(QualificationReplay.prototype.advance.call(cycleReplay, .02, true), true);
+  assert.equal(cycleReplay.case, caseCycle[0]);
+  console.log('PASS: seven terrain winners stay in lane and the surface carousel wraps');
+
   const dockSources = [
     'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
     'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',
