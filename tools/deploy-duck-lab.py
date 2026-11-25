@@ -20,6 +20,7 @@ LAB_ASSETS = (
     'bench.html', 'sim/bench-data.mjs', 'sim/bench-ui.mjs', 'sim/bench.css',
     'sim/sim.css', 'sim/lab-entry.css', 'sim/matrix-ui.mjs', 'sim/build-test.mjs', 'sim/trial-report.mjs',
     'sim/demo-ui.mjs', 'sim/qualification-replay.mjs', 'sim/skate-speed-recording.json', 'sim/skate-terrain-recording.json',
+    'sim/motion-recording.json',
     'sim/stock-replay.json', 'sim/v5-receiver-rail-fit-u1.3mf',
     'sim/v5-torso-backpack-fit-u1.3mf', 'sim/sim-ui.mjs', 'sim/walk-ui.mjs', 'experimental.html',
     'build-test.html', 'simulate.html',
@@ -60,7 +61,7 @@ def alias(page, legacy_pond=False):
     script = f'location.replace({destination!r} + location.search + location.hash)'
     if legacy_pond:
         script = f'''const query = new URLSearchParams(location.search);
-const canonical = ['stock', 'lab', 'mods', 'teeth', 'tusks', 'tail', 'skin', 'dock', 'hardware', 'skates', 'sprint', 'replay'];
+const canonical = ['stock', 'lab', 'mods', 'teeth', 'tusks', 'tail', 'skin', 'dock', 'hardware', 'skates', 'sprint', 'motions', 'replay'];
 const pond = query.get('demo') === '1' && !canonical.some(key => query.has(key));
 location.replace((pond ? '/pond-demo-legacy.html' : {destination!r}) + location.search + location.hash)'''
     return f'''<!doctype html>

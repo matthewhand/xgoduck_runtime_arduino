@@ -38,7 +38,7 @@
         <summary>Simulation controls</summary>
         <div class="sim-controls-content controls-panel">
           <section class="sim-setup" aria-label="Workspace settings">
-            <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="skates" aria-pressed="false" disabled>Skates</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button><button data-mode="hardware" aria-pressed="false" disabled>Hardware</button><button data-mode="mods" aria-pressed="false" disabled>Mods</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
+            <div class="stage-bar"><div class="tabs" role="group" aria-label="Workspace mode"><button data-mode="pose" aria-pressed="true" disabled>Pose</button><button data-mode="walk" aria-pressed="false" disabled>Physics</button><button data-mode="skates" aria-pressed="false" disabled>Skates</button><button data-mode="explore" aria-pressed="false" disabled>Explore</button><button data-mode="live" aria-pressed="false" disabled>Live Duck</button><button data-mode="demo" aria-pressed="false" disabled>Demo</button><button data-mode="motions" aria-pressed="false" disabled>Motions</button><button data-mode="replay" aria-pressed="false" disabled>Replay</button><button data-mode="hardware" aria-pressed="false" disabled>Hardware</button><button data-mode="mods" aria-pressed="false" disabled>Mods</button></div><span class="engine" id="renderer-state">Starting renderer…</span></div>
             <div class="hardware-views" id="hardware-views" role="group" aria-label="Backpack configuration" hidden>
               <button type="button" data-assembly="cutout" aria-pressed="false">Open cut-out</button>
               <button type="button" data-assembly="translucent" aria-pressed="true">Translucent window</button>
@@ -106,6 +106,21 @@
             </div>
             <p class="muted" id="qualification-status" role="status">Choose a qualification JSON report with a recorded trace. It stays on this device.</p>
             <a class="muted" id="skate-speed-data" href="sim/skate-speed-recording.json" download hidden>Download skate trial results</a>
+            <div id="motion-research" hidden>
+              <p class="muted"><a id="motion-credit">Policy source</a></p>
+              <details class="muted">
+                <summary>More Microduck projects</summary>
+                <ul>
+                  <li><a href="https://huggingface.co/spaces/pollen-robotics/microduck-simulator">Pollen browser simulator</a> · Try the original robot and policies.</li>
+                  <li><a href="https://github.com/pollen-robotics/microduck_rl#tasks">Pollen training tasks</a> · Skate spins, downhill gliding and get-up on rollers.</li>
+                  <li><a href="https://huggingface.co/spaces/pollen-robotics/microduck-arena">Microduck Arena</a> · Timed sprint, roller sprint and hill climb.</li>
+                  <li><a href="https://huggingface.co/fffiloni/microduck-moonwalk-backward-55e6af">Moonwalk · fffiloni</a></li>
+                  <li><a href="https://huggingface.co/Nupr-Haokun/microduck-step-up-head-brake">25 mm step with head support · Nupr-Haokun</a></li>
+                  <li><a href="https://huggingface.co/q2p/microduck-beak-throw">Beak ball toss · q2p</a></li>
+                  <li><a href="https://huggingface.co/juicenv/duckwing-v80-roller-skating">DuckWing speed and spin research · juicenv</a></li>
+                </ul>
+              </details>
+            </div>
             <div id="qualification-controls" hidden>
               <div id="qualification-selectors">
                 <div id="qualification-case-field">
@@ -229,5 +244,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=62"></script>
+<script type="module" src="sim/sim-ui.mjs?v=64"></script>
 </body></html>

@@ -237,6 +237,25 @@ try {
   assert.equal(cycleReplay.case, caseCycle[0]);
   console.log('PASS: seven terrain winners stay in lane and the surface carousel wraps');
 
+  const motionReport = JSON.parse(await read('motion-recording.json'));
+  const motions = parseQualificationReport(motionReport, jointIds);
+  assert.equal(motions.size, 7);
+  for (const result of Object.values(motionReport['XGO Duck policy'])) {
+    const model = await readFile(new URL(`../../python/${result.motion.policy}`, base));
+    assert.equal(result.motion.sha256, createHash('sha256').update(model).digest('hex'));
+  }
+  for (const variants of motions.values()) assert(variants.values().next().value.result.motion.upright);
+  assert(motions.get('Forward roll').get('XGO Duck policy').result.motion.pitch_travel_deg >= 350);
+  assert(motions.get('Sit and stand').get('XGO Duck policy').result.motion.torso_drop_m > .04);
+  for (const side of ['Left', 'Right']) {
+    const kick = motions.get(`${side}-foot ball kick`).get('XGO Duck policy');
+    assert.deepEqual(kick.result.motion.ball_feet, [side.toLowerCase()]);
+    assert(kick.events.get('Ball contact') > .6 && kick.result.motion.ball_forward_m > .02);
+  }
+  const flamingo = motions.get('Flamingo balance').get('Microduck transfer trial');
+  assert(flamingo.result.motion.one_foot_s > .15 && flamingo.result.motion.source.includes('RemiFabre/'));
+  console.log('PASS: seven policy motion clips, signed foot contacts, and community source links');
+
   const dockSources = [
     'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
     'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',

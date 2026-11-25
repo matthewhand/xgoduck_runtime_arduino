@@ -97,6 +97,30 @@ Open `http://127.0.0.1:19527/simulate.html` on that PC. Recreate the forward aft
 reconnecting USB. Plain HTTP at the board's Wi-Fi address uses the WebGL 2
 fallback. The renderer badge reports the backend actually initialized.
 
+## Motion library
+
+Open **Motions** or `simulate.html?motions=1` to loop the forward roll,
+sit and stand, ground reach, and both foot kicks from the shipped XGO
+policies. The browser plays recorded MuJoCo poses and ball motion. Ground
+reach brings the head to the floor in the fixed-jaw model. The sit clip
+gives the rise two seconds before returning to the idle policy. Kicks use
+a 70 mm, 15 g simulated ball starting 100 mm forward and 42 mm off centre.
+
+The same library includes a polite bow and a brief one-foot balance from
+Microduck community policies tested on the simulated XGO body. These
+clips use each policy's published command pattern and home angles, then
+hand back to the XGO walking policy at idle. They are single simulation
+trials with the simplified position actuator model. **More Microduck
+projects** links to the original browser simulator, training tasks, Arena,
+and other community work.
+
+Run `python tools/record-xgo-motions.py --community-dir PATH --recording assets/sim/motion-recording.json`
+with MuJoCo, NumPy and ONNX Runtime. Save the pinned [bow model](https://huggingface.co/GinDuck/microduck-polite-bow/tree/6dd2ad21ef9a105945c0af826f68f9d62b0a6415)
+as `microduck-polite-bow.onnx` and the [flamingo model](https://huggingface.co/RemiFabre/microduck-flamingo-cycle/tree/a69e4f6103a70e355983eb5d4e919da76778a40f)
+as `microduck-flamingo-cycle.onnx` in `PATH`. The recorder checks their
+SHA-256 digests before loading them. Both community models declare
+Apache-2.0. The deployed library includes the replays and source links.
+
 ## Roller skates and exploded views
 
 Open **Skates** or add `?skates=1` to try the upstream roller MJCF with four

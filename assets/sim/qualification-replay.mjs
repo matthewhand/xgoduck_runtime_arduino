@@ -67,6 +67,7 @@ function parseModules(modules) {
 }
 
 export const usesSkates = result => Boolean(result?.skate || result?.dock?.skates);
+const validRoot = value => vector(value, 7) && Math.abs(Math.hypot(...value.slice(3)) - 1) <= 0.001;
 
 export function parseQualificationReport(report, jointIds) {
   const cases = new Map();
@@ -76,13 +77,15 @@ export function parseQualificationReport(report, jointIds) {
     for (const [test, result] of Object.entries(trials)) {
       if (!Array.isArray(result?.trace)) continue;
       if (!result.trace.length) throw new Error(`The recording for ${label(name)} is empty.`);
+      const radius = result.motion?.ball_radius_m;
+      if (radius !== undefined && (!Number.isFinite(radius) || radius <= 0)) throw new Error('Invalid motion ball radius.');
       let previousTime = -1;
       const events = new Map();
       for (const frame of result.trace) {
         if (!Number.isFinite(frame?.time_s) || frame.time_s < 0 || frame.time_s <= previousTime
-            || !vector(frame.root, 7)
-            || Math.abs(Math.hypot(...frame.root.slice(3)) - 1) > 0.001
+            || !validRoot(frame.root)
             || (usesSkates(result) && !vector(frame.wheels_rad, 4))
+            || (radius !== undefined && !validRoot(frame.ball))
             || !jointIds.every(id => Number.isFinite(frame.joints_rad?.[id]))) {
           throw new Error(`The recording for ${label(name)} has an invalid frame.`);
         }
@@ -102,6 +105,7 @@ export function parseQualificationReport(report, jointIds) {
           [result.dock?.chair ? 'Seated' : 'Parked', frame.recovery?.phase === 'parked' ? frame.time_s : null],
           ['Chair rise', frame.recovery?.phase === 'chair_rise' ? frame.time_s : null],
           ['Foot on pad', onFootPad ? frame.time_s : null],
+          ['Ball contact', result.motion?.ball_contact_s],
           ['Push', frame.push?.time_s], ['Fall', result.dock ? null : frame.recovery?.fall_at_s],
           ['Get-up', frame.recovery?.getup_at_s],
           [result.dock?.skates ? 'Roll away' : 'Walk again', frame.recovery?.resumed_at_s],
@@ -180,13 +184,22 @@ export class QualificationReplay {
   get frame() { return this.trial && replayFrameAt(this.trial.result.trace, this.time); }
   get alternating() { return !this.get('alternate-label').hidden && this.get('alternate').checked; }
 
-  setRecording(report, {scenario, variant, filename, alternate = false, cycleCases = false, dockIndex, dockLoader} = {}) {
+  clearRecording() {
+    this.caseRequest = {};
+    this.fileRequest++;
+    this.trials = null;
+    this.time = this.duration = 0;
+    this.get('controls').hidden = true;
+    this.get('status').textContent = 'Choose a qualification JSON report with a recorded trace. It stays on this device.';
+  }
+
+  setRecording(report, {scenario, variant, filename, alternate = false, cycleCases = false, cycleLabel = 'Cycle surfaces', dockIndex, dockLoader} = {}) {
     const cases = parseQualificationReport(report, this.jointIds);
     this.caseRequest = {};
     this.dockLoader = dockLoader;
     this.cases = cases;
     this.caseCycle = cycleCases && cases.size > 1 ? [...cases.keys()] : null;
-    this.get('alternate-text').textContent = this.caseCycle ? 'Cycle surfaces' : 'Cycle through trials';
+    this.get('alternate-text').textContent = this.caseCycle ? cycleLabel : 'Cycle through trials';
     const options = dockIndex ? Object.keys(dockIndex) : [...cases.keys()];
     this.get('case').replaceChildren(...options.map(key => new Option(label(key), key)));
     this.get('case-field').hidden = options.length < 2;
@@ -313,12 +326,13 @@ export class QualificationReplay {
     this.lastDisplay = frame;
     const phase = frame?.recovery?.phase;
     const skate = this.trial.result.skate;
-    this.get('phase').textContent = skate ? skate.profile
+    const motion = this.trial.result.motion;
+    this.get('phase').textContent = motion ? (frame?.motion_phase ?? 'Recorded pose') : skate ? skate.profile
       : phase === 'walk' && this.trial.result.dock?.skates ? 'Skating policy'
       : phase === 'approach_missed' && this.trial.result.dock?.navigation ? this.trial.result.dock.navigation.outcome
       : Object.hasOwn(PHASES, phase) ? PHASES[phase] : 'Recorded pose';
     const feet = frame?.footfalls;
-    this.get('footfalls').parentElement.hidden = Boolean(skate);
+    this.get('footfalls').parentElement.hidden = Boolean(skate || motion);
     this.get('footfalls').textContent = Number.isInteger(feet?.left) && Number.isInteger(feet?.right)
       ? `${feet.left} left · ${feet.right} right` : '—';
     const contacts = frame?.module_contacts;
@@ -439,6 +453,22 @@ export class QualificationReplay {
           ['Chair contact while skating', result => result.dock.roller_release.handoff
             ? result.dock.roller_release.exit_chair_contacts.join(', ') || 'None detected' : 'Policy did not start'],
         ] : []),
+      ] : []),
+    ] : this.trial.result.motion ? [
+      ['Return to upright', result => result.motion.upright ? 'Yes' : 'No'],
+      ['Peak tilt', result => number(result.motion.peak_tilt_deg, 1, '°')],
+      ...(Number.isFinite(this.trial.result.motion.pitch_travel_deg) ? [
+        ['Pitch travelled', result => number(result.motion.pitch_travel_deg, 1, '°')],
+      ] : []),
+      ...(Number.isFinite(this.trial.result.motion.lowest_head_m) ? [
+        ['Lowest head clearance', result => number(result.motion.lowest_head_m * 100, 1, 'cm')],
+      ] : []),
+      ...(Number.isFinite(this.trial.result.motion.one_foot_s) ? [
+        ['Continuous one-foot contact', result => number(result.motion.one_foot_s, 2, 's')],
+      ] : []),
+      ...(this.trial.result.motion.ball_radius_m ? [
+        ['Foot contact', result => result.motion.ball_feet?.join(', ') || 'None'],
+        ['Ball moved forward', result => number(result.motion.ball_forward_m * 100, 1, 'cm')],
       ] : []),
     ] : this.trial.result.skate ? [
       ['Forward command', result => number(result.skate.command_m_s, 2, 'm/s')],
