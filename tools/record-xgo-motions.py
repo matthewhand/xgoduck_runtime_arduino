@@ -40,9 +40,10 @@ COMMUNITY = {
 }
 
 
-def load_skill(skill, path=None):
+def load_skill(skill, path=None, *, pinned=None):
     policy = Policy()
-    ok, message = policy.load(path or f'xgoduck_{skill}.onnx', use_model_home=path is not None)
+    model, digest = pinned or (path or f'xgoduck_{skill}.onnx', None)
+    ok, message = policy.load(model, use_model_home=path is not None, expected_sha256=digest)
     if not ok:
         raise RuntimeError(message)
     metadata = policy.session.get_modelmeta().custom_metadata_map

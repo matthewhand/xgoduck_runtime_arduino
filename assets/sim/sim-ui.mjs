@@ -3,7 +3,8 @@ import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs?v=4';
 import {WalkPanel} from './walk-ui.mjs?v=7';
 import {DemoCircuit} from './demo-ui.mjs?v=3';
-import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase, usesSkates} from './qualification-replay.mjs?v=23';
+import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase, usesSkates} from './qualification-replay.mjs?v=24';
+import {caseState, matchingCase, openTripleReport, panelLink, replayable, tripleTrial} from './triple-m-replay.mjs?v=1';
 import {GuardPreview} from './guard-preview.mjs?v=10';
 import {DOCK_DESIGNS, dockSurfaceGeometry} from './dock-preview.mjs?v=7';
 import {SKATE_SURFACES} from './skate-terrain.mjs';
@@ -87,6 +88,7 @@ let terrain, towLine, towPoint, skateTrack;
 let floorGroup, ground, grid, shownSkateTerrain, visibleSprintTiles;
 const sprintTiles = new Map();
 let replay, lastReplayPose, replayModules = [];
+let tripleRows = [], tripleFailures = [];
 let motionBall;
 let dockOverhead = false;
 let modPreview, modLoad, dino, dinoModule, dinoLoad, skinModule;
@@ -446,6 +448,12 @@ function updateModeText() {
   $('qualification-case-field').querySelector('label').textContent = triple ? 'Case' : motion ? 'Motion' : skateTerrain ? 'Surface' : stockView ? 'Trial' : 'Entry';
   $('qualification-variant-field').hidden = Boolean(skateTerrain || motion || triple);
   $('triple-panel-link').hidden = !triple;
+  const selectedCase = tripleRows.find(row => row.key === triple?.key);
+  const matched = selectedCase && matchingCase(tripleRows, selectedCase);
+  $('triple-compare').hidden = !matched;
+  if (matched) $('triple-compare').textContent = matched.case.build === 'stock' ? 'Show stock' : 'Show backpack';
+  $('triple-next-failure').hidden = !triple || tripleFailures.length < 2;
+  $('triple-viewport-actions').hidden = $('triple-compare').hidden && $('triple-next-failure').hidden;
   $('qualification-variant-field').querySelector('label').textContent = skateReplay ? 'Run' : 'Design';
   $('skate-speed-data').hidden = $('skate-hud').hidden = !skateReplay;
   $('motion-research').hidden = !motion;
@@ -502,13 +510,13 @@ function updateModeText() {
     : recordedDock?.qualification ? `${replay.selectedLabel} · #${recordedDock.qualification.id}`
     : recordedDock?.bar_entry ? `${replay.selectedLabel} · ${outcome}`
     : recordedDock?.lowering_test ? replay.selectedLabel : recordedDock?.chair ? 'CHAIR DOCK' : 'FLOOR DOCK';
-  $('scene-mode').textContent = triple ? replay.case : motion ? replay.case.toUpperCase() : skateTerrain ? 'TERRAIN SPEED TRIAL' : skateReplay ? 'SKATE SPEED TRIAL' : skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? (stockView ? 'STOCK SIMULATION' : 'QUALIFICATION REPLAY') : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = triple ? triple.label : motion ? replay.case.toUpperCase() : skateTerrain ? 'TERRAIN SPEED TRIAL' : skateReplay ? 'SKATE SPEED TRIAL' : skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? (stockView ? 'STOCK SIMULATION' : 'QUALIFICATION REPLAY') : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : skates ? 'Replay the fastest roller-policy run or try a passive roll on the selected surface.'
     : skateTerrain ? 'Each clip shows the fastest clean setting for that surface. Choose a surface or cycle through all of them.'
     : skateReplay ? 'Recorded MuJoCo trial. Compare the shipped roller policy from rest with the previous passive push.'
-    : triple ? (replay.trial.result.failure ?? 'Passed the simulated screen.')
+    : triple ? 'Recorded CPU simulation. Switch builds to compare the same test conditions.'
     : motion?.author ? 'Recorded transfer trial for a Microduck policy on the simulated XGO Duck.'
     : motion?.lowest_head_m !== undefined ? 'The trained reach brings the head to the floor. This model has a fixed jaw.'
     : motion ? 'Recorded simulation of the shipped XGO Duck policy.'
@@ -758,26 +766,64 @@ async function openMotionLibrary() {
 
 async function openTripleReplay() {
   await selectWorkspace('replay');
+  if (mode !== 'replay' || stopping) return;
   const request = workspaceRequest;
+  const fileRequest = replay.fileRequest;
+  const current = () => !stopping && request === workspaceRequest && fileRequest === replay.fileRequest;
   const status = $('qualification-status');
   status.textContent = 'Loading Triple M cases…';
   try {
-    const local = location.origin === 'http://127.0.0.1:19534' && query.get('source') === 'local';
-    const report = await readReplayJson(local ? '/api/triple-m/report' : './triple-m-report.json', 45000);
-    const rows = report.cases.filter(row => query.get('all') === '1' || !row.result.passed);
-    if (rows.some(row => row.case.move === 'skate')) await prepareSkates();
-    if (stopping || request !== workspaceRequest) return;
-    const cases = Object.fromEntries(rows.map(({label, case:spec, result}) => [label, {
-      ...result, modules:spec.modules, triple:{fault:spec.fault, skates:spec.move === 'skate', lane:['walk','skate'].includes(spec.move)},
-    }]));
-    const scenario = query.get('case');
-    replay.setRecording({'Triple M':cases}, {scenario, alternate:!scenario, cycleCases:true,
-      cycleLabel:query.get('all') === '1' ? 'Cycle cases' : 'Cycle failures'});
+    const report = await openTripleReport({local:query.get('source') === 'local', id:query.get('report')});
+    const rows = report.cases.filter(replayable);
+    const failures = rows.filter(row => caseState(row) === 'failed');
+    const all = query.get('all') === '1';
+    const ordered = all ? rows : failures;
+    const requested = query.get('case');
+    const selected = requested ? rows.find(row => row.key === requested || row.label === requested) : ordered[0];
+    if (!selected) throw new Error(requested ? 'The selected case is unavailable in this report.'
+      : all ? 'This report has no recorded cases.' : 'This report has no recorded failures.');
+    const loadCase = async key => {
+      const row = await report.load(key);
+      if (!row || row.key !== key || !row.result?.trace?.length) throw new Error('This case has no recording.');
+      const trial = tripleTrial(row);
+      if (usesSkates(trial)) await prepareSkates();
+      return {'Triple M':{[key]:trial}};
+    };
+    const recording = await loadCase(selected.key);
+    if (!current()) return;
+    tripleRows = rows;
+    tripleFailures = failures.map(row => row.key);
+    $('triple-panel-link').href = panelLink(report);
+    replay.setRecording(recording, {
+      scenario:selected.key, alternate:!requested, cycleCases:ordered.map(row => row.key),
+      cycleLabel:all ? 'Cycle cases' : 'Cycle failures', incident:caseState(selected) === 'failed',
+      caseOptions:rows.map(row => [row.key, row.label]), caseLoader:loadCase,
+    });
     running = true;
     updateModeText();
   } catch (error) {
-    if (request === workspaceRequest) status.textContent = error.message;
+    if (current()) status.textContent = error.message;
   }
+}
+
+function comparableTime(result) {
+  const metrics = result.scenario_metrics;
+  return metrics?.gate_at_s ?? metrics?.shove_at_s ?? result.triple?.fault?.at_s;
+}
+
+function compareTripleCase() {
+  const selected = tripleRows.find(row => row.key === replay.case);
+  const other = selected && matchingCase(tripleRows, selected);
+  if (!other) return;
+  const now = replay.time;
+  const source = comparableTime(replay.trial.result);
+  return replay.chooseCase(other.key, {
+    action:'compare',
+    position:trial => {
+      const target = comparableTime(trial.result);
+      return Number.isFinite(source) && Number.isFinite(target) ? now + target - source : now;
+    },
+  });
 }
 
 async function openStockReplay() {
@@ -954,9 +1000,17 @@ function applyReplayPose() {
   const contact = $('dock-contact-overlay');
   const triple = replay.trial.result.triple;
   const fault = triple?.fault;
-  const activeFault = fault?.jam && packet.time_s >= fault.at_s && packet.time_s < fault.at_s + fault.jam_s;
+  const result = replay.trial.result;
+  const jamAt = triple?.scenario ? result.scenario_metrics?.jam_at_s : fault?.at_s;
+  const releaseAt = triple?.scenario ? result.scenario_metrics?.release_at_s : jamAt + fault?.jam_s;
+  const activeFault = fault?.jam && Number.isFinite(jamAt) && packet.time_s >= jamAt && packet.time_s < releaseAt;
   const activeShove = fault?.shove && packet.time_s >= fault.at_s && packet.time_s < fault.at_s + .45;
-  const pushOff = triple ? (activeFault ? `${fault.jam} wheel locked` : replay.trial.result.failure ?? '')
+  const failedAt = result.events?.find?.(event => event?.id === 'first-failure')?.time_s ?? result.failed_at_s ?? replay.trial.duration;
+  const failure = packet.time_s >= failedAt && !result.skipped ? result.failure : null;
+  const scenarioShove = result.scenario_metrics?.shove_at_s;
+  const activeTip = Number.isFinite(scenarioShove) && packet.time_s >= scenarioShove && packet.time_s < scenarioShove + .45;
+  const phase = activeFault ? `${fault.jam} wheel locked` : activeTip ? `Disturbance towards the ${fault.tip}` : packet.scenario_phase;
+  const pushOff = triple ? [phase, failure].filter(Boolean).join(' · ')
     : replay.trial.result.dock && Array.isArray(packet.push_off) ? packet.push_off.join(' · ') : '';
   const contactText = activeShove ? `Side shove ${fault.shove > 0 ? 'left' : 'right'}` : pushOff;
   contact.hidden = !contactText;
@@ -1317,6 +1371,14 @@ function attachControls() {
     wheelsExploded = false;
     running = !running; sim.accumulator = 0; updateModeText();
   });
+  $('triple-next-failure').addEventListener('click', () => {
+    const next = (tripleFailures.indexOf(replay.case) + 1) % tripleFailures.length;
+    if (tripleFailures[next]) {
+      replay.get('incident').checked = true;
+      void replay.chooseCase(tripleFailures[next]);
+    }
+  });
+  $('triple-compare').addEventListener('click', () => void compareTripleCase());
   $('roll-forward').addEventListener('click', startSkateRoll);
   $('skate-speed').addEventListener('click', () => void openSkateSpeed());
   $('skate-terrain-speed').addEventListener('click', () => void openSkateSpeed(true));

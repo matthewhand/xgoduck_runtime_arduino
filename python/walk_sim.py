@@ -30,11 +30,11 @@ JOINT_NAMES = (
 OBS_NAMES = 'base_ang_vel,projected_gravity,joint_pos,joint_vel,actions,command,head_command,body_command'
 
 
-def load_sim_policy(np, obs, file):
+def load_sim_policy(np, obs, file, expected_sha256=None):
     from policy import Policy
 
     policy = Policy()
-    ok, message = policy.load(file, use_model_home=True)
+    ok, message = policy.load(file, use_model_home=True, expected_sha256=expected_sha256)
     if not ok:
         raise ValueError(message)
     metadata = policy.session.get_modelmeta().custom_metadata_map
@@ -69,7 +69,8 @@ def load_recovery_scene(mj, configure=None, *, skates=False):
 
 class WalkSimulation:
     def __init__(self, vx, yaw, arena=None, *, configure=None,
-                 walk_file='xgoduck_walk.onnx', getup_file='xgoduck_getup.onnx', skates=False):
+                 walk_file='xgoduck_walk.onnx', getup_file='xgoduck_getup.onnx', skates=False,
+                 policy_hashes=None):
         import mujoco as mj
         import numpy as np
         self.mj, self.np = mj, np
@@ -81,8 +82,9 @@ class WalkSimulation:
         self.data = data = mj.MjData(model)
         self.obs = np.zeros((1, 61), dtype=np.float32)
         self.command = (vx, 0, yaw)
-        self.walk = load_sim_policy(np, self.obs, walk_file)
-        self.getup = None if self.mission else load_sim_policy(np, self.obs, getup_file)
+        policy_hashes = policy_hashes or {}
+        self.walk = load_sim_policy(np, self.obs, walk_file, policy_hashes.get('walk'))
+        self.getup = None if self.mission else load_sim_policy(np, self.obs, getup_file, policy_hashes.get('getup'))
         self.recovery = None if self.mission else Recovery(period_s=SLOT_S)
         self.fall_at_s = self.getup_at_s = self.resumed_at_s = None
         self.qpos = [int(model.joint(name).qposadr[0]) for name in JOINT_NAMES]

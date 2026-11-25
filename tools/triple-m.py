@@ -2,7 +2,6 @@
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from datetime import datetime, timezone
 from hashlib import sha256
 from inspect import getsource
 import json
@@ -13,7 +12,6 @@ from pathlib import Path
 import platform
 import runpy
 import sys
-from tempfile import NamedTemporaryFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'python'))
@@ -23,12 +21,15 @@ import numpy as np
 import onnxruntime as ort
 
 from skate_dock_exit import load_roller_policy, roller_target
+from triple_m_batches import BatchStore, atomic_json, completed_row, error_row, publish_latest, read_json, timestamp
+from triple_m_scenarios import run_scenario
 from walk_sim import JOINT_IDS, MODEL, ROLLER_MODEL, RUN_S, SLOT_S, SUBSTEPS, WHEEL_NAMES, WalkSimulation
 
 TOOLS = ROOT / 'tools'
 ASSETS = ROOT / 'assets'
 CACHE = ROOT / '.cache/triple-m'
 REPLAY_SCHEMA = 1
+RUNNER_VERSION = 2
 HARDWARE = runpy.run_path(str(TOOLS / 'check-duck-hardware.py'))
 MOTIONS = runpy.run_path(str(TOOLS / 'record-xgo-motions.py'))
 FALLS, add_modules = HARDWARE['FALLS'], HARDWARE['add_modules']
@@ -37,19 +38,24 @@ MOVE_LABELS = {'walk':'Walk', 'getup':'Get-up', 'skate':'Skate', 'dance':'Head d
                'flamingo-cycle':'Flamingo'}
 EXPRESSION_ASSETS = {item[0]: item[1:] for item in MOTIONS['COMMUNITY'].values()}
 DEFAULT = dict(moves=['walk','getup','skate'], builds=['stock','backpack'], faults=['nominal','shove','jam'],
-               pack_g=round(PACK['mass_g']['nominal'], 2), grip=.75, shove_m_s=.35, jam_s=.60)
+               pack_g=round(PACK['mass_g']['nominal'], 2), grip=.75, shove_m_s=.35, jam_s=.60, scenarios=[])
 FAULT_AT_S = 2.
+SCENARIOS = ('wheel-jam-release', 'fall-recovery')
 
 
 def normalize(options):
     if not isinstance(options, dict) or set(options) - set(DEFAULT):
         raise ValueError('Choose the supported motions, builds and physics settings.')
     settings = {**DEFAULT, **options}
-    for name, choices in (('moves', MOVE_LABELS), ('builds', DEFAULT['builds']), ('faults', DEFAULT['faults'])):
+    for name, choices in (('moves', MOVE_LABELS), ('builds', DEFAULT['builds']), ('faults', DEFAULT['faults']),
+                          ('scenarios', SCENARIOS)):
         selected = settings[name]
-        if not isinstance(selected, list) or not selected or any(not isinstance(v, str) or v not in choices for v in selected):
+        if not isinstance(selected, list) or (not selected and name in ('builds', 'faults')) or any(
+                not isinstance(v, str) or v not in choices for v in selected):
             raise ValueError(f'Choose one or more supported {name}.')
         settings[name] = [v for v in choices if v in selected]
+    if not settings['moves'] and not settings['scenarios']:
+        raise ValueError('Choose at least one motion or scenario.')
     for name, low, high in (('pack_g', 5, 80), ('grip', .3, 1.5), ('shove_m_s', .1, .8), ('jam_s', .10, 2.)):
         value = settings[name]
         if type(value) not in (int, float) or not low <= value <= high:
@@ -78,6 +84,18 @@ def cases_for(settings):
                 conditions.extend(dict(jam=wheel, jam_s=settings['jam_s'], at_s=FAULT_AT_S) for wheel in ('LF','RF'))
             for fault in conditions:
                 cases.append(dict(build=build, modules=modules, move=move, grip=settings['grip'], fault=fault))
+        preset = dict(build=build, modules=modules, grip=settings['grip'])
+        if 'wheel-jam-release' in settings['scenarios']:
+            for wheel in ('LF', 'RF'):
+                for variant in ('matched-control', 'release', 'simulated-brake'):
+                    fault = dict(jam_s=settings['jam_s'], at_s=FAULT_AT_S)
+                    fault['jam_wheel' if variant == 'matched-control' else 'jam'] = wheel
+                    cases.append(dict(preset, move='skate', fault=fault,
+                                      scenario=dict(kind='wheel-jam-release', variant=variant)))
+        if 'fall-recovery' in settings['scenarios']:
+            for side in ('back', 'right'):
+                cases.append(dict(preset, move='walk', fault=dict(tip=side, at_s=FAULT_AT_S),
+                                  scenario=dict(kind='fall-recovery', variant=side)))
     if not cases:
         raise ValueError('No selected move supports those physics settings.')
     return cases
@@ -85,10 +103,19 @@ def cases_for(settings):
 
 def label(case):
     fault = case['fault']
+    scenario = case.get('scenario')
+    build = case['build'].capitalize()
+    if scenario:
+        if scenario['kind'] == 'fall-recovery':
+            return f"Walk and get up · {fault['tip'].capitalize()} shove · {build}"
+        wheel = fault.get('jam', fault.get('jam_wheel'))
+        branch = {'matched-control': 'Matched control', 'release': 'Jam and release',
+                  'simulated-brake': 'Jam and simulated brake'}[scenario['variant']]
+        return f"Skate · {wheel} {branch} · {build}"
     condition = (f"From {fault['fall']}" if 'fall' in fault else
                  ('Shove left' if fault['shove'] > 0 else 'Shove right') if 'shove' in fault else
                  f"{fault['jam']} wheel jam" if 'jam' in fault else 'Baseline')
-    return f"{MOVE_LABELS[case['move']]} · {condition} · {case['build'].capitalize()}"
+    return f"{MOVE_LABELS[case['move']]} · {condition} · {build}"
 
 
 def tilt(sim):
@@ -96,7 +123,7 @@ def tilt(sim):
     return math.degrees(math.acos(max(-1., 1 - 2*(x*x+y*y))))
 
 
-def setup(case):
+def setup(case, pins=None):
     fault, modules = case['fault'], case['modules']
 
     def configure(spec):
@@ -106,7 +133,9 @@ def setup(case):
                               name1=f"passive_{fault['jam']}_wheel", objtype=mj.mjtObj.mjOBJ_JOINT,
                               data=[0.]*11, solref=[.010, 1.])
 
-    sim = WalkSimulation(.2, 0, configure=configure, skates=case['move'] == 'skate')
+    policy_options = {} if pins is None else dict(walk_file=pins['walk'][0], getup_file=pins['getup'][0],
+        policy_hashes={skill: pins[skill][1] for skill in ('walk','getup')})
+    sim = WalkSimulation(.2, 0, configure=configure, skates=case['move'] == 'skate', **policy_options)
     sim.model.geom_friction[[sim.floor, *sim.feet], 0] = case['grip']
     return sim
 
@@ -165,12 +194,12 @@ def engage_lock(sim, wheel):
     return eq, position, float(sim.data.qpos[position])
 
 
-def skate(sim, case):
+def skate(sim, case, pins=None):
     fault = case['fault']
     mj.mj_resetDataKeyframe(sim.model, sim.data, sim.model.key('home').id)
     mj.mj_forward(sim.model, sim.data)
     wheels = [int(sim.model.joint(w).qposadr[0]) for w in WHEEL_NAMES]
-    policy = load_roller_policy()
+    policy = load_roller_policy(pinned=(pins or {}).get('roller'))
     trace = [capture(sim, case, wheels=wheels)]
     onset = round(fault.get('at_s', -1)/SLOT_S)
     release = onset + round(fault.get('jam_s', 0)/SLOT_S)
@@ -210,14 +239,14 @@ def skate(sim, case):
                 wheel_slip_deg=math.degrees(lock_travel) if lock else None)
 
 
-def expression(sim, case):
+def expression(sim, case, pins=None):
     skill = case['move']
-    stand = MOTIONS['load_skill']('walk')
+    stand = MOTIONS['load_skill']('walk', pinned=(pins or {}).get('walk'))
     if skill == 'dance':
-        policy = MOTIONS['load_skill']('walk')
+        policy = MOTIONS['load_skill']('walk', pinned=(pins or {}).get('walk'))
     else:
         policy_path = ROOT / '.cache' / f'microduck-{skill}.onnx'
-        policy = MOTIONS['load_skill'](skill, policy_path)
+        policy = MOTIONS['load_skill'](skill, policy_path, pinned=(pins or {}).get(skill))
     result = MOTIONS['record'](sim, stand, policy, skill)
     motion = result['motion']
     gesture = max(max(frame['joints_rad'][id] for frame in result['trace']) - min(frame['joints_rad'][id] for frame in result['trace']) for id in (30,31,32,33))
@@ -228,108 +257,225 @@ def expression(sim, case):
                 gesture_deg=math.degrees(gesture), one_foot_s=motion.get('one_foot_s'))
 
 
-def dependency_key(case, digests):
+def runner_identity():
+    return dict(version=RUNNER_VERSION, replay_schema=REPLAY_SCHEMA, python=platform.python_version(),
+                implementation=platform.python_implementation(), system=platform.system(), machine=platform.machine(),
+                mujoco=mj.__version__, numpy=np.__version__, onnxruntime=ort.__version__,
+                provider='CPUExecutionProvider')
+
+
+def digest_file(path, digests):
+    if path not in digests:
+        data = path.read_bytes()
+        if path.suffix in ('.py', '.xml'):
+            data = data.replace(b'\r\n', b'\n')
+        digests[path] = sha256(data).hexdigest()
+    return digests[path]
+
+
+def policy_pins(case, digests):
+    move = case['move']
+    skills = ('walk', 'getup', 'roller') if move == 'skate' else ('walk', 'getup')
+    paths = {skill: ROOT / 'python' / f'xgoduck_{skill}.onnx' for skill in skills}
+    pins = {skill: (path, digest_file(path, digests)) for skill, path in paths.items()}
+    if move in EXPRESSION_ASSETS:
+        pins[move] = ROOT / '.cache' / f'microduck-{move}.onnx', EXPRESSION_ASSETS[move][2]
+    return pins
+
+
+def dependency_key(case, digests, *, pins=None, runner=None):
     move = case['move']
     skate_case = move == 'skate'
     model = ROLLER_MODEL if skate_case else MODEL
     files = [model, model.parent / ('robot.xml' if skate_case else 'robot_walk.xml')]
     files.extend(sorted((model.parent / 'assets').glob('*')))
-    files += [ROOT / 'python' / name for name in ('walk_sim.py','policy.py','rl_core.py')]
-    functions = [setup, add_modules]
+    files += [ROOT / 'python' / name for name in ('walk_sim.py', 'policy.py', 'rl_core.py', 'recovery.py')]
+    functions = [setup, add_modules, run_case]
     if skate_case:
-        files += [ROOT / 'python/xgoduck_roller.onnx', TOOLS / 'skate_dock_exit.py']
+        files.append(TOOLS / 'skate_dock_exit.py')
         functions += [skate, capture, tilt]
         if 'jam' in case['fault']:
             functions.append(engage_lock)
     elif move in ('walk','getup'):
-        files += [ROOT / 'python' / f'xgoduck_{policy}.onnx' for policy in ('walk','getup')]
-        files.append(ROOT / 'python/recovery.py')
         functions += [walk_or_getup, capture, tilt]
     else:
-        files += [ROOT / 'python/xgoduck_walk.onnx', TOOLS / 'record-xgo-motions.py']
+        files += [ROOT / 'python/controller.py', TOOLS / 'record-xgo-motions.py']
         functions.append(expression)
-        if move in EXPRESSION_ASSETS:
-            path = ROOT / '.cache' / f'microduck-{move}.onnx'
-            if not path.is_file() or sha256(path.read_bytes()).hexdigest() != EXPRESSION_ASSETS[move][2]:
-                raise ValueError(f'Place the pinned {move} ONNX in .cache before running that expression.')
-            files.append(path)
-    fingerprints = []
-    for path in files:
-        if path not in digests:
-            digests[path] = sha256(path.read_bytes()).hexdigest()
-        fingerprints.append((path.relative_to(ROOT).as_posix(), digests[path]))
+    if case.get('scenario'):
+        files.append(TOOLS / 'triple_m_scenarios.py')
+        functions.extend((engage_lock, capture, tilt))
+    fingerprints = [(path.relative_to(ROOT).as_posix(), digest_file(path, digests)) for path in files]
+    policies = pins if pins is not None else policy_pins(case, digests)
+    fingerprints.extend((path.relative_to(ROOT).as_posix(), digest) for path, digest in policies.values())
     physics = case['fault']
     if 'fall' in physics:
         physics = dict(physics, axis=FALLS[physics['fall']])
     identity = dict(schema=REPLAY_SCHEMA, move=move, physics=physics, grip=case['grip'], modules=case['modules'],
-                    engine=[mj.__version__, np.__version__, ort.__version__, platform.system(), platform.machine()],
-                    sources=[sha256(getsource(f).encode()).hexdigest() for f in functions],
+                    engine=runner or runner_identity(), scenario=case.get('scenario'),
+                    sources=[sha256(getsource(f).replace('\r\n', '\n').encode()).hexdigest() for f in functions],
                     files=fingerprints)
     return sha256(json.dumps(identity, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def run_case(case):
-    sim = setup(case)
+def run_case(case, pins=None):
+    sim = setup(case, pins)
     move = case['move']
-    result = (skate(sim, case) if move == 'skate' else walk_or_getup(sim,case) if move in ('walk','getup') else expression(sim,case))
-    result.update(mass_g=round(float(sim.model.body_mass.sum())*1000, 2), passed=result['failure'] is None)
+    if case.get('scenario'):
+        result = run_scenario(sim, case, capture=capture, tilt=tilt, engage_lock=engage_lock,
+                              load_roller=lambda: load_roller_policy(pinned=(pins or {}).get('roller')))
+    elif move == 'skate':
+        result = skate(sim, case, pins)
+    elif move in ('walk', 'getup'):
+        result = walk_or_getup(sim, case)
+    else:
+        result = expression(sim, case, pins)
+    result.update(mass_g=round(float(sim.model.body_mass.sum())*1000, 2),
+                  passed=result['failure'] is None and not result.get('skipped', False))
     return result
 
 
-def atomic_json(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(dir=path.parent, mode='w', encoding='utf-8', delete=False) as staged:
-        name = Path(staged.name)
-        try:
-            json.dump(payload, staged, separators=(',', ':'), allow_nan=False)
-            staged.write('\n')
-        except BaseException:
-            staged.close()
-            name.unlink(missing_ok=True)
-            raise
-    try:
-        name.replace(path)
-    finally:
-        name.unlink(missing_ok=True)
+def run_pinned_case(case, key):
+    digests = {}
+    pins = policy_pins(case, digests)
+    if dependency_key(case, digests, pins=pins) != key:
+        raise ValueError('Simulation inputs changed before the worker started. Run a new batch.')
+    result = run_case(case, pins)
+    if dependency_key(case, {}) != key:
+        raise ValueError('Simulation inputs changed during the run. Run a new batch.')
+    if not valid_result(result):
+        raise ValueError('The worker returned an invalid replay trace.')
+    return result
+
+
+def finite_number(value):
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def finite_vector(value, length):
+    return isinstance(value, list) and len(value) == length and all(map(finite_number, value))
+
+
+EXPECTED_JOINTS = frozenset(map(str, JOINT_IDS))
+
+
+def valid_result(result):
+    if not isinstance(result, dict) or type(result.get('passed')) is not bool or 'failure' not in result:
+        return False
+    failure = result['failure']
+    if failure is not None and not isinstance(failure, str):
+        return False
+    skipped = result.get('skipped', False)
+    if type(skipped) is not bool or result['passed'] != (failure is None and not skipped):
+        return False
+    trace = result.get('trace')
+    if not isinstance(trace, list) or not trace:
+        return False
+    previous_time = -1
+    for frame in trace:
+        if not isinstance(frame, dict):
+            return False
+        current_time, joints = frame.get('time_s'), frame.get('joints_rad')
+        if (not finite_number(current_time) or current_time <= previous_time or current_time < 0
+                or not finite_vector(frame.get('root'), 7) or not isinstance(joints, dict)
+                or set(map(str, joints)) != EXPECTED_JOINTS or len(joints) != len(EXPECTED_JOINTS)
+                or not all(map(finite_number, joints.values()))
+                or ('wheels_rad' in frame and not finite_vector(frame['wheels_rad'], len(WHEEL_NAMES)))):
+            return False
+        previous_time = current_time
+    return True
 
 
 def load_cache(path, key):
     try:
-        entry = json.loads(path.read_text(encoding='utf-8'))
-        return entry['result'] if entry.get('key') == key and entry['result']['trace'] else None
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        entry = read_json(path)
+        if isinstance(entry, dict) and entry.get('key') == key and valid_result(entry.get('result')):
+            return entry['result']
+    except (OSError, ValueError, OverflowError):
         return None
 
 
-def run_batch(options, workers, cache=CACHE, *, progress=lambda update: None):
+def plan_batch(options):
     settings = normalize(options)
-    cases = cases_for(settings)
     digests = {}
-    keys = [dependency_key(case, digests) for case in cases]
-    entries = {key:load_cache(cache / f'{key}.json', key) for key in set(keys)}
-    queued = {key:case for key,case in zip(keys,cases) if entries[key] is None}
-    hits = sum(entries[key] is not None for key in keys)
+    runner = runner_identity()
+    rows = [dict(case=case, label=label(case), key=dependency_key(case, digests, runner=runner))
+            for case in cases_for(settings)]
+    # Keep live plans and manifests identical after serialization, including tuples in case options.
+    return json.loads(json.dumps(dict(schema=REPLAY_SCHEMA, runner=runner, settings=settings, cases=rows)))
+
+
+def run_batch(options, workers, cache=CACHE, *, keys=None, progress=lambda update: None, batch=None):
+    plan = plan_batch(options)
+    if batch is not None and (keys is not None or not batch.matches(plan)):
+        raise ValueError('The stored batch needs different simulation inputs. Run a new batch.')
+    if keys is None:
+        selected = plan['cases']
+    else:
+        requested = set(keys)
+        if requested - {row['key'] for row in plan['cases']}:
+            raise ValueError('One or more case keys are missing from the current plan.')
+        selected = [row for row in plan['cases'] if row['key'] in requested]
+
+    entries, queued = {}, {}
+    hits = 0
+
+    def finish(row):
+        entries[row['key']] = row
+        if batch is not None:
+            batch.save(row)
+
+    for entry in selected:
+        key, move = entry['key'], entry['case']['move']
+        saved = batch.case(key) if batch is not None else None
+        if saved is not None and saved['result'] is not None:
+            entries[key] = saved
+            hits += 1
+            continue
+        cached = load_cache(cache / f'{key}.json', key)
+        if cached is not None:
+            finish(completed_row(entry, cached))
+            hits += 1
+            continue
+        if move in EXPRESSION_ASSETS:
+            path, expected = policy_pins(entry['case'], {})[move]
+            if not path.is_file() or digest_file(path, {}) != expected:
+                finish(error_row(entry, f'Place the pinned {move} ONNX in .cache, then retry this batch.'))
+                continue
+        queued[key] = entry
+
     used_workers = min(workers, len(queued))
-    progress(dict(total=len(cases), reused=hits, completed=hits, workers=used_workers))
+    completed = len(selected) - len(queued)
+
+    def report_progress():
+        progress(dict(total=len(selected), reused=hits, completed=completed, workers=used_workers))
+
+    report_progress()
     if queued:
         with ProcessPoolExecutor(max_workers=used_workers, mp_context=get_context('spawn')) as pool:
-            futures = {pool.submit(run_case, case):key for key,case in queued.items()}
-            completed = hits
+            futures = {pool.submit(run_pinned_case, entry['case'], key): entry for key, entry in queued.items()}
             for future in as_completed(futures):
-                key = futures[future]
-                entries[key] = result = future.result()
-                atomic_json(cache / f'{key}.json', dict(key=key, result=result))
-                completed += keys.count(key)
-                progress(dict(total=len(cases), reused=hits, completed=completed, workers=used_workers))
-    rows = [dict(case=case, label=label(case), key=key, result=entries[key]) for case,key in zip(cases,keys)]
-    return dict(schema=REPLAY_SCHEMA, created_at=datetime.now(timezone.utc).isoformat(), settings=settings, cases=rows,
-                compute=dict(workers=used_workers, reused=hits, ran=len(queued)))
+                entry = futures[future]
+                key = entry['key']
+                try:
+                    result = future.result()
+                    atomic_json(cache / f'{key}.json', dict(key=key, result=result))
+                    finish(completed_row(entry, result))
+                except Exception as exc:
+                    finish(error_row(entry, exc))
+                completed += 1
+                report_progress()
+    rows = [entries[row['key']] for row in selected]
+    compute = dict(workers=used_workers, reused=hits, ran=len(queued), errors=sum(row['state'] == 'error' for row in rows))
+    if batch is not None:
+        batch.save_compute(compute)
+        return batch.report()
+    return {**plan, 'created_at': timestamp(), 'cases': rows, 'compute': compute}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--options', type=Path, help='Run a saved plan from the Triple M panel')
-    parser.add_argument('--report', type=Path, default=CACHE / 'latest.json')
+    parser.add_argument('--report', type=Path, help='Also write a standalone report for this batch')
     parser.add_argument('--cache', type=Path, default=CACHE)
     parser.add_argument('--jobs', type=int, choices=range(1, 9), default=min(4, os.cpu_count() or 1))
     parser.add_argument('--expressions', action='store_true', help='Include head dance and both Microduck gestures')
@@ -337,16 +483,25 @@ def main():
     args = parser.parse_args()
     if args.serve:
         from triple_m_server import serve
-        serve(run_batch, atomic_json, args.cache, args.jobs, ASSETS)
+        serve(plan_batch, run_batch, args.cache, args.jobs, ASSETS)
         return
-    options = json.loads(args.options.read_text(encoding='utf-8')) if args.options else {}
+    options = read_json(args.options) if args.options else {}
     if args.expressions:
         options['moves'] = list(MOVE_LABELS)
-    report = run_batch(options, args.jobs, args.cache)
-    atomic_json(args.report, report)
+    batch = BatchStore.create(args.cache, plan_batch(options))
+    batch.mark_attempt()
+    report = run_batch(options, args.jobs, args.cache, batch=batch)
+    if args.report is not None:
+        atomic_json(args.report, report)
+    if any(row['result'] is not None for row in report['cases']):
+        publish_latest(args.cache / 'latest.json', report)
     for row in report['cases']:
-        print(row['label'], row['result']['failure'] or 'Pass')
-    print(report['compute'], flush=True)
+        result = row['result']
+        detail = row.get('error') if result is None else result.get('skip_reason') or result['failure'] or 'Pass'
+        print(row['label'], detail)
+    print(batch.manifest['id'], report['compute'], flush=True)
+    if report['compute']['errors']:
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':
