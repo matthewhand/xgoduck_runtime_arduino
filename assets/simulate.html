@@ -105,6 +105,7 @@
               <input id="qualification-file" type="file" accept=".json,application/json" hidden>
             </div>
             <p class="muted" id="qualification-status" role="status">Choose a qualification JSON report with a recorded trace. It stays on this device.</p>
+            <a class="muted" id="triple-panel-link" href="triple-m.html" hidden>Triple M results and batch controls</a>
             <a class="muted" id="skate-speed-data" href="sim/skate-speed-recording.json" download hidden>Download skate trial results</a>
             <div id="motion-research" hidden>
               <p class="muted"><a id="motion-credit">Policy source</a></p>
@@ -244,5 +245,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=64"></script>
+<script type="module" src="sim/sim-ui.mjs?v=66"></script>
 </body></html>

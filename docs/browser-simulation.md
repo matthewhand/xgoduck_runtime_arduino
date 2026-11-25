@@ -97,6 +97,34 @@ Open `http://127.0.0.1:19527/simulate.html` on that PC. Recreate the forward aft
 reconnecting USB. Plain HTTP at the board's Wi-Fi address uses the WebGL 2
 fallback. The renderer badge reports the backend actually initialized.
 
+## Triple M Manufacturing
+
+Open **Experimental → Triple M Manufacturing** for the published batch and
+its failure loop. The three selectors cover physics modifiers, movements,
+and modifications. Get-up trials start on each of four sides. Walking and
+skating receive either a left or right lateral velocity impulse at 2 s.
+Skate jams lock one front wheel at its current angle for the chosen interval.
+The optional expression cases run head dance, polite bow, and flamingo.
+
+The first batch compares stock with the nominal 30.18 g charging-backpack
+estimate. The backpack is a rigid contact envelope at the estimated centre
+of mass. The locomotion cases use the shipped policies and flat ground.
+Walking and skating check a ±15 cm lane. Get-up checks upright walking
+within eight seconds and at least 0.75 m of movement after recovery.
+These are simulated screens with simplified actuators.
+
+On a PC with the simulation dependencies installed, run
+`python -B tools/triple-m.py --serve --jobs 4`, then use **Open PC runner**.
+The runner listens on that PC's loopback address. Run plans can also be
+downloaded from the panel and passed to `tools/triple-m.py --options`.
+For the Microduck expressions, use the same pinned ONNX files as the Motion
+Library and save them in `.cache`. The UNO Q hosts the published report.
+
+The cache stores whole case results, including failures, keyed by the
+effective geometry and mass, applicable physics inputs, model and policy
+files, simulation code, and engine versions. Changing jam duration reuses
+cases without a jam. A backpack-only mass change reuses the stock cases.
+
 ## Motion library
 
 Open **Motions** or `simulate.html?motions=1` to loop the forward roll,

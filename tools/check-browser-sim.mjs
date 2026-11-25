@@ -256,6 +256,21 @@ try {
   assert(flamingo.result.motion.one_foot_s > .15 && flamingo.result.motion.source.includes('RemiFabre/'));
   console.log('PASS: seven policy motion clips, signed foot contacts, and community source links');
 
+  const tripleReport = JSON.parse(await read('triple-m-report.json'));
+  const tripleCases = Object.fromEntries(tripleReport.cases.map(({label,case:spec,result}) => [label,
+    {...result, modules:spec.modules, triple:{fault:spec.fault, skates:spec.move === 'skate'}},
+  ]));
+  const tripleReplay = parseQualificationReport({'Triple M':tripleCases}, jointIds);
+  assert.equal(tripleReplay.size, 30);
+  assert.equal(tripleReport.cases.filter(row => !row.result.passed).length, 10);
+  for (const {case:spec,label,result} of tripleReport.cases.filter(row => row.case.fault.jam)) {
+    const replay = tripleReplay.get(label).get('Triple M');
+    assert.equal(spec.move, 'skate');
+    assert(result.wheel_slip_deg < .1 && result.max_side_m > .15);
+    assert(replay.events.get('Wheel released') > replay.events.get('Disturbance'));
+  }
+  console.log('PASS: Triple M outcome traces and timed wheel locks load in Duck Lab');
+
   const dockSources = [
     'floor-dock', 'chair-dock', 'dock-approach', 'contact-dock', 'contact-refinements', 'contact-stress', 'skate-lowering',
     'chair-catch', 'trip-entry', 'clear-lane', 'turn-seek',

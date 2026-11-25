@@ -3,7 +3,7 @@ import {OrbitControls} from './vendor/three/OrbitControls.js';
 import {DuckSimulation, parsePose} from './sim-core.mjs?v=4';
 import {WalkPanel} from './walk-ui.mjs?v=7';
 import {DemoCircuit} from './demo-ui.mjs?v=3';
-import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase, usesSkates} from './qualification-replay.mjs?v=22';
+import {QualificationReplay, SKATE_TURN_LOOP, loadDockCase, usesSkates} from './qualification-replay.mjs?v=23';
 import {GuardPreview} from './guard-preview.mjs?v=10';
 import {DOCK_DESIGNS, dockSurfaceGeometry} from './dock-preview.mjs?v=7';
 import {SKATE_SURFACES} from './skate-terrain.mjs';
@@ -292,6 +292,7 @@ function buildSkateScene() {
   towPoint.visible = false;
   const laneMarks = [];
   for (let x = 0; x <= 8; x += .25) laneMarks.push(x, -.15, .001, x, .15, .001);
+  for (const y of [-.15,.15]) laneMarks.push(0,y,.001,8,y,.001);
   skateTrack = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',
     new THREE.Float32BufferAttribute(laneMarks, 3)), new THREE.LineBasicMaterial({color:'#7caeaa'}));
   skateTrack.visible = false;
@@ -335,7 +336,8 @@ function showSprintTerrain(config) {
 
 function updateSkateScene() {
   const recording = mode === 'replay' && replay.trial?.result.skate;
-  skateTrack.visible = Boolean(recording);
+  const tripleLane = mode === 'replay' && replay.trial?.result.triple?.lane;
+  skateTrack.visible = Boolean(recording || tripleLane);
   showSprintTerrain(recording?.terrain);
   for (const [name, group] of Object.entries(terrain)) group.visible = mode === 'skates' && sim.surface === name;
   const tow = mode === 'skates' && sim.tow;
@@ -421,6 +423,7 @@ function updateModeText() {
   const rollout = rolloutMode(mode);
   const replaying = mode === 'replay';
   const dockingReplay = replaying && Boolean(replay.trial?.result.dock);
+  const triple = replaying && replay.trial?.result.triple;
   const motion = replaying && replay.trial?.result.motion;
   const skateReplay = replaying && replay.trial?.result.skate;
   const skateTerrain = skateReplay?.terrain;
@@ -438,10 +441,11 @@ function updateModeText() {
   $('qualification-card').hidden = !replaying;
   $('hardware-card').hidden = $('hardware-views').hidden = $('hardware-toolbar').hidden = !hardware;
   $('sim-toolbar').hidden = $('sim-stats').hidden = inspecting;
-  $('matrix-player').hidden = $('board-strip').hidden = inspecting || skates || dockingReplay || Boolean(skateReplay || motion);
-  $('qualification-title').textContent = motion ? 'Motion library' : skateTerrain ? 'Terrain speed trials' : skateReplay ? 'Skate speed trials' : stockView ? 'Stock simulation replay' : dockingReplay ? 'Docking replay' : 'Qualification replay';
-  $('qualification-case-field').querySelector('label').textContent = motion ? 'Motion' : skateTerrain ? 'Surface' : stockView ? 'Trial' : 'Entry';
-  $('qualification-variant-field').hidden = Boolean(skateTerrain || motion);
+  $('matrix-player').hidden = $('board-strip').hidden = inspecting || skates || dockingReplay || Boolean(skateReplay || motion || triple);
+  $('qualification-title').textContent = triple ? 'Triple M replays' : motion ? 'Motion library' : skateTerrain ? 'Terrain speed trials' : skateReplay ? 'Skate speed trials' : stockView ? 'Stock simulation replay' : dockingReplay ? 'Docking replay' : 'Qualification replay';
+  $('qualification-case-field').querySelector('label').textContent = triple ? 'Case' : motion ? 'Motion' : skateTerrain ? 'Surface' : stockView ? 'Trial' : 'Entry';
+  $('qualification-variant-field').hidden = Boolean(skateTerrain || motion || triple);
+  $('triple-panel-link').hidden = !triple;
   $('qualification-variant-field').querySelector('label').textContent = skateReplay ? 'Run' : 'Design';
   $('skate-speed-data').hidden = $('skate-hud').hidden = !skateReplay;
   $('motion-research').hidden = !motion;
@@ -465,7 +469,7 @@ function updateModeText() {
   dockSelectors.hidden = !dockingReplay;
   $('dock-overhead').hidden = !dockingReplay;
   $('dock-overhead').setAttribute('aria-pressed', String(dockOverhead));
-  if (!dockingReplay) $('dock-contact-overlay').hidden = true;
+  if (!dockingReplay && !triple) $('dock-contact-overlay').hidden = true;
   $('mode-note').hidden = inspecting;
   $('physics-card').hidden = !playground(mode) || demoMode;
   $('physics-title').textContent = skates ? 'Roller skates' : 'Physics playground';
@@ -498,12 +502,13 @@ function updateModeText() {
     : recordedDock?.qualification ? `${replay.selectedLabel} · #${recordedDock.qualification.id}`
     : recordedDock?.bar_entry ? `${replay.selectedLabel} · ${outcome}`
     : recordedDock?.lowering_test ? replay.selectedLabel : recordedDock?.chair ? 'CHAIR DOCK' : 'FLOOR DOCK';
-  $('scene-mode').textContent = motion ? replay.case.toUpperCase() : skateTerrain ? 'TERRAIN SPEED TRIAL' : skateReplay ? 'SKATE SPEED TRIAL' : skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? (stockView ? 'STOCK SIMULATION' : 'QUALIFICATION REPLAY') : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
+  $('scene-mode').textContent = triple ? replay.case : motion ? replay.case.toUpperCase() : skateTerrain ? 'TERRAIN SPEED TRIAL' : skateReplay ? 'SKATE SPEED TRIAL' : skates ? 'PHYSICS / ROLLER SKATES' : dockingReplay ? dockSceneLabel : replaying ? (stockView ? 'STOCK SIMULATION' : 'QUALIFICATION REPLAY') : mode === 'explore' ? 'EXPLORE / BEACON HUNT' : mode === 'walk' ? 'PHYSICS / WALKING POLICY' : mode === 'physics' ? 'PHYSICS / PLAYGROUND' : mode === 'live' ? 'LIVE / READ ONLY' : gait ? 'PROCEDURAL STEP PREVIEW' : 'POSE WORKSPACE';
   $('mode-note').textContent = mode === 'physics'
     ? 'Try a drop, a nudge, or lower gravity. Select Walking policy to let the trained controller balance the Duck.'
     : skates ? 'Replay the fastest roller-policy run or try a passive roll on the selected surface.'
     : skateTerrain ? 'Each clip shows the fastest clean setting for that surface. Choose a surface or cycle through all of them.'
     : skateReplay ? 'Recorded MuJoCo trial. Compare the shipped roller policy from rest with the previous passive push.'
+    : triple ? (replay.trial.result.failure ?? 'Passed the simulated screen.')
     : motion?.author ? 'Recorded transfer trial for a Microduck policy on the simulated XGO Duck.'
     : motion?.lowest_head_m !== undefined ? 'The trained reach brings the head to the floor. This model has a fixed jaw.'
     : motion ? 'Recorded simulation of the shipped XGO Duck policy.'
@@ -637,7 +642,7 @@ function updateDemoStatus(message, progress, active) {
 async function selectWorkspace(next) {
   if (next === 'motions') return openMotionLibrary();
   if (next === 'demo' && demoMode) return;
-  if (next === 'replay' && replay.trial?.result.motion) replay.clearRecording();
+  if (next === 'replay' && (replay.trial?.result.motion || replay.trial?.result.triple)) replay.clearRecording();
   const request = ++workspaceRequest;
   if (next !== 'demo') {
     demoMode = false;
@@ -688,8 +693,8 @@ async function selectWorkspace(next) {
 }
 
 let dockIndex;
-async function readReplayJson(path) {
-  const response = await fetch(new URL(path, import.meta.url), {signal:AbortSignal.timeout(10000)});
+async function readReplayJson(path, timeout = 10000) {
+  const response = await fetch(new URL(path, import.meta.url), {signal:AbortSignal.timeout(timeout)});
   if (!response.ok) throw new Error(`Replay download failed (HTTP ${response.status}).`);
   return response.json();
 }
@@ -748,6 +753,30 @@ async function openMotionLibrary() {
     updateModeText();
   } catch (error) {
     if (request === workspaceRequest && fileRequest === replay.fileRequest) status.textContent = error.message;
+  }
+}
+
+async function openTripleReplay() {
+  await selectWorkspace('replay');
+  const request = workspaceRequest;
+  const status = $('qualification-status');
+  status.textContent = 'Loading Triple M cases…';
+  try {
+    const local = location.origin === 'http://127.0.0.1:19534' && query.get('source') === 'local';
+    const report = await readReplayJson(local ? '/api/triple-m/report' : './triple-m-report.json', 45000);
+    const rows = report.cases.filter(row => query.get('all') === '1' || !row.result.passed);
+    if (rows.some(row => row.case.move === 'skate')) await prepareSkates();
+    if (stopping || request !== workspaceRequest) return;
+    const cases = Object.fromEntries(rows.map(({label, case:spec, result}) => [label, {
+      ...result, modules:spec.modules, triple:{fault:spec.fault, skates:spec.move === 'skate', lane:['walk','skate'].includes(spec.move)},
+    }]));
+    const scenario = query.get('case');
+    replay.setRecording({'Triple M':cases}, {scenario, alternate:!scenario, cycleCases:true,
+      cycleLabel:query.get('all') === '1' ? 'Cycle cases' : 'Cycle failures'});
+    running = true;
+    updateModeText();
+  } catch (error) {
+    if (request === workspaceRequest) status.textContent = error.message;
   }
 }
 
@@ -923,9 +952,15 @@ function applyReplayPose() {
   if (motion?.ball_radius_m) showMotionBall(motion, packet);
   if (replay.trial.result.dock?.navigation) $('scene-mode').textContent = navigationLabel(packet, replay.trial.result.dock.navigation);
   const contact = $('dock-contact-overlay');
-  const pushOff = Array.isArray(packet.push_off) ? packet.push_off.join(' · ') : '';
-  contact.hidden = !replay.trial.result.dock || !pushOff;
-  if (contact.textContent !== pushOff) contact.textContent = pushOff;
+  const triple = replay.trial.result.triple;
+  const fault = triple?.fault;
+  const activeFault = fault?.jam && packet.time_s >= fault.at_s && packet.time_s < fault.at_s + fault.jam_s;
+  const activeShove = fault?.shove && packet.time_s >= fault.at_s && packet.time_s < fault.at_s + .45;
+  const pushOff = triple ? (activeFault ? `${fault.jam} wheel locked` : replay.trial.result.failure ?? '')
+    : replay.trial.result.dock && Array.isArray(packet.push_off) ? packet.push_off.join(' · ') : '';
+  const contactText = activeShove ? `Side shove ${fault.shove > 0 ? 'left' : 'right'}` : pushOff;
+  contact.hidden = !contactText;
+  if (contact.textContent !== contactText) contact.textContent = contactText;
   const data = sim.data, q = data.qpos;
   const dx = packet.root[0] - q[0], dy = packet.root[1] - q[1];
   if (replay.trial.result.skate) {
@@ -957,7 +992,7 @@ async function showReplayTrial(action) {
   if (mode !== 'replay') return;
   const trial = replay.trial;
   const skates = usesSkates(trial.result);
-  if (action === 'seek' || (action === 'case' && !trial.result.dock && !trial.result.skate && !trial.result.motion)) running = false;
+  if (action === 'seek' || (action === 'case' && !trial.result.dock && !trial.result.skate && !trial.result.motion && !trial.result.triple)) running = false;
   if (skates && !skateSim) {
     try { await prepareSkates(); }
     catch (error) {
@@ -1372,7 +1407,7 @@ function frame(time) {
     if (rolloutMode(mode)) animateWalk(dt);
     if (mode === 'replay') {
       const result = replay.trial?.result;
-      if (running && !replay.advance(dt, Boolean(result?.motion || result?.dock || (result?.skate && !demoMode)))) { running = false; updateModeText(); }
+      if (running && !replay.advance(dt, Boolean(result?.triple || result?.motion || result?.dock || (result?.skate && !demoMode)))) { running = false; updateModeText(); }
       applyReplayPose();
     }
     if (mode === 'hardware') guardPreview.followTrunk(sim.data.qpos);
@@ -1505,6 +1540,7 @@ async function start() {
   } else if (query.get('hardware') === '1') {
     await selectWorkspace('hardware');
   }
+  else if (query.get('triple') === '1') await openTripleReplay();
   else if (query.get('motions') === '1') await openMotionLibrary();
   else if (query.get('sprint') === '1') await openSkateSpeed(query.get('terrain') === '1');
   else if (query.get('skates') === '1') selectWorkspace('skates');

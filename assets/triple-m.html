@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Triple M · Duck Lab</title>
+  <link rel="stylesheet" href="sim/sim.css?v=21">
+  <link rel="stylesheet" href="sim/lab-entry.css?v=4">
+  <link rel="stylesheet" href="sim/triple-m.css?v=1">
+</head>
+<body>
+<main class="lab-entry">
+  <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="experimental.html">Experimental</a><a href="build-test.html">Build &amp; Test</a></nav></header>
+  <h1>Triple M Manufacturing</h1>
+  <form id="batch-form">
+    <div class="batch-grid">
+      <fieldset class="card"><legend>Physics modifiers</legend>
+        <label><input type="checkbox" name="faults" value="nominal" checked> Baseline</label>
+        <label><input type="checkbox" name="faults" value="shove" checked> Side shoves</label>
+        <label><input type="checkbox" name="faults" value="jam" checked> Front-wheel jams</label>
+        <label class="number-field">Grip <input type="number" name="grip" value="0.75" min="0.30" max="1.50" step="0.01" required></label>
+        <label class="number-field">Shove Δv (m/s) <input type="number" name="shove_m_s" value="0.35" min="0.10" max="0.80" step="0.01" required></label>
+        <label class="number-field">Jam duration (s) <input type="number" name="jam_s" value="0.60" min="0.10" max="2.00" step="0.01" required></label>
+      </fieldset>
+      <fieldset class="card"><legend>Movements</legend>
+        <label><input type="checkbox" name="moves" value="walk" checked> Walking</label>
+        <label><input type="checkbox" name="moves" value="getup" checked> Get-up · four sides</label>
+        <label><input type="checkbox" name="moves" value="skate" checked> Skating</label>
+        <details><summary>Dance and expressions</summary>
+          <label><input type="checkbox" name="moves" value="dance"> Head dance</label>
+          <label><input type="checkbox" name="moves" value="polite-bow"> Polite bow</label>
+          <label><input type="checkbox" name="moves" value="flamingo-cycle"> Flamingo</label>
+        </details>
+      </fieldset>
+      <fieldset class="card"><legend>Modifications</legend>
+        <label><input type="checkbox" name="builds" value="stock" checked> Stock</label>
+        <label><input type="checkbox" name="builds" value="backpack" checked> Charging backpack</label>
+        <label class="number-field">Added mass (g) <input type="number" name="pack_g" value="30.18" min="5" max="80" step="0.01" required></label>
+        <p class="muted">The backpack uses a rigid envelope at the estimated centre of mass.</p>
+      </fieldset>
+    </div>
+    <div class="batch-actions"><output id="batch-plan"></output><button class="primary" id="run-batch" type="submit" hidden>Run batch</button><a class="primary" id="local-runner" href="http://127.0.0.1:19534/triple-m.html">Open PC runner</a><button id="save-plan" type="button">Download plan</button></div>
+    <p class="muted" id="batch-status" role="status">Loading the first batch…</p>
+  </form>
+  <section class="card batch-results" aria-labelledby="batch-results-title">
+    <div class="batch-actions"><h2 id="batch-results-title">Results</h2><a class="primary" id="loop-failures" href="simulate.html?triple=1" hidden>Loop failures</a><label><input type="checkbox" id="failures-only" checked> Failures only</label><a id="batch-download" href="sim/triple-m-report.json" download>Download report</a></div>
+    <p id="batch-summary" role="status"></p>
+    <ul class="batch-list" id="batch-list"></ul>
+  </section>
+</main>
+<script type="module" src="sim/triple-m-ui.mjs?v=1"></script>
+</body>
+</html>

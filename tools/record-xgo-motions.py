@@ -94,7 +94,7 @@ def record(sim, stand, policy, skill, *, ball_position=None):
     head_vertices = m.mesh_vert[first_vertex:first_vertex + m.mesh_vertnum[head_mesh]]
     angles, velocities = np.zeros(len(MOTOR_IDS)), np.zeros(len(MOTOR_IDS))
     limits = {'sitstand':SIT_HOLD_S + RISE_S, 'pick':PICK_PERIOD_S, 'roulade':ROULADE_S,
-              'polite-bow':2.8, 'flamingo-cycle':4.2}
+              'polite-bow':2.8, 'flamingo-cycle':4.2, 'dance':4.0}
     skill_s = limits.get(skill, KICK_S)
     start_tick = round(SETTLE_S / SLOT_S)
     action_ticks = round(skill_s / SLOT_S)
@@ -119,7 +119,7 @@ def record(sim, stand, policy, skill, *, ball_position=None):
         mj.mj_forward(m, d)
         elapsed = (tick - start_tick) * SLOT_S
         if start_tick <= tick < start_tick + action_ticks:
-            command, phase = skill_command(skill, elapsed)
+            command, phase = ((0, 0, 0), 'Head dance') if skill == 'dance' else skill_command(skill, elapsed)
             current = policy
         else:
             command, phase = (0, 0, 0), 'Settle' if tick < start_tick else 'Return to idle'
@@ -128,7 +128,12 @@ def record(sim, stand, policy, skill, *, ball_position=None):
             stand.reset_action_filter()
         angles[SERVO_INDICES] = np.rad2deg(d.qpos[sim.qpos])
         velocities[SERVO_INDICES] = np.rad2deg(d.qvel[sim.qvel])
-        action = current.infer(-d.xmat[sim.trunk, 6:9], d.sensordata[sim.gyro], angles, velocities, command)
+        head = None
+        if phase == 'Head dance':
+            beat = math.tau * elapsed
+            ease = min(1., elapsed * 4, (skill_s - elapsed) * 4)
+            head = [0, .16 * ease * math.sin(2 * beat), .30 * ease * math.sin(beat), .10 * ease * math.cos(beat)]
+        action = current.infer(-d.xmat[sim.trunk, 6:9], d.sensordata[sim.gyro], angles, velocities, command, head)
         d.ctrl[sim.actuators] = np.deg2rad(np.asarray(current.action_to_deg(action))[SERVO_INDICES])
         for _ in range(SUBSTEPS):
             mj.mj_step(m, d)

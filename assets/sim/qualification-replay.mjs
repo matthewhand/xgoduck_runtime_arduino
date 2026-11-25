@@ -66,7 +66,7 @@ function parseModules(modules) {
   return modules;
 }
 
-export const usesSkates = result => Boolean(result?.skate || result?.dock?.skates);
+export const usesSkates = result => Boolean(result?.skate || result?.dock?.skates || result?.triple?.skates);
 const validRoot = value => vector(value, 7) && Math.abs(Math.hypot(...value.slice(3)) - 1) <= 0.001;
 
 export function parseQualificationReport(report, jointIds) {
@@ -106,6 +106,9 @@ export function parseQualificationReport(report, jointIds) {
           ['Chair rise', frame.recovery?.phase === 'chair_rise' ? frame.time_s : null],
           ['Foot on pad', onFootPad ? frame.time_s : null],
           ['Ball contact', result.motion?.ball_contact_s],
+          ['Disturbance', result.triple?.fault?.at_s],
+          ['Wheel released', result.triple?.fault?.jam ? result.triple.fault.at_s + result.triple.fault.jam_s : null],
+          ['First failure', result.failed_at_s],
           ['Push', frame.push?.time_s], ['Fall', result.dock ? null : frame.recovery?.fall_at_s],
           ['Get-up', frame.recovery?.getup_at_s],
           [result.dock?.skates ? 'Roll away' : 'Walk again', frame.recovery?.resumed_at_s],
@@ -327,7 +330,7 @@ export class QualificationReplay {
     const phase = frame?.recovery?.phase;
     const skate = this.trial.result.skate;
     const motion = this.trial.result.motion;
-    this.get('phase').textContent = motion ? (frame?.motion_phase ?? 'Recorded pose') : skate ? skate.profile
+    this.get('phase').textContent = (motion || frame?.motion_phase) ? (frame?.motion_phase ?? 'Recorded pose') : skate ? skate.profile
       : phase === 'walk' && this.trial.result.dock?.skates ? 'Skating policy'
       : phase === 'approach_missed' && this.trial.result.dock?.navigation ? this.trial.result.dock.navigation.outcome
       : Object.hasOwn(PHASES, phase) ? PHASES[phase] : 'Recorded pose';
@@ -453,6 +456,19 @@ export class QualificationReplay {
           ['Chair contact while skating', result => result.dock.roller_release.handoff
             ? result.dock.roller_release.exit_chair_contacts.join(', ') || 'None detected' : 'Policy did not start'],
         ] : []),
+      ] : []),
+    ] : this.trial.result.triple ? [
+      ['Outcome', result => result.failure ?? 'Passed'],
+      ['Total mass', result => number(result.mass_g, 1, 'g')],
+      ['Forward travel', result => number(result.forward_m, 2, 'm')],
+      ['Max sideways drift', result => number(result.max_side_m * 100, 1, 'cm')],
+      ['Peak tilt', result => number(result.peak_tilt_deg, 1, '°')],
+      ['Time to walk again', result => number(result.recovered_s, 2, 's')],
+      ...(this.trial.result.triple.fault?.jam ? [
+        ['Wheel movement during jam', result => number(result.wheel_slip_deg, 1, '°')],
+      ] : []),
+      ...(Number.isFinite(this.trial.result.gesture_deg) ? [
+        ['Head motion', result => number(result.gesture_deg, 1, '°')],
       ] : []),
     ] : this.trial.result.motion ? [
       ['Return to upright', result => result.motion.upright ? 'Yes' : 'No'],
