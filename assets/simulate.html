@@ -8,7 +8,7 @@
     if (!location.search && !location.hash) location.replace('build-test.html');
     if (new URLSearchParams(location.search).get('stock') === '1') document.documentElement.classList.add('stock-view');
   </script>
-  <link rel="stylesheet" href="sim/sim.css?v=21">
+  <link rel="stylesheet" href="sim/sim.css?v=22">
   <script type="importmap">{"imports":{"three":"./sim/vendor/three/three.webgpu.js"}}</script>
 </head>
 <body>
@@ -31,6 +31,10 @@
           <div class="viewport-actions">
             <button type="button" class="dock-overhead" id="dock-overhead" aria-pressed="false" hidden>Overhead</button>
             <button type="button" id="sim-fullscreen" hidden>Fullscreen</button>
+          </div>
+          <div class="viewport-actions triple-viewport-actions" id="triple-viewport-actions" hidden>
+            <button type="button" id="triple-next-failure" hidden>Next failure</button>
+            <button type="button" id="triple-compare" hidden>Show backpack</button>
           </div>
         </div>
       </section>
@@ -133,6 +137,7 @@
                   <select id="qualification-variant"></select>
                 </div>
               <label id="qualification-alternate-label" class="qualification-alternate" hidden><input id="qualification-alternate" type="checkbox"> <span id="qualification-alternate-text">Cycle through trials</span></label>
+              <label id="qualification-incident-field" class="qualification-alternate" hidden><input id="qualification-incident" type="checkbox"> Loop incident</label>
               </div>
               <div class="button-row qualification-switch"><button type="button" id="qualification-stock">Show variant</button></div>
               <label class="range-label" for="qualification-seek">Timeline <output id="qualification-time" for="qualification-seek">0.00 s</output></label>
@@ -245,5 +250,5 @@
   <p id="error" class="error" role="alert" hidden></p>
 </main>
 <script>window.addEventListener('error',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.message||'Could not load the simulator. Reload the page.');});window.addEventListener('unhandledrejection',function(e){const box=document.getElementById('error');box.hidden=false;box.textContent='Duck Lab: '+(e.reason?.message||String(e.reason));});</script>
-<script type="module" src="sim/sim-ui.mjs?v=66"></script>
+<script type="module" src="sim/sim-ui.mjs?v=67"></script>
 </body></html>

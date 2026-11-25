@@ -57,6 +57,10 @@
 .viewport-actions{position:absolute;z-index:2;right:12px;top:10px;display:flex;gap:6px}
 .viewport-actions button{font-size:11px;min-height:44px;padding:6px 10px;background:#101c25ed}
 .viewport-actions button:hover:not(:disabled){background:#284039}
+.viewport-actions.triple-viewport-actions{inset:auto 8px 28px;justify-content:center;flex-wrap:wrap}
+#viewport:has(.triple-viewport-actions:not([hidden])) .dock-contact-overlay{bottom:78px}
+#viewport:has(.triple-viewport-actions:not([hidden])) .scene-label{right:110px}
+#viewport:has(.triple-viewport-actions:not([hidden])) .scene-label .status-dot{flex:none}
 .dock-overhead[aria-pressed=true]{background:#284039;border-color:#597d73;color:#bbf4dc}
 .qualification-contact{grid-column:1/-1}
 .qualification-summary{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
@@ -147,6 +151,8 @@
 .is-fullscreen .viewport-help{display:none}
 .is-fullscreen .scene-label{left:calc(12px + env(safe-area-inset-left));top:calc(16px + env(safe-area-inset-top))}
 .is-fullscreen .viewport-actions{right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top))}
+.is-fullscreen .viewport-actions.triple-viewport-actions{top:auto;bottom:calc(57px + env(safe-area-inset-bottom))}
+.is-fullscreen #viewport:has(.triple-viewport-actions:not([hidden])) .dock-contact-overlay{bottom:calc(107px + env(safe-area-inset-bottom))}
 .is-fullscreen .walk-hud,.is-fullscreen .dock-contact-overlay{bottom:calc(66px + env(safe-area-inset-bottom))}
 .is-fullscreen .sim-controls{
   position:absolute;

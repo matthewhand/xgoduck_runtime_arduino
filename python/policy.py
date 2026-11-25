@@ -37,11 +37,11 @@ class Policy:
         self._obs = np.empty(OBS_DIM, dtype=np.float32)
         self.reset_action_filter()
 
-    def load(self, path=None, *, use_model_home=False):
+    def load(self, path=None, *, use_model_home=False, expected_sha256=None):
         p = Path(path) if path else default_onnx()
         if p is None:
             return False, 'default model xgoduck_walk.onnx was not found'
-        if not p.is_file():
+        if expected_sha256 is None and not p.is_file():
             p = PYTHON_DIR / p.name
         if not p.is_file():
             return False, f'not found: {p}'
@@ -53,10 +53,14 @@ class Policy:
             # Bind the reported digest to the same bytes ORT loaded. Models
             # with external weights still need path-based session loading.
             model_bytes = p.read_bytes()
+            fingerprint = hashlib.sha256(model_bytes).hexdigest()
+            if expected_sha256 is not None and fingerprint != expected_sha256:
+                raise ValueError(f'{p.name} does not match the pinned SHA-256 digest')
             try:
                 sess = ort.InferenceSession(model_bytes, sess_options=options, providers=['CPUExecutionProvider'])
-                fingerprint = hashlib.sha256(model_bytes).hexdigest()
             except Exception:
+                if expected_sha256 is not None:
+                    raise
                 sess = ort.InferenceSession(str(p), sess_options=options, providers=['CPUExecutionProvider'])
                 fingerprint = 'unverified'
             del model_bytes

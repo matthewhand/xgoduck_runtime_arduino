@@ -21,7 +21,7 @@ LAB_ASSETS = (
     'sim/sim.css', 'sim/lab-entry.css', 'sim/matrix-ui.mjs', 'sim/build-test.mjs', 'sim/trial-report.mjs',
     'sim/demo-ui.mjs', 'sim/qualification-replay.mjs', 'sim/skate-speed-recording.json', 'sim/skate-terrain-recording.json',
     'sim/motion-recording.json',
-    'triple-m.html', 'sim/triple-m.css', 'sim/triple-m-ui.mjs', 'sim/triple-m-report.json',
+    'triple-m.html', 'sim/triple-m.css', 'sim/triple-m-ui.mjs', 'sim/triple-m-replay.mjs', 'sim/triple-m-report.json',
     'sim/stock-replay.json', 'sim/v5-receiver-rail-fit-u1.3mf',
     'sim/v5-torso-backpack-fit-u1.3mf', 'sim/sim-ui.mjs', 'sim/walk-ui.mjs', 'experimental.html',
     'build-test.html', 'simulate.html',
@@ -39,6 +39,9 @@ LEGACY_POND_MODULE = '51742f55993dbd2072b9fe95b7f35a3a795bef571f730f75a0e262d320
 FILES = (*BACKEND, *MANAGED_BACKEND, *(f'assets/{name}' for name in ROOT_ASSETS),
          *(f'assets/experiments/{name}' for name in LAB_ASSETS),
          *(f'assets/{name}' for name in ALIASES))
+TRIPLE_REPORT = 'assets/experiments/sim/triple-m-report.json'
+TRIPLE_PREFIX = 'assets/experiments/sim/triple-m-'
+TRIPLE_SIDECAR = re.compile(re.escape(TRIPLE_PREFIX) + r'(?:index(?:-[a-f0-9]{64})?|case-[a-f0-9]{64}-[a-f0-9]{64})\.json')
 
 
 def revision(ref):
@@ -57,6 +60,10 @@ def json_bytes(value):
     return (json.dumps(value, indent=2) + '\n').encode()
 
 
+def compact_json_bytes(value):
+    return (json.dumps(value, separators=(',', ':'), allow_nan=False) + '\n').encode()
+
+
 def alias(page, legacy_pond=False):
     destination = f'/experiments/{page}'
     script = f'location.replace({destination!r} + location.search + location.hash)'
@@ -72,7 +79,29 @@ location.replace((pond ? '/pond-demo-legacy.html' : {destination!r}) + location.
 '''.encode()
 
 
-def package(destination, ref, base):
+def triple_recordings(raw):
+    report = json.loads(raw)
+    report_id = digest(raw)
+    summary = {**report, 'id': report_id, 'cases': []}
+    files = {}
+    keys = set()
+    for row in report['cases']:
+        key = row['key']
+        if not re.fullmatch(r'[a-f0-9]{64}', key) or key in keys:
+            raise ValueError('Invalid or duplicate Triple M case key')
+        keys.add(key)
+        result = row.get('result')
+        summary['cases'].append({**row, 'result': None if result is None else
+                                {name: value for name, value in result.items() if name != 'trace'}})
+        if result and result.get('trace'):
+            files[f'{TRIPLE_PREFIX}case-{report_id}-{key}.json'] = compact_json_bytes(row)
+    index = compact_json_bytes(summary)
+    files[f'{TRIPLE_PREFIX}index-{report_id}.json'] = index
+    files[f'{TRIPLE_PREFIX}index.json'] = index
+    return files
+
+
+def package(destination, ref, base, triple_report=None):
     release = revision(ref)
     base = revision(base or f'{release}^')
     files = {name: git('cat-file', 'blob', f'{release}:{name}') for name in (*BACKEND, *MANAGED_BACKEND)}
@@ -81,6 +110,9 @@ def package(destination, ref, base):
     files.update({f'assets/experiments/{name}': git('cat-file', 'blob', f'{release}:assets/{name}')
                   for name in LAB_ASSETS})
     files.update({f'assets/{name}': alias(name) for name in ALIASES})
+    if triple_report is not None:
+        files[TRIPLE_REPORT] = triple_report.read_bytes()
+    files.update(triple_recordings(files[TRIPLE_REPORT]))
     baseline = {name: git('cat-file', 'blob', f'{base}:{name}') for name in BACKEND}
     manifest = {'commit': release, 'base': base, 'files': {name: digest(data) for name, data in files.items()},
                 'backend_base': {name: digest(data) for name, data in baseline.items()}}
@@ -145,7 +177,10 @@ def install(bundle, app=APP):
             raise ValueError(f'Install the Duck Lab experiments before deploying this update. Missing {name}.')
     with ZipFile(bundle) as archive:
         manifest = json.loads(archive.read('manifest.json'))
-        files = verified_files(archive, 'files', manifest['files'], FILES)
+        sidecars = triple_recordings(archive.read(f'files/{TRIPLE_REPORT}'))
+        files = verified_files(archive, 'files', manifest['files'], (*FILES, *sidecars))
+        if any(files[name] != data for name, data in sidecars.items()):
+            raise ValueError('Triple M recordings differ from the bundled report')
         baseline = verified_files(archive, 'base', manifest['backend_base'], BACKEND)
     legacy = legacy_pond_snapshot(app)
     if legacy is not None:
@@ -210,7 +245,7 @@ def restore(backup, app=APP, names=None):
     names = list(record) if names is None else names
     targets = {}
     for name in names:
-        if name not in (*FILES, LEGACY_POND, STAMP):
+        if name not in (*FILES, LEGACY_POND, STAMP) and not TRIPLE_SIDECAR.fullmatch(name):
             raise ValueError(f'Unexpected rollback path {name}')
         target = app_file(app, name)
         original = record[name]['original']
@@ -256,6 +291,7 @@ def main():
     parser.add_argument('--ref', default='HEAD', help='Committed release revision to package')
     parser.add_argument('--base', help='Previous backend revision for the three-way merge, defaulting to the release parent')
     parser.add_argument('--output', type=Path, help='Write the release bundle to a local path')
+    parser.add_argument('--triple-report', type=Path, help='Publish this completed Triple M report instead of the packaged example')
     parser.add_argument('--host', help='Board SSH host alias')
     parser.add_argument('--address', help='Override the SSH alias address while preserving its host identity')
     parser.add_argument('--install', type=Path, help=argparse.SUPPRESS)
@@ -277,7 +313,7 @@ def main():
 
     with TemporaryDirectory(prefix='duck-lab-') as directory:
         bundle = args.output or Path(directory) / 'release.zip'
-        release = package(bundle, args.ref, args.base)
+        release = package(bundle, args.ref, args.base, args.triple_report)
         if args.output:
             print(f'Packaged {release} at {bundle}')
         if args.host:

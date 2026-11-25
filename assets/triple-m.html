@@ -5,23 +5,27 @@
   <title>Triple M · Duck Lab</title>
   <link rel="stylesheet" href="sim/sim.css?v=21">
   <link rel="stylesheet" href="sim/lab-entry.css?v=4">
-  <link rel="stylesheet" href="sim/triple-m.css?v=1">
+  <link rel="stylesheet" href="sim/triple-m.css?v=2">
 </head>
 <body>
 <main class="lab-entry">
   <header class="topbar"><a class="wordmark" href="/">XGO<span>DUCK</span></a><nav aria-label="Main"><a href="experimental.html">Experimental</a><a href="build-test.html">Build &amp; Test</a></nav></header>
   <h1>Triple M Manufacturing</h1>
   <form id="batch-form">
+    <fieldset id="batch-fields" aria-label="Batch plan">
+    <label class="batch-check"><input type="checkbox" id="atomic-tests" checked> Include individual tests</label>
     <div class="batch-grid">
       <fieldset class="card"><legend>Physics modifiers</legend>
-        <label><input type="checkbox" name="faults" value="nominal" checked> Baseline</label>
-        <label><input type="checkbox" name="faults" value="shove" checked> Side shoves</label>
-        <label><input type="checkbox" name="faults" value="jam" checked> Front-wheel jams</label>
+        <div id="fault-controls">
+          <label><input type="checkbox" name="faults" value="nominal" checked> Baseline</label>
+          <label><input type="checkbox" name="faults" value="shove" checked> Side shoves</label>
+          <label><input type="checkbox" name="faults" value="jam" checked> Front-wheel jams</label>
+        </div>
         <label class="number-field">Grip <input type="number" name="grip" value="0.75" min="0.30" max="1.50" step="0.01" required></label>
         <label class="number-field">Shove Δv (m/s) <input type="number" name="shove_m_s" value="0.35" min="0.10" max="0.80" step="0.01" required></label>
         <label class="number-field">Jam duration (s) <input type="number" name="jam_s" value="0.60" min="0.10" max="2.00" step="0.01" required></label>
       </fieldset>
-      <fieldset class="card"><legend>Movements</legend>
+      <fieldset class="card" id="move-controls"><legend>Movements</legend>
         <label><input type="checkbox" name="moves" value="walk" checked> Walking</label>
         <label><input type="checkbox" name="moves" value="getup" checked> Get-up · four sides</label>
         <label><input type="checkbox" name="moves" value="skate" checked> Skating</label>
@@ -38,15 +42,31 @@
         <p class="muted">The backpack uses a rigid envelope at the estimated centre of mass.</p>
       </fieldset>
     </div>
-    <div class="batch-actions"><output id="batch-plan"></output><button class="primary" id="run-batch" type="submit" hidden>Run batch</button><a class="primary" id="local-runner" href="http://127.0.0.1:19534/triple-m.html">Open PC runner</a><button id="save-plan" type="button">Download plan</button></div>
-    <p class="muted" id="batch-status" role="status">Loading the first batch…</p>
+    <fieldset class="card scenario-presets"><legend>Scenario presets</legend>
+      <label><input type="checkbox" name="scenarios" value="wheel-jam-release"><span><strong>Skate, jam and release</strong><small>Start skating, test each front wheel, then compare release, simulated braking and a matched control.</small></span></label>
+      <label><input type="checkbox" name="scenarios" value="fall-recovery"><span><strong>Walk, fall, get up and walk again</strong><small>Trigger a back or right-side fall while walking and test whether the Duck resumes its walk.</small></span></label>
+    </fieldset>
+    <div class="batch-actions">
+      <button class="primary" id="run-batch" type="submit" hidden>Run batch</button>
+      <button id="save-plan" type="button">Download plan</button>
+      <button id="open-plan" type="button">Open plan</button><input id="plan-file" type="file" accept=".json,application/json" hidden>
+    </div>
+    </fieldset>
   </form>
+  <details class="card coverage"><summary id="batch-plan">Test coverage</summary><ul id="batch-coverage"></ul></details>
+  <p class="muted" id="batch-status" role="status">Checking for the CPU runner…</p>
+  <details class="runner-help" id="runner-help" hidden>
+    <summary>Run on a PC</summary>
+    <p>Download this plan and open it in Triple M on the computer running the simulation.</p>
+    <a id="local-runner" href="http://127.0.0.1:19534/triple-m.html" hidden>Open runner on this computer</a>
+  </details>
   <section class="card batch-results" aria-labelledby="batch-results-title">
-    <div class="batch-actions"><h2 id="batch-results-title">Results</h2><a class="primary" id="loop-failures" href="simulate.html?triple=1" hidden>Loop failures</a><label><input type="checkbox" id="failures-only" checked> Failures only</label><a id="batch-download" href="sim/triple-m-report.json" download>Download report</a></div>
+    <div class="batch-actions"><h2 id="batch-results-title">Results</h2><a class="primary" id="loop-failures" href="simulate.html?triple=1" hidden>Loop failures</a><label><input type="checkbox" id="failures-only" checked> Needs review</label><button id="retry-cases" type="button" hidden>Retry unfinished cases</button><a id="batch-download" href="sim/triple-m-report.json" download hidden>Download report</a><a id="latest-results" href="triple-m.html" hidden>Latest results</a></div>
+    <p class="muted" id="batch-source"></p>
     <p id="batch-summary" role="status"></p>
     <ul class="batch-list" id="batch-list"></ul>
   </section>
 </main>
-<script type="module" src="sim/triple-m-ui.mjs?v=1"></script>
+<script type="module" src="sim/triple-m-ui.mjs?v=2"></script>
 </body>
 </html>

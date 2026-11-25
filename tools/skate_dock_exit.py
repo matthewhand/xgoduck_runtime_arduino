@@ -26,9 +26,10 @@ SIM_MOTOR_INDEX = [JOINT_IDS.index(motor) if motor in JOINT_IDS else None for mo
 POLICY_MOTOR_INDEX = [MOTOR_IDS.index(motor) for motor in JOINT_IDS]
 
 
-def load_roller_policy():
+def load_roller_policy(*, pinned=None):
     policy = Policy()
-    ok, message = policy.load('xgoduck_roller.onnx', use_model_home=True)
+    path, digest = pinned or ('xgoduck_roller.onnx', None)
+    ok, message = policy.load(path, use_model_home=True, expected_sha256=digest)
     if not ok:
         raise RuntimeError(message)
     for index, motor_id in enumerate(JOINT_IDS):

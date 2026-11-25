@@ -106,6 +106,20 @@ skating receive either a left or right lateral velocity impulse at 2 s.
 Skate jams lock one front wheel at its current angle for the chosen interval.
 The optional expression cases run head dance, polite bow, and flamingo.
 
+The **Scenario presets** run multiple phases in one simulation. The wheel-jam
+preset compares normal skating, jam and release, and an experimental braking
+response for each front wheel and selected build. It waits until the target
+wheel is loaded and the Duck is moving. A lane breach still fails
+qualification when the Duck later returns to the lane. The braking response
+uses the simulator's exact jam onset and position feedback. It needs a
+qualified detection signal before it can be used on hardware.
+
+The walking preset applies a fixed 12 N shove for 120 ms after establishing
+steps, then records the fall, get-up and resumed walking. It checks recovery
+time from the fall, signed forward travel in the resumed heading, and
+alternating footfalls. Use **Loop incident** or **Next failure** to review
+an event and switch builds to compare the same scenario.
+
 The first batch compares stock with the nominal 30.18 g charging-backpack
 estimate. The backpack is a rigid contact envelope at the estimated centre
 of mass. The locomotion cases use the shipped policies and flat ground.
@@ -118,12 +132,43 @@ On a PC with the simulation dependencies installed, run
 The runner listens on that PC's loopback address. Run plans can also be
 downloaded from the panel and passed to `tools/triple-m.py --options`.
 For the Microduck expressions, use the same pinned ONNX files as the Motion
-Library and save them in `.cache`. The UNO Q hosts the published report.
+Library and save them in `.cache`. If an optional model is missing, the rest
+of the batch can still run. The UNO Q hosts the published report.
 
 The cache stores whole case results, including failures, keyed by the
 effective geometry and mass, applicable physics inputs, model and policy
-files, simulation code, and engine versions. Changing jam duration reuses
-cases without a jam. A backpack-only mass change reuses the stock cases.
+files, simulation code, and engine versions. Workers verify the exact model
+bytes they load. Changing jam duration reuses trials that do not use jam
+timing, such as walking. A backpack-only mass change reuses the stock cases.
+
+Each run has a batch ID. The PC runner saves cases as they finish under
+`.cache/triple-m/batches`, and case replay links keep pointing to that batch
+as newer runs finish. **Retry unfinished cases** reruns pending cases or
+execution errors with the original plan and inputs. Results from completed
+simulation trials are kept, including trials that failed a physics check.
+
+To spread a batch across PCs, export the plan from Duck Lab, then create one
+manifest and copy it to each worker PC. The PCs need matching simulation code,
+policies, runtime versions, OS, and architecture. In this example the first PC
+runs partition 1 and the second PC runs partition 2.
+
+```sh
+python -B tools/triple_m_shards.py plan --options plan.json --shards 2 --out batch.json
+python -B tools/triple_m_shards.py run batch.json 1 --out part-1.json
+python -B tools/triple_m_shards.py run batch.json 2 --out part-2.json
+python -B tools/triple_m_shards.py merge batch.json part-1.json part-2.json --out report.json
+```
+
+Copy the part files back to the PC doing the merge. The merge requires every
+partition exactly once. A simulation failure is recorded in the report. If
+a worker records an execution error, rerun its partition with the same cache
+and merge again. Cases already completed on that worker can be reused. This
+workflow runs the existing CPU simulator on each PC.
+
+Add `--publish` to the merge command to save the result in the local runner's
+batch store. Start the runner with `--serve` and open the batch link printed
+by the merge. Use the same `--cache` directory for both commands if you
+override the default.
 
 ## Motion library
 

@@ -1,3 +1,5 @@
+import {incidentWindow} from './triple-m-replay.mjs?v=1';
+
 const MAX_REPORT_BYTES = 20 * 1024 * 1024;
 const PHASES = {
   brake_turn:'Slowing for reverse', turn_around:'Turning around', reverse_seek:'Seeking backwards',
@@ -90,6 +92,7 @@ export function parseQualificationReport(report, jointIds) {
           throw new Error(`The recording for ${label(name)} has an invalid frame.`);
         }
         previousTime = frame.time_s;
+        if (result.triple && Array.isArray(result.events) && result.events.length) continue;
         const onFootPad = result.dock && Array.isArray(frame.push_off)
           && frame.push_off.some(name => name === 'Left foot on foot pad' || name === 'Right foot on foot pad');
         for (const [event, time] of [
@@ -119,6 +122,21 @@ export function parseQualificationReport(report, jointIds) {
             events.set(event, frame.time_s);
           }
         }
+      }
+      if (result.triple && Array.isArray(result.events)) {
+        const names = new Set();
+        for (const event of result.events) {
+          const {label:name, time_s} = event ?? {};
+          if (typeof name !== 'string' || !Number.isFinite(time_s) || time_s < 0 || time_s > previousTime) continue;
+          const at = result.trace.find(frame => frame.time_s >= time_s)?.time_s;
+          const display = names.has(name) ? `${name} · ${time_s.toFixed(2)} s` : name;
+          if (at !== undefined) events.set(display, at);
+          names.add(name);
+        }
+      }
+      if (result.triple && result.failure && !result.skipped && !Number.isFinite(result.failed_at_s)
+          && !result.events?.some?.(event => event?.id === 'first-failure')) {
+        events.set('Final check', previousTime);
       }
       if (!cases.has(test)) cases.set(test, new Map());
       cases.get(test).set(name, {result, events, duration:previousTime, modules:parseModules(result.modules)});
@@ -180,6 +198,13 @@ export class QualificationReplay {
       }
     });
     this.get('seek').addEventListener('input', event => this.seek(Number(event.target.value)));
+    this.get('incident').addEventListener('change', () => {
+      this.updateDuration();
+      if (this.get('incident').checked) this.time = this.startTime;
+      this.holdElapsed = 0;
+      this.updatePosition();
+      this.onChange('window');
+    });
   }
 
   get trial() { return this.trials?.get(this.selected); }
@@ -189,6 +214,7 @@ export class QualificationReplay {
 
   clearRecording() {
     this.caseRequest = {};
+    this.loadingCase = false;
     this.fileRequest++;
     this.trials = null;
     this.time = this.duration = 0;
@@ -196,46 +222,57 @@ export class QualificationReplay {
     this.get('status').textContent = 'Choose a qualification JSON report with a recorded trace. It stays on this device.';
   }
 
-  setRecording(report, {scenario, variant, filename, alternate = false, cycleCases = false, cycleLabel = 'Cycle surfaces', dockIndex, dockLoader} = {}) {
+  setRecording(report, {scenario, variant, filename, alternate = false, cycleCases = false,
+    cycleLabel = 'Cycle surfaces', dockIndex, dockLoader, caseOptions, caseLoader, incident = false} = {}) {
     const cases = parseQualificationReport(report, this.jointIds);
     this.caseRequest = {};
-    this.dockLoader = dockLoader;
+    this.loadingCase = false;
+    this.caseLoader = dockLoader ?? caseLoader;
     this.cases = cases;
-    this.caseCycle = cycleCases && cases.size > 1 ? [...cases.keys()] : null;
+    this.caseCycle = Array.isArray(cycleCases) ? (cycleCases.length > 1 ? cycleCases : null)
+      : cycleCases && cases.size > 1 ? [...cases.keys()] : null;
     this.get('alternate-text').textContent = this.caseCycle ? cycleLabel : 'Cycle through trials';
-    const options = dockIndex ? Object.keys(dockIndex) : [...cases.keys()];
-    this.get('case').replaceChildren(...options.map(key => new Option(label(key), key)));
+    const options = caseOptions ?? (dockIndex ? Object.keys(dockIndex) : [...cases.keys()]).map(key => [key, label(key)]);
+    this.get('case').replaceChildren(...options.map(([key, name]) => new Option(name, key)));
     this.get('case-field').hidden = options.length < 2;
     this.get('controls').hidden = false;
     this.get('status').textContent = filename ? `Loaded ${filename}` : '';
     this.get('alternate').checked = alternate;
+    this.get('incident').checked = incident;
     this.selectCase(cases.has(scenario) ? scenario : cases.keys().next().value, variant);
   }
 
-  async chooseCase(next) {
+  async chooseCase(next, {action = 'case', position} = {}) {
     const request = this.caseRequest = {};
     const status = this.get('status');
     const preferred = this.trial?.result.dock ? this.selected : undefined;
     try {
-      if (this.dockLoader && !this.cases.has(next)) {
-        status.textContent = 'Loading the selected dock trial…';
-        const report = await this.dockLoader(next);
+      if (this.caseLoader && !this.cases.has(next)) {
+        this.loadingCase = true;
+        status.textContent = 'Loading the selected trial…';
+        const report = await this.caseLoader(next);
         if (request !== this.caseRequest) return;
         const parsed = parseQualificationReport(report, this.jointIds);
+        if (!parsed.has(next)) throw new Error('The recording does not contain the selected trial.');
         this.cases.set(next, parsed.get(next));
       }
-      if (this.dockLoader) status.textContent = '';
-      this.selectCase(next, preferred);
+      if (this.caseLoader) status.textContent = '';
+      this.selectCase(next, preferred, action, position);
+      return true;
     } catch (error) {
       if (request !== this.caseRequest) return;
       this.get('case').value = this.case;
       status.textContent = error.message;
+      return false;
+    } finally {
+      if (request === this.caseRequest) this.loadingCase = false;
     }
   }
 
   async load(file, {scenario, variant} = {}) {
     const request = ++this.fileRequest;
     this.caseRequest = {};
+    this.loadingCase = false;
     const message = this.get('status');
     try {
       if (file.size > MAX_REPORT_BYTES) throw new Error('Choose a report smaller than 20 MB.');
@@ -251,31 +288,46 @@ export class QualificationReplay {
     }
   }
 
-  selectCase(next, preferred) {
+  selectCase(next, preferred, action = 'case', position) {
     this.case = next;
     this.get('case').value = next;
     this.trials = this.cases.get(next);
     this.time = 0;
+    this.holdElapsed = 0;
     this.playlist = [LOWERING_PAIR, RELEASE_PAIR, TRIP_PAIR, CLEAR_LANE_LOOP, TURN_SEEK_LOOP, SKATE_TURN_LOOP].find(list => list.every(name => this.trials.has(name)));
     this.get('alternate-label').hidden = !this.playlist && !this.caseCycle;
     this.get('variant').replaceChildren(...[...this.trials.keys()].map(key => new Option(label(key), key)));
     this.previousVariant = [...this.trials.keys()].find(key => key !== 'stock');
     const first = this.trials.has('stock') ? 'stock' : this.trials.keys().next().value;
     const preferredVariant = this.alternating && this.playlist && !this.playlist.includes(preferred) ? this.playlist[0] : preferred;
-    this.select(this.trials.has(preferredVariant) ? preferredVariant : first, 'case');
+    this.select(this.trials.has(preferredVariant) ? preferredVariant : first, action, position);
   }
 
   updateDuration() {
-    this.duration = this.alternating || this.trial.result.dock?.navigation || this.trial.result.dock?.qualification ? this.trial.duration : Math.max(...[...this.trials.values()].map(trial => trial.duration));
+    const window = this.trial.result.triple && incidentWindow(this.trial.result, this.trial.duration);
+    const clip = window && this.get('incident').checked ? window : null;
+    this.get('incident-field').hidden = !window;
+    this.startTime = clip?.start ?? 0;
+    this.duration = clip?.end ?? (this.alternating || this.trial.result.dock?.navigation || this.trial.result.dock?.qualification
+      ? this.trial.duration : Math.max(...[...this.trials.values()].map(trial => trial.duration)));
     this.get('seek').max = this.duration;
-    this.time = Math.min(this.time, this.duration);
+    this.get('seek').min = this.startTime;
+    this.time = Math.max(this.startTime, Math.min(this.time, this.duration));
   }
 
-  select(next, action = 'variant') {
+  select(next, action = 'variant', position) {
     if (!this.trials.has(next)) return;
     this.selected = next;
     if (action === 'manual' && (this.trial.result.skate || this.trial.result.dock?.navigation || this.trial.result.dock?.qualification || this.trial.result.dock?.lowering_test || this.trial.result.dock?.bar_entry)) this.time = 0;
     this.updateDuration();
+    if (position) {
+      const at = position(this.trial);
+      if (at < this.startTime || at > this.duration) {
+        this.get('incident').checked = false;
+        this.updateDuration();
+      }
+      this.time = Math.max(this.startTime, Math.min(at, this.duration));
+    }
     if (next !== 'stock') this.previousVariant = next;
     this.get('variant').value = next;
     const compare = this.get('stock');
@@ -288,7 +340,13 @@ export class QualificationReplay {
       jump.type = 'button';
       jump.textContent = name === 'Roll away' ? 'Skating policy on' : name;
       jump.title = `Jump to ${time.toFixed(2)} s`;
-      jump.addEventListener('click', () => this.seek(time));
+      jump.addEventListener('click', () => {
+        if (time < this.startTime || time > this.duration) {
+          this.get('incident').checked = false;
+          this.updateDuration();
+        }
+        this.seek(time);
+      });
       jumps.append(jump);
     }
     this.updateMetrics();
@@ -297,17 +355,30 @@ export class QualificationReplay {
   }
 
   seek(time) {
-    this.time = Math.max(0, Math.min(time, this.duration));
+    this.holdElapsed = 0;
+    this.time = Math.max(this.startTime ?? 0, Math.min(time, this.duration));
     this.updatePosition();
     this.onChange('seek');
   }
 
   advance(seconds, loop = false) {
+    if (this.loadingCase) return true;
     const next = this.time + seconds * Number(this.get('speed').value);
+    if (loop && this.trial?.result.triple?.key && next >= this.duration && this.holdElapsed < .65) {
+      this.time = this.duration;
+      this.holdElapsed += seconds;
+      this.updatePosition();
+      return true;
+    }
     if (loop && this.alternating && next >= this.duration) {
       if (this.caseCycle) {
         const index = (this.caseCycle.indexOf(this.case) + 1) % this.caseCycle.length;
-        this.selectCase(this.caseCycle[index]);
+        const following = this.caseCycle[index];
+        if (this.caseLoader) {
+          void this.chooseCase(following).then(ok => {
+            if (ok === false) this.get('alternate').checked = false;
+          });
+        } else this.selectCase(following);
         return true;
       }
       this.time = next - this.duration;
@@ -315,7 +386,10 @@ export class QualificationReplay {
       this.select(this.playlist[index], 'loop');
       return true;
     }
-    this.time = loop && this.duration > 0 ? next % this.duration : Math.min(next, this.duration);
+    const start = this.startTime ?? 0;
+    const span = this.duration - start;
+    if (loop && next >= this.duration) this.holdElapsed = 0;
+    this.time = loop && span > 0 ? start + (next - start) % span : Math.min(next, this.duration);
     this.updatePosition();
     return this.time < this.duration;
   }
@@ -330,10 +404,10 @@ export class QualificationReplay {
     const phase = frame?.recovery?.phase;
     const skate = this.trial.result.skate;
     const motion = this.trial.result.motion;
-    this.get('phase').textContent = (motion || frame?.motion_phase) ? (frame?.motion_phase ?? 'Recorded pose') : skate ? skate.profile
+    this.get('phase').textContent = frame?.scenario_phase ?? ((motion || frame?.motion_phase) ? (frame?.motion_phase ?? 'Recorded pose') : skate ? skate.profile
       : phase === 'walk' && this.trial.result.dock?.skates ? 'Skating policy'
       : phase === 'approach_missed' && this.trial.result.dock?.navigation ? this.trial.result.dock.navigation.outcome
-      : Object.hasOwn(PHASES, phase) ? PHASES[phase] : 'Recorded pose';
+      : Object.hasOwn(PHASES, phase) ? PHASES[phase] : 'Recorded pose');
     const feet = frame?.footfalls;
     this.get('footfalls').parentElement.hidden = Boolean(skate || motion);
     this.get('footfalls').textContent = Number.isInteger(feet?.left) && Number.isInteger(feet?.right)
@@ -458,12 +532,21 @@ export class QualificationReplay {
         ] : []),
       ] : []),
     ] : this.trial.result.triple ? [
-      ['Outcome', result => result.failure ?? 'Passed'],
+      ['Outcome', result => result.outcome ?? result.skip_reason ?? result.failure ?? 'Passed'],
       ['Total mass', result => number(result.mass_g, 1, 'g')],
       ['Forward travel', result => number(result.forward_m, 2, 'm')],
       ['Max sideways drift', result => number(result.max_side_m * 100, 1, 'cm')],
       ['Peak tilt', result => number(result.peak_tilt_deg, 1, '°')],
       ['Time to walk again', result => number(result.recovered_s, 2, 's')],
+      ...(this.trial.result.triple.scenario?.kind === 'wheel-jam-release' ? [
+        ['Wheel load at trigger', result => number(result.scenario_metrics?.target_wheel_load_n, 1, 'N')],
+        ['Lane regained at', result => number(result.scenario_metrics?.lane_returned_at_s, 2, 's')],
+        ['Stopped at', result => number(result.scenario_metrics?.stopped_at_s, 2, 's')],
+      ] : []),
+      ...(this.trial.result.triple.scenario?.kind === 'fall-recovery' ? [
+        ['Fall to walking again', result => number(result.scenario_metrics?.recovery_s, 2, 's')],
+        ['Travel after recovery', result => number(result.scenario_metrics?.resumed_forward_m, 2, 'm')],
+      ] : []),
       ...(this.trial.result.triple.fault?.jam ? [
         ['Wheel movement during jam', result => number(result.wheel_slip_deg, 1, '°')],
       ] : []),
